@@ -1,0 +1,33 @@
+[package]
+name = "onca"
+version = "0.1.0"
+edition = "2021"
+authors = [ "TheJelmega" ]
+description = "Game engine in rust"
+readme = "readme.md"
+repository = "https://github.com/TheJelmega/onca-rs"
+license = "Apache 2.0"
+keywords = [ "gamedev", "graphics", "engine", "game", "onca" ]
+categories = ["game-engines", "graphics", "gui", "rendering"]
+
+# temporary
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+
+members = [ "crates/*" ]
+
+[dependencies]
+onca_core = { path = "crates/onca_core" }
+
+
+[profile.opt-dev]
+inherits = "dev"
+opt-level = 1
+debug = 2
+debug-assertions = true
+lto = "thin"
+panic = "unwind"
+overflow-checks = true
