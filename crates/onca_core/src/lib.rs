@@ -10,5 +10,6 @@ mod bytes;
 pub mod alloc;
 pub mod os;
 pub mod sync;
+pub mod mem;
 
 pub use bytes::*;

@@ -54,6 +54,10 @@ impl<T: ?Sized> MemPointer<T>
 
 impl<T> MemPointer<T>
 {
+    pub fn cast<U>(self) -> MemPointer<U> {
+        MemPointer { ptr: self.ptr.cast(), layout: self.layout }
+    }
+
     /// Get the pointer as an untyped ptr
     pub fn untyped(this: Self) -> (NonNull<u8>, Layout) {
         (this.ptr.cast::<u8>(), this.layout)
