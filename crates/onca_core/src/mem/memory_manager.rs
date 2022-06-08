@@ -1,4 +1,4 @@
-use core::cell::Cell;
+use core::cell::UnsafeCell;
 use std::borrow::BorrowMut;
 use crate::{
     alloc::{Allocator, MemPointer, Layout, primitives::Mallocator},
@@ -28,19 +28,19 @@ impl State {
 // TODO: Extended tags
 pub struct MemoryManager
 {
-    state : Lazy<Cell<State>>
+    state : Lazy<UnsafeCell<State>>
 }
 
 impl MemoryManager {
     
     /// Create a new memory manager
     pub const fn new() -> Self {
-        Self { state: Lazy::new(|| Cell::new(State::new())) }
+        Self { state: Lazy::new(|| UnsafeCell::new(State::new())) }
     }
 
     /// Register an allocator to the manager and set its allocator id
     pub fn register_allocator(&self, alloc: *mut dyn Allocator) {
-        let state = unsafe { &mut *self.state.as_ptr() };
+        let state = unsafe { &mut *self.state.get() };
         let mut id : usize = 0;
 
         lock!(state.mutex);
@@ -57,7 +57,7 @@ impl MemoryManager {
 
     /// Get an allocator from its id
     pub fn get_allocator(&self, id: u16) -> Option<*mut dyn Allocator> {
-        let state = unsafe { &mut *self.state.as_ptr() };
+        let state = unsafe { &mut *self.state.get() };
         if id >= Layout::MAX_ALLOC_ID {
             Some(&mut state.malloc)
         } else {
@@ -68,7 +68,7 @@ impl MemoryManager {
 
     /// Get the default allocator
     pub fn get_default_allocator(&self) -> &mut dyn Allocator {
-        let state = unsafe { &mut *self.state.as_ptr() };
+        let state = unsafe { &mut *self.state.get() };
         lock!(state.mutex);
         &mut state.malloc
     }

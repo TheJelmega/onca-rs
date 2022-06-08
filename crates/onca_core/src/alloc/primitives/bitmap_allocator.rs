@@ -1,3 +1,4 @@
+use crate::mem::MEMORY_MANAGER;
 use crate::{alloc::*, sync::Mutex};
 use crate::lock;
 
@@ -123,7 +124,7 @@ impl Allocator for BitmapAllocator {
 
     unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
-        
+
         let mut block_idx = unsafe { ptr.ptr().offset_from(self.buffer.ptr()) } as usize;
         block_idx = block_idx / self.block_size - self.num_manage;
 
@@ -151,6 +152,13 @@ impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
         let buffer = unsafe { alloc.alloc(Layout::new_size_align(buffer_size, 8)).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, args.0, args.1)
+    }
+}
+
+impl Drop for BitmapAllocator {
+    fn drop(&mut self) {
+        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
 

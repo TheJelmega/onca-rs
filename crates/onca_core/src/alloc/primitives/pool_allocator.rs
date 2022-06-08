@@ -2,7 +2,7 @@ use core::{
     mem::size_of, 
     ptr::null_mut, 
     sync::atomic::{AtomicPtr, Ordering}};
-use crate::alloc::{MemPointer, Allocator, Layout, ComposableAllocator};
+use crate::{alloc::{MemPointer, Allocator, Layout, ComposableAllocator}, mem::MEMORY_MANAGER};
 
 struct Header {
     next: *mut Header
@@ -103,6 +103,13 @@ impl ComposableAllocator<(usize, usize)> for PoolAllocator {
     fn new_composable(alloc: &mut dyn Allocator, args: (usize, usize)) -> Self {
         let buffer = unsafe { alloc.alloc(Layout::new_size_align(args.0, 8)).expect("Failed to allocate memory for composable allocator") };
         PoolAllocator::new(buffer, args.1)
+    }
+}
+
+impl Drop for PoolAllocator {
+    fn drop(&mut self) {
+        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
 

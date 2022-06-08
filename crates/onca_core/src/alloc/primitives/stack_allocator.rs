@@ -1,5 +1,5 @@
-use core::{mem::size_of, cmp::{min, max}};
-use crate::alloc::{MemPointer, Allocator, Layout};
+use core::mem::size_of;
+use crate::{alloc::{MemPointer, Allocator, Layout}, mem::MEMORY_MANAGER};
 
 /// Linear/Bump allocator
 /// 
@@ -51,7 +51,7 @@ impl Allocator for StackAllocator {
 
     unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
-        
+
         let ptr_mut = ptr.ptr_mut();
         let expected_head = ptr_mut.add(ptr.layout().size());
 
@@ -72,6 +72,13 @@ impl Allocator for StackAllocator {
 
     fn alloc_id(&self) -> u16 {
         self.id
+    }
+}
+
+impl Drop for StackAllocator {
+    fn drop(&mut self) {
+        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
 

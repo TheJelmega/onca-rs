@@ -1,5 +1,5 @@
 use core::mem::size_of;
-use crate::alloc::{MemPointer, Allocator, Layout};
+use crate::{alloc::{MemPointer, Allocator, Layout}, mem::MEMORY_MANAGER};
 
 /// Linear/Bump allocator
 /// 
@@ -56,6 +56,13 @@ impl Allocator for LinearAllocator {
 
     fn alloc_id(&self) -> u16 {
         self.id
+    }
+}
+
+impl Drop for LinearAllocator {
+    fn drop(&mut self) {
+        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
 

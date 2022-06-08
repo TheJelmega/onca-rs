@@ -1,5 +1,6 @@
 use core::{mem::size_of, ptr::null_mut};
 
+use crate::mem::MEMORY_MANAGER;
 use crate::{alloc::*, lock};
 use crate::sync::Mutex;
 
@@ -178,6 +179,13 @@ impl ComposableAllocator<usize> for FreelistAllocator {
     fn new_composable(alloc: &mut dyn Allocator, args: usize) -> Self {
         let buffer = unsafe { alloc.alloc(Layout::new_size_align(args, 8)).expect("Failed to allocate memory for composable allocator") };
         FreelistAllocator::new(buffer)
+    }
+}
+
+impl Drop for FreelistAllocator {
+    fn drop(&mut self) {
+        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
 
