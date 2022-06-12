@@ -8,7 +8,7 @@ use crate::lock;
 /// it well then mark these in a bitmap to keep track of which blocks are in use and which are available
 pub struct BitmapAllocator
 {
-    buffer     : MemPointer<u8>,
+    buffer     : Allocation<u8>,
     block_size : usize,
     num_blocks : usize,
     num_manage : usize,
@@ -33,7 +33,7 @@ impl BitmapAllocator {
     /// # Panics
     /// 
     /// The function will panic if it the provided memory is not large enough, since the size should be calculated using `calc_needed_memory_size`
-    pub fn new(buffer: MemPointer<u8>, block_size: usize, num_blocks : usize) -> Self {
+    pub fn new(buffer: Allocation<u8>, block_size: usize, num_blocks : usize) -> Self {
         assert!(buffer.layout().size() >= Self::calc_needed_memory_size(block_size, num_blocks), "Provided buffer is not large enough, use `calc_needed_memory_size` to ge the needed size");
 
         let num_manage = Self::calc_num_management_blocks(block_size, num_blocks);
@@ -83,7 +83,7 @@ impl BitmapAllocator {
 }
 
 impl Allocator for BitmapAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
 
         let blocks_needed = (layout.size() + self.block_size - 1) / self.block_size;
         if blocks_needed >= self.num_blocks {
@@ -117,12 +117,12 @@ impl Allocator for BitmapAllocator {
             self.mark_bits(i, blocks_needed, true);
 
             let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size); 
-            return Some(MemPointer::<_>::new(ptr, layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id)));
+            return Some(Allocation::<_>::new(ptr, layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id)));
         }
         None
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
 
         let mut block_idx = unsafe { ptr.ptr().offset_from(self.buffer.ptr()) } as usize;
@@ -134,7 +134,7 @@ impl Allocator for BitmapAllocator {
         unsafe { self.mark_bits(block_idx, num_blocks, false) };
     }
 
-    fn owns(&self, ptr: &MemPointer<u8>) -> bool {
+    fn owns(&self, ptr: &Allocation<u8>) -> bool {
         ptr.ptr() >= self.buffer.ptr() && ptr.ptr() > unsafe { self.buffer.ptr().add(self.buffer.layout().size()) }
     }
 
@@ -157,7 +157,7 @@ impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
 
 impl Drop for BitmapAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
         MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }

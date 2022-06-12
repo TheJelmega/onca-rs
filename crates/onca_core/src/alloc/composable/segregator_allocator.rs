@@ -24,7 +24,7 @@ impl<A: Allocator, B: Allocator> SegregatorArena<A, B>
 
 impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
 {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
         if layout.size() <= self.boundary {
             self.le_alloc.alloc(layout)
         } else {
@@ -32,7 +32,7 @@ impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         if ptr.layout().size() <= self.boundary {
             self.le_alloc.dealloc(ptr);
         } else {
@@ -40,7 +40,7 @@ impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
         }
     }
 
-    fn owns(&self, ptr: &MemPointer<u8>) -> bool {
+    fn owns(&self, ptr: &Allocation<u8>) -> bool {
         if ptr.layout().size() <= self.boundary {
             self.le_alloc.owns(ptr)
         } else {

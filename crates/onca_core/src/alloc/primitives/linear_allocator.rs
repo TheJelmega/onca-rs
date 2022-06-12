@@ -1,12 +1,12 @@
 use core::mem::size_of;
-use crate::{alloc::{MemPointer, Allocator, Layout}, mem::MEMORY_MANAGER};
+use crate::{alloc::{Allocation, Allocator, Layout}, mem::MEMORY_MANAGER};
 
 /// Linear/Bump allocator
 /// 
 /// An allocator that can freely allocate when there is enough space left in it, but it cannot deallocate,
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct LinearAllocator {
-    buffer : MemPointer<u8>,
+    buffer : Allocation<u8>,
     head   : *mut u8,
     end    : *mut u8,
     id     : u16
@@ -14,11 +14,11 @@ pub struct LinearAllocator {
 
 impl LinearAllocator {
     /// Create a new stack allocator from a buffer
-    pub fn new(mut buffer: MemPointer<u8>) -> Self
+    pub fn new(mut buffer: Allocation<u8>) -> Self
     {
         let head = buffer.ptr_mut();
         let end = unsafe {
-            buffer.ptr_mut().add(MemPointer::<u8>::layout(&buffer).size())
+            buffer.ptr_mut().add(Allocation::<u8>::layout(&buffer).size())
         };
 
         Self { buffer, head, end, id: 0 }
@@ -26,12 +26,12 @@ impl LinearAllocator {
 
     /// Reset the linear allocator to its empty state
     pub fn reset(&mut self) {
-        self.head = MemPointer::<u8>::ptr_mut(&mut self.buffer);
+        self.head = Allocation::<u8>::ptr_mut(&mut self.buffer);
     }
 }
 
 impl Allocator for LinearAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
         let align = layout.align();
         let padding = self.head.align_offset(align);
         let aligned_ptr = self.head.add(padding);
@@ -41,11 +41,11 @@ impl Allocator for LinearAllocator {
             None
         } else {
             self.head = new_head;
-            Some(MemPointer::<_>::new(aligned_ptr, layout.with_alloc_id(self.id)))
+            Some(Allocation::<_>::new(aligned_ptr, layout.with_alloc_id(self.id)))
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
         // No-op
     }
@@ -61,7 +61,7 @@ impl Allocator for LinearAllocator {
 
 impl Drop for LinearAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
         MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }

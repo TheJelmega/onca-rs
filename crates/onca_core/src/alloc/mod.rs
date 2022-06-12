@@ -1,10 +1,10 @@
 mod layout;
-mod pointer;
+mod allocation;
 mod alloc;
 
 pub mod primitives;
 pub mod composable;
 
 pub use layout::*;
-pub use pointer::*;
+pub use allocation::*;
 pub use alloc::*;

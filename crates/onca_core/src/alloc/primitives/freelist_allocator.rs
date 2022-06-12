@@ -18,7 +18,7 @@ struct Header {
 /// 
 /// An allocator that manages a block of memory using a list to track all free space in the allocator
 pub struct FreelistAllocator {
-    buffer : MemPointer<u8>,
+    buffer : Allocation<u8>,
     head   : *mut FreeBlock,
     mutex  : Mutex,
     id     : u16
@@ -26,7 +26,7 @@ pub struct FreelistAllocator {
 
 impl FreelistAllocator {
     /// Create a stack allocator with the given memory as its arena
-    pub fn new(buffer: MemPointer<u8>) -> Self {
+    pub fn new(buffer: Allocation<u8>) -> Self {
         let head = buffer.ptr_mut().cast::<FreeBlock>();
         unsafe {
             (*head).next = null_mut();
@@ -125,7 +125,7 @@ impl FreelistAllocator {
 }
 
 impl Allocator for FreelistAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
 
         let mut layout = layout;
         let ptr = {
@@ -136,11 +136,11 @@ impl Allocator for FreelistAllocator {
         if ptr == null_mut() {
             None
         } else {
-            Some(MemPointer::<_>::new(ptr, layout.with_alloc_id(self.id)))
+            Some(Allocation::<_>::new(ptr, layout.with_alloc_id(self.id)))
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
 
         let (orig_ptr, front_pad) = Self::get_orig_ptr_and_front_padding(ptr.ptr_mut());
@@ -162,7 +162,7 @@ impl Allocator for FreelistAllocator {
             { self.head = cur_block }
     }
 
-    fn owns(&self, ptr: &MemPointer<u8>) -> bool {
+    fn owns(&self, ptr: &Allocation<u8>) -> bool {
         ptr.ptr() >= self.buffer.ptr() && ptr.ptr() > unsafe { self.buffer.ptr().add(self.buffer.layout().size()) }
     }
 
@@ -184,7 +184,7 @@ impl ComposableAllocator<usize> for FreelistAllocator {
 
 impl Drop for FreelistAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
         MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }

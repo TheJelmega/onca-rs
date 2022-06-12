@@ -21,7 +21,7 @@ impl <A: Allocator, F: Allocator> FallbackAllocator<A, F> {
 }
 
 impl <A: Allocator, F: Allocator> Allocator for FallbackAllocator<A, F> {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
         let opt = self.main.alloc(layout);
         if let Some(ptr) = opt {
             Some(ptr)
@@ -30,7 +30,7 @@ impl <A: Allocator, F: Allocator> Allocator for FallbackAllocator<A, F> {
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         if self.main.owns(&ptr) {
             self.main.dealloc(ptr);
         } else if self.fallback.owns(&ptr) {

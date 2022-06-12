@@ -78,6 +78,7 @@ impl Layout {
     }
 
     /// Get a 0-size layout
+    #[inline]
     pub fn null() -> Self
     {
         Self { packed: 0 }
@@ -86,6 +87,7 @@ impl Layout {
     /// Expand the layout by the given layout
     /// 
     /// The added size is added to the element that it would represent has the correct alignment inside of the layout
+    #[inline]
     pub fn expand(&mut self, other: Self) -> &mut Self {
         *self = self.expanded(other);
         self
@@ -105,6 +107,7 @@ impl Layout {
     }
 
     /// Expand the layout by the given layout. The given layout will be directly appneded and its alignment will be ignored
+    #[inline]
     pub fn expand_packed(&mut self, other: Self) -> &mut Self {
         *self = self.expanded_packed(other);
         self
@@ -125,6 +128,7 @@ impl Layout {
     }
 
     /// Set the minimum alignment needed for this layout
+    #[inline]
     pub fn set_min_align(&mut self, align: usize) -> &mut Self {
         *self = self.with_min_align(align);
         self
@@ -140,15 +144,19 @@ impl Layout {
     }
 
     /// Get the size of the allocation
+    #[inline]
     pub fn size(&self) -> usize { (self.packed >> Self::SIZE_SHIFT) as usize }
 
     /// Get the pow2 of the alignment
+    #[inline]
     pub fn log2_align(&self) -> u8 { (self.packed & Self::ALIGN_MASK) as u8 }
 
     /// Get the alignment of the allocation
+    #[inline]
     pub fn align(&self) -> usize { 1usize << self.log2_align() }
 
     /// Get the allocator id
+    #[inline]
     pub fn alloc_id(&self) -> u16 { ((self.packed & Self::ALLOC_ID_MASK) >> Self::ALLOC_ID_SHIFT) as u16 }
     /// Set the allocator id
     /// 
@@ -167,6 +175,7 @@ impl Layout {
     }
 
     /// Get the tag
+    #[inline]
     pub fn tag(&self) -> u8 { (self.packed >> Self::TAG_SHIFT) as u8 }
     /// Set the allocator id
     /// 

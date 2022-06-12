@@ -2,7 +2,7 @@ use core::{
     mem::size_of, 
     ptr::null_mut, 
     sync::atomic::{AtomicPtr, Ordering}};
-use crate::{alloc::{MemPointer, Allocator, Layout, ComposableAllocator}, mem::MEMORY_MANAGER};
+use crate::{alloc::{Allocation, Allocator, Layout, ComposableAllocator}, mem::MEMORY_MANAGER};
 
 struct Header {
     next: *mut Header
@@ -13,7 +13,7 @@ struct Header {
 /// An allocator that can freely allocate when there is enough space left in it, but it cannot deallocate,
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct PoolAllocator {
-    buffer     : MemPointer<u8>,
+    buffer     : Allocation<u8>,
     head       : AtomicPtr<Header>,
     block_size : usize,
     id         : u16
@@ -25,7 +25,7 @@ impl PoolAllocator {
     /// The `block_size` needs to be a power of 2, and larger than the size of a known-size pointer
     /// 
     /// The size of the provided buffer needs to be a multiple of the `block_size`
-    pub fn new(mut buffer: MemPointer<u8>, block_size: usize) -> Self {
+    pub fn new(mut buffer: Allocation<u8>, block_size: usize) -> Self {
         assert!(block_size.is_power_of_two(), "Block size needs to be a power of 2");
         assert!(block_size >= size_of::<Header>(), "Block size needs to be larger than the size of a pointer");
         assert!(buffer.layout().size() & block_size == 0, "The provided buffer needs to have a size that is a multiple of the block size");
@@ -48,7 +48,7 @@ impl PoolAllocator {
 }
 
 impl Allocator for PoolAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
 
         if layout.align() > self.block_size {
             return None;
@@ -64,14 +64,14 @@ impl Allocator for PoolAllocator {
             let next = (*head).next;
 
             match self.head.compare_exchange_weak(head, next, Ordering::AcqRel, Ordering::Acquire) {
-                Ok(ptr) => return Some(MemPointer::<_>::new(ptr.cast::<u8>(), layout.with_alloc_id(self.id))),
+                Ok(ptr) => return Some(Allocation::<_>::new(ptr.cast::<u8>(), layout.with_alloc_id(self.id))),
                 Err(ptr) => head = ptr
             }
         }
         None
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
 
         let header = ptr.ptr_mut().cast::<Header>();
@@ -86,7 +86,7 @@ impl Allocator for PoolAllocator {
         }
     }
 
-    fn owns(&self, ptr: &MemPointer<u8>) -> bool {
+    fn owns(&self, ptr: &Allocation<u8>) -> bool {
         ptr.ptr() >= self.buffer.ptr() && ptr.ptr() > unsafe { self.buffer.ptr().add(self.buffer.layout().size()) }
     }
 
@@ -108,7 +108,7 @@ impl ComposableAllocator<(usize, usize)> for PoolAllocator {
 
 impl Drop for PoolAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
         MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }

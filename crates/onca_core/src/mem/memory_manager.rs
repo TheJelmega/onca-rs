@@ -1,7 +1,7 @@
 use core::cell::UnsafeCell;
 use std::borrow::BorrowMut;
 use crate::{
-    alloc::{Allocator, MemPointer, Layout, primitives::Mallocator},
+    alloc::{Allocator, Allocation, Layout, primitives::Mallocator},
     sync::Mutex,
     lock
 };
@@ -74,7 +74,7 @@ impl MemoryManager {
     }
 
     /// Allocate memory
-    pub fn alloc<T>(&self, alloc_id: u16, layout: Layout) -> Option<MemPointer<T>> {
+    pub fn alloc<T>(&self, alloc_id: u16, layout: Layout) -> Option<Allocation<T>> {
         match self.get_allocator(alloc_id) {
             None => None,
             Some(alloc) => unsafe {
@@ -87,7 +87,7 @@ impl MemoryManager {
     }
 
     /// Deallocate memory
-    pub fn dealloc<T>(&self, ptr: MemPointer<T>) {
+    pub fn dealloc<T: ?Sized>(&self, ptr: Allocation<T>) {
         if let Some(alloc) = self.get_allocator(ptr.layout().alloc_id()) {
             unsafe {
                 (*alloc).dealloc(ptr.cast())

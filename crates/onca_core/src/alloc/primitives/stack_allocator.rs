@@ -1,5 +1,5 @@
 use core::mem::size_of;
-use crate::{alloc::{MemPointer, Allocator, Layout}, mem::MEMORY_MANAGER};
+use crate::{alloc::{Allocation, Allocator, Layout}, mem::MEMORY_MANAGER};
 
 /// Linear/Bump allocator
 /// 
@@ -7,7 +7,7 @@ use crate::{alloc::{MemPointer, Allocator, Layout}, mem::MEMORY_MANAGER};
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct StackAllocator {
     max_align : u16,
-    buffer : MemPointer<u8>,
+    buffer : Allocation<u8>,
     head   : *mut u8,
     end    : *mut u8,
     id     : u16
@@ -15,23 +15,23 @@ pub struct StackAllocator {
 
 impl StackAllocator {
     /// Create a new stack allocator from a buffer and a maximum alignment for allocations
-    pub fn new(mut buffer: MemPointer<u8>, max_align: u16) -> Self
+    pub fn new(mut buffer: Allocation<u8>, max_align: u16) -> Self
     {
         let head = buffer.ptr_mut();
         let end = unsafe {
-            buffer.ptr_mut().add(MemPointer::<u8>::layout(&buffer).size())
+            buffer.ptr_mut().add(Allocation::<u8>::layout(&buffer).size())
         };
 
         Self { max_align, buffer, head, end, id: 0 }
     }
     /// Reset the linear allocator to its empty state
     pub fn reset(&mut self) {
-        self.head = MemPointer::<u8>::ptr_mut(&mut self.buffer);
+        self.head = Allocation::<u8>::ptr_mut(&mut self.buffer);
     }
 }
 
 impl Allocator for StackAllocator {
-    unsafe fn alloc(&mut self, mut layout: Layout) -> Option<MemPointer<u8>> {
+    unsafe fn alloc(&mut self, mut layout: Layout) -> Option<Allocation<u8>> {
         if layout.align() > self.max_align as usize {
             // Layout exceeds allocator's maximum alignment
             return None;
@@ -45,11 +45,11 @@ impl Allocator for StackAllocator {
             None
         } else {
             self.head = new_head;
-            Some(MemPointer::<_>::new(ptr, layout.with_alloc_id(self.id)))
+            Some(Allocation::<_>::new(ptr, layout.with_alloc_id(self.id)))
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: MemPointer<u8>) {
+    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
         assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
 
         let ptr_mut = ptr.ptr_mut();
@@ -77,7 +77,7 @@ impl Allocator for StackAllocator {
 
 impl Drop for StackAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = MemPointer::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
+        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
         MEMORY_MANAGER.dealloc(dealloc_ptr);
     }
 }
