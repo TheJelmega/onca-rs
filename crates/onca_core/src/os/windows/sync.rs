@@ -486,29 +486,29 @@ impl RwLock
     // Get the native handle of the Mutex
     pub fn native_handle(&self) -> *const () { self.handle.Ptr as *const () }
 
-    fn lock_exclusive(&mut self) -> LockResult
+    pub fn lock_exclusive(&mut self) -> LockResult
     {
         unsafe { AcquireSRWLockExclusive(&mut self.handle) };
         Ok(())
     }
 
-    fn lock_shared(&mut self) -> LockResult
+    pub fn lock_shared(&mut self) -> LockResult
     {
         unsafe { AcquireSRWLockShared(&mut self.handle) };
         Ok(())
     }
 
-    fn unlock_exclusive(&mut self)
+    pub fn unlock_exclusive(&mut self)
     {
         unsafe { ReleaseSRWLockExclusive(&mut self.handle) };
     }
 
-    fn unlock_shared(&mut self)
+    pub fn unlock_shared(&mut self)
     {
         unsafe { ReleaseSRWLockShared(&mut self.handle) };
     }
 
-    fn try_lock_exclusive(&mut self) -> TryLockResult
+    pub fn try_lock_exclusive(&mut self) -> TryLockResult
     {
         if unsafe { TryAcquireSRWLockExclusive(&mut self.handle).0 != 0 }
             { Ok(()) }

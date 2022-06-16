@@ -35,7 +35,11 @@ impl MemoryManager {
     
     /// Create a new memory manager
     pub const fn new() -> Self {
-        Self { state: Lazy::new(|| UnsafeCell::new(State::new())) }
+        Self { state: Lazy::new(|| {
+            let mut state = UnsafeCell::new(State::new());
+            state.get_mut().mutex = Mutex::new();
+            state
+        }) }
     }
 
     /// Register an allocator to the manager and set its allocator id
