@@ -57,8 +57,27 @@ impl<T: ?Sized> Allocation<T>
         unsafe { &mut *self.ptr_mut() }
     }
 
+    /// Cast the allocation to contain a value of another type
     pub fn cast<U>(self) -> Allocation<U> {
         Allocation { ptr: self.ptr.cast(), layout: self.layout }
+    }
+
+    /// Duplicate the allocation
+    /// 
+    /// # Safety
+    /// 
+    /// Duplicating the allocation is unsafe, as it could cause double deallocations
+    pub unsafe fn duplicate(&self) -> Self {
+        Self::new(self.ptr.as_ptr(), self.layout)
+    }
+
+    /// Duplicate the allocation and cast it
+    /// 
+    /// # Safety
+    /// 
+    /// Duplicating the allocation is unsafe, as it could cause double deallocations
+    pub unsafe fn duplicate_cast<U>(&self) -> Allocation<U> {
+        self.duplicate().cast()
     }
 }
 
@@ -77,6 +96,15 @@ impl<T> Allocation<T>
     pub fn from_untyped(ptr: *mut u8, layout: Layout) -> Self {
         Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr.cast::<T>()) }, layout }
     }
+
+    /// Create a null allocation
+    /// 
+    /// # Safety
+    /// 
+    /// This function is meant for internal use, as calling anything using it is UB
+    pub unsafe fn null() -> Self {
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null() }
+    }
 }
 
 impl Allocation<dyn Any>
@@ -94,7 +122,7 @@ impl Allocation<dyn Any>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast::<T>(), layout: self.layout }
+        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
     }
 }
 
@@ -113,7 +141,7 @@ impl Allocation<dyn Any + Send>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast::<T>(), layout: self.layout }
+        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
     }
 }
 
@@ -132,7 +160,7 @@ impl Allocation<dyn Any + Send + Sync>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast::<T>(), layout: self.layout }
+        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
     }
 }
 

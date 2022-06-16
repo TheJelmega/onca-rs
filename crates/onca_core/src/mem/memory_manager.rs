@@ -1,7 +1,7 @@
 use core::cell::UnsafeCell;
 use std::borrow::BorrowMut;
 use crate::{
-    alloc::{Allocator, Allocation, Layout, primitives::Mallocator},
+    alloc::{Allocator, Allocation, Layout, primitives::Mallocator, UseAlloc},
     sync::Mutex,
     lock
 };
@@ -56,13 +56,16 @@ impl MemoryManager {
     }
 
     /// Get an allocator from its id
-    pub fn get_allocator(&self, id: u16) -> Option<*mut dyn Allocator> {
+    pub fn get_allocator(&self, id: u16) -> Option<&mut dyn Allocator> {
         let state = unsafe { &mut *self.state.get() };
         if id >= Layout::MAX_ALLOC_ID {
             Some(&mut state.malloc)
         } else {
             lock!(state.mutex);
-            state.allocs[id as usize]
+            match state.allocs[id as usize] {
+                None => None,
+                Some(alloc) => Some(unsafe{ &mut *alloc })
+            }
         }
     }
 
@@ -73,16 +76,32 @@ impl MemoryManager {
         &mut state.malloc
     }
 
+    /// Allocate a raw allocation with the given allocator and layout
+    pub fn alloc_raw(&self, alloc: UseAlloc, layout: Layout) -> Option<Allocation<u8>> {
+        let alloc = match alloc {
+            UseAlloc::Default => self.get_default_allocator(),
+            UseAlloc::Alloc(alloc) => alloc,
+            UseAlloc::Id(id) => {
+                match self.get_allocator(id) {
+                    None => return None,
+                    Some(alloc) => alloc
+                }
+            }
+        };
+
+        unsafe {
+            match alloc.alloc(layout) {
+                None => None,
+                Some(ptr) => Some(ptr)
+            }
+        }
+    }
+
     /// Allocate memory
-    pub fn alloc<T>(&self, alloc_id: u16, layout: Layout) -> Option<Allocation<T>> {
-        match self.get_allocator(alloc_id) {
+    pub fn alloc<T>(&self, alloc: UseAlloc) -> Option<Allocation<T>> {
+        match self.alloc_raw(alloc, Layout::new::<T>()) {
             None => None,
-            Some(alloc) => unsafe {
-              match (*alloc).alloc(layout) {
-                  None => None,
-                  Some(ptr) => Some(ptr.cast())
-              } 
-            },
+            Some(ptr) => Some(ptr.cast())
         }
     }
 

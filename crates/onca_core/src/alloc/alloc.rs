@@ -30,4 +30,14 @@ pub trait ComposableAllocator<Args> : Allocator
 {
     /// Create a new allocator
     fn new_composable(alloc: &mut dyn Allocator, args: Args) -> Self;
-}     
+}
+
+/// Enum telling what allocator to use for any structure that allocates memory
+pub enum UseAlloc<'a> {
+    /// Use the default allocator
+    Default,
+    /// Use the provided allocator
+    Alloc(&'a mut dyn Allocator),
+    /// Use the allocator associated with the given id
+    Id(u16)
+}

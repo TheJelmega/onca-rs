@@ -12,7 +12,7 @@ use core::{
     ptr::drop_in_place,
 };
 use std::{ops::CoerceUnsized, marker::Unsize, f32::consts::E};
-use crate::alloc::{Allocator, Allocation, Layout};
+use crate::alloc::{Allocator, Allocation, Layout, UseAlloc};
 use super::{MEMORY_MANAGER, HeapPtr};
 
 
@@ -53,86 +53,31 @@ impl<T: ?Sized> Unique<T> {
 
 impl<T> Unique<T> {
     
-    /// Create a new `Unique<T>` using the default allocator
-    #[inline]
-    pub fn new(x: T) -> Self {
-        Self::try_new(x).expect("Failed to allocate memory")
-    }
-
     /// Create a new `Unique<T>` using the given allocator
     #[inline]
-    pub fn new_alloc(x: T, alloc: &mut dyn Allocator) -> Self {
-        Self::try_new_alloc(x, alloc).expect("Failed to allocate memory")
-    }
-
-    /// Create a new `Unique<T>` using the allocator for the given id
-    #[inline]
-    pub fn new_alloc_id(x: T, alloc_id: u16) -> Self {
-        Self::try_new_alloc_id(x, alloc_id).expect("Failed to allocate memory")
-    }
-
-    /// Try to create a new `Unique<T>` using the default allocator
-    #[inline]
-    pub fn try_new(x: T) -> Option<Self> {
-        Self::try_new_alloc(x, MEMORY_MANAGER.get_default_allocator())
+    pub fn new(x: T, alloc: UseAlloc) -> Self {
+        Self::try_new(x, alloc).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `Unique<T>` using the given allocator
-    pub fn try_new_alloc(x: T, alloc: &mut dyn Allocator) -> Option<Self> {
-        let heap = HeapPtr::<T>::try_new_alloc(x, alloc);
+    #[inline]
+    pub fn try_new(x: T, alloc: UseAlloc) -> Option<Self> {
+        let heap = HeapPtr::<T>::try_new(x, alloc);
         match heap {
             None => None,
             Some(ptr) => Some(Self{ ptr })
         }
     }
 
-    /// Try to create a new `Unique<T>` using the allocator for the given id
-    pub fn try_new_alloc_id(x: T, alloc_id: u16) -> Option<Self> {
-        let heap = HeapPtr::<T>::try_new_alloc_id(x, alloc_id);
-        match heap {
-            None => None,
-            Some(ptr) => Some(Self{ ptr })
-        }
-    }
-
-    /// Creates new `Unique<T>` with an uninitialized value, using the default allocator
+    /// Creates new `Unique<T>` with an uninitialized value, using the given allocator
     #[inline]
-    pub fn new_uninit() -> Unique<MaybeUninit<T>> {
-        Self::new_uninit_alloc(MEMORY_MANAGER.get_default_allocator())
-    }
-
-    /// Creates a new `Unique<T>` with an uninitialized value, using the given allocator
-    #[inline]
-    pub fn new_uninit_alloc(alloc: &mut dyn Allocator) -> Unique<MaybeUninit<T>> {
-        Self::try_new_uninit_alloc(alloc).expect("Failed to allocate memory")
-    }
-
-    /// Creates a new `Unique<T>` with an uninitialized value, using the allocator for the given id
-    #[inline]
-    pub fn new_uninit_alloc_id(alloc_id: u16) -> Unique<MaybeUninit<T>> {
-        Self::try_new_uninit_alloc_id(alloc_id).expect("Failed to allocate memory")
-    }
-
-    /// Try to create a new `Unique<T>` with an uninitialized value, using the default allocator
-    #[inline]
-    pub fn try_new_uninit() -> Option<Unique<MaybeUninit<T>>> {
-        Self::try_new_uninit_alloc(MEMORY_MANAGER.get_default_allocator())
+    pub fn new_uninit(alloc: UseAlloc) -> Unique<MaybeUninit<T>> {
+        Self::try_new_uninit(alloc).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `Unique<T>` with an uninitialized value, using the given allocator
-    pub fn try_new_uninit_alloc(alloc: &mut dyn Allocator) -> Option<Unique<MaybeUninit<T>>> {
-        let ptr = HeapPtr::<T>::try_new_uninit_alloc(alloc);
-        match ptr {
-            None => None,
-            Some(ptr) => {
-                Some(Unique::<MaybeUninit<T>>{ ptr })
-            }
-        }
-    }
-
-    /// Try to create a new `Unique<T>` with an uninitialized value, using the allocator for the given id
-    pub fn try_new_uninit_alloc_id(alloc_id: u16) -> Option<Unique<MaybeUninit<T>>> {
-        let ptr = HeapPtr::<T>::try_new_uninit_alloc_id(alloc_id);
+    pub fn try_new_uninit(alloc: UseAlloc) -> Option<Unique<MaybeUninit<T>>> {
+        let ptr = HeapPtr::<T>::try_new_uninit(alloc);
         match ptr {
             None => None,
             Some(ptr) => {
