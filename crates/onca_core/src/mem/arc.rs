@@ -6,7 +6,7 @@ use core::{
     marker::{PhantomData, Unsize},
     mem::{MaybeUninit, ManuallyDrop, forget},
     ops::{Deref, CoerceUnsized},
-    ptr::{drop_in_place, read}
+    ptr::{drop_in_place, read, null}
 };
 use crate::alloc::{Allocation, Allocator, Layout, UseAlloc};
 use crate::mem::MEMORY_MANAGER;
@@ -58,7 +58,6 @@ impl<T: ?Sized> Arc<T> {
     
     pub fn downgrade(this: &Self) -> AWeak<T> {
         this.inner().inc_weak();
-        this.inner().dec_strong();
         AWeak { ptr: unsafe { this.ptr.duplicate() } }
     }
 
@@ -136,15 +135,16 @@ impl<T> Arc<T> {
     }
 
     /// Create a new `Arc` using the value produced by the given closure, which itself has access to a weak pointer to the data
-    pub fn new_cyclic<F: FnOnce(&AWeak<T>) -> T>(fun: F, alloc: UseAlloc) -> Option<Self> {
+    pub fn new_cyclic<F: FnOnce(AWeak<T>) -> T>(fun: F, alloc: UseAlloc) -> Option<Self> {
         let mut uninit = Self::try_new_uninit(alloc).expect("Failed to allocate memory");
         uninit.inner().dec_strong();
         uninit.inner().inc_weak();
 
         let weak_ptr = unsafe{ uninit.ptr.duplicate_cast::<RcData<T>>() };
         let weak = AWeak::<T>{ ptr: weak_ptr };
-        uninit.ptr.get_mut().value.write(fun(&weak));
+        uninit.ptr.get_mut().value.write(fun(weak));
 
+        uninit.inner().inc_strong();
         Some(uninit.assume_init())
     }
 
@@ -200,44 +200,6 @@ impl<T> Arc<T> {
             (&mut data.weak as *mut AtomicUsize).write(AtomicUsize::new(0));
         }
         Some(rc)
-    }
-}
-
-impl<T: ?Sized> AWeak<T> {
-    /// Get the strong count for the `Arc`
-    pub fn strong_count(&self) -> usize {
-        self.inner().strong_count()
-    }
-
-    /// Get the weak count for the `Arc`
-    pub fn weak_count(&self) -> usize {
-        self.inner().weak_count()
-    }
-
-    /// Upgrade to an 'Arc', `None` will be returned if the `AWeak` points to an invalid pointer
-    pub fn upgrade(&self) -> Option<Arc<T>> {
-        if Self::strong_count(self) > 0 {
-            let rc = Arc::<T>{ ptr: unsafe { self.ptr.duplicate() }, phantom: PhantomData };
-            self.inner().inc_strong();
-            Some(rc)
-        } else {
-            None
-        }
-    }
-
-    pub fn ptr_eq(&self, other: &Self) -> bool {
-        self.ptr.ptr() == other.ptr.ptr()
-    }
-
-    fn inner(&self) -> &RcData<T> {
-        self.ptr.get_ref()
-    }
-}
-
-impl<T> AWeak<T> {
-    /// Create a new invalid weak pointer
-    pub fn new() -> Self {
-        AWeak { ptr: unsafe { Allocation::<RcData<T>>::null() } }
     }
 }
 
@@ -355,9 +317,71 @@ impl<T: Ord + ?Sized> Ord for Arc<T> {
     }
 }
 
+impl<T, U> CoerceUnsized<Arc<U>> for Arc<T>
+    where T : Unsize<U> + ?Sized,
+          U : ?Sized
+{}
+
+unsafe impl<T: ?Sized> Send for Arc<T> {}
+unsafe impl<T: ?Sized> Sync for Arc<T> {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+impl<T: ?Sized> AWeak<T> {
+    /// Get the strong count for the `Rc`
+    pub fn strong_count(&self) -> usize {
+        if self.is_valid() {
+            self.inner().strong_count()
+        } else {
+            0
+        }
+    }
+
+    /// Get the weak count for the `Rc`
+    pub fn weak_count(&self) -> usize {
+        if self.is_valid() {
+            self.inner().weak_count()
+        } else {
+            0
+        }
+    }
+
+    /// Upgrade to an 'Rc', `None` will be returned if the `AWeak` points to an invalid pointer
+    pub fn upgrade(&self) -> Option<Arc<T>> {
+        if self.is_valid() && Self::strong_count(self) > 0 {
+            let rc = Arc::<T>{ ptr: unsafe { self.ptr.duplicate() }, phantom: PhantomData };
+            self.inner().inc_strong();
+            Some(rc)
+        } else {
+            None
+        }
+    }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        self.ptr.ptr() == other.ptr.ptr()
+    }
+
+    fn inner(&self) -> &RcData<T> {
+        self.ptr.get_ref()
+    }
+
+    fn is_valid(&self) -> bool {
+        self.ptr.ptr() as *const u8 != null()
+    }
+}
+
+impl<T> AWeak<T> {
+    /// Create a new invalid weak pointer
+    pub fn new() -> Self {
+        AWeak { ptr: unsafe { Allocation::<RcData<T>>::null() } }
+    }
+}
+
 impl<T: ?Sized> Clone for AWeak<T> {
     fn clone(&self) -> Self {
-        self.inner().inc_weak();
+        if self.is_valid() {
+            self.inner().inc_weak();
+        }
         AWeak { ptr: unsafe{ self.ptr.duplicate() } }
     }
 }
@@ -370,25 +394,159 @@ impl<T> Default for AWeak<T> {
 
 impl<T: ?Sized> Drop for AWeak<T> {
     fn drop(&mut self) {
-        self.inner().dec_weak();
-        if self.strong_count() == 0 && self.weak_count() == 0 {
-            MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+        if self.is_valid() {
+            self.inner().dec_weak();
+            if self.strong_count() == 0 && self.weak_count() == 0 {
+                MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+            }
         }
     }
 }
-
-impl<T, U> CoerceUnsized<Arc<U>> for Arc<T>
-    where T : Unsize<U> + ?Sized,
-          U : ?Sized
-{}
 
 impl<T, U> CoerceUnsized<AWeak<U>> for AWeak<T>
     where T : Unsize<U> + ?Sized,
           U : ?Sized
 {}
 
-unsafe impl<T: ?Sized> Send for Arc<T> {}
-unsafe impl<T: ?Sized> Sync for Arc<T> {}
-
 unsafe impl<T: ?Sized> Send for AWeak<T> {}
 unsafe impl<T: ?Sized> Sync for AWeak<T> {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use crate::alloc::UseAlloc;
+
+    use super::{Arc, AWeak};
+
+
+    #[test]
+    fn new() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+
+        assert_eq!(Arc::strong_count(&rc), 1);
+        assert_eq!(Arc::weak_count(&rc), 0);
+        assert_eq!(*rc, 123);
+    }
+
+    #[test]
+    fn clone_drop() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+
+        {
+            let rc2 = rc.clone();
+            assert!(Arc::ptr_eq(&rc, &rc2));
+            assert_eq!(Arc::strong_count(&rc), 2);
+            assert_eq!(Arc::weak_count(&rc), 0);
+        }
+
+        assert_eq!(Arc::strong_count(&rc), 1);
+        assert_eq!(Arc::weak_count(&rc), 0);
+    }
+
+    #[test]
+    fn downgrade() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+
+        {
+            let weak = Arc::downgrade(&rc);
+            
+            assert_eq!(Arc::strong_count(&rc), 1);
+            assert_eq!(Arc::weak_count(&rc), 1);
+        }
+
+        assert_eq!(Arc::strong_count(&rc), 1);
+        assert_eq!(Arc::weak_count(&rc), 0);
+    }
+
+    #[test]
+    fn upgrade_null() {
+        let weak = AWeak::<u64>::new();
+
+        match weak.upgrade() {
+            None => {},
+            Some(_) => panic!()
+        }
+    }
+
+    #[test]
+    fn upgrade() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let weak = Arc::downgrade(&rc);
+
+        let upgraded = weak.upgrade();
+        match &upgraded {
+            None => panic!(),
+            Some(ref tmp) => assert_eq!(**tmp, 123)
+        }
+
+        assert_eq!(Arc::strong_count(&rc), 2);
+        assert_eq!(Arc::weak_count(&rc), 1);
+    }
+
+    #[test]
+    fn cyclic() {
+        let mut weak = AWeak::<u64>::new();
+
+        let rc = Arc::<u64>::new_cyclic(|wrc| { weak = wrc; 123 }, UseAlloc::Default).unwrap();
+
+        assert_eq!(Arc::strong_count(&rc), 1);
+        assert_eq!(Arc::weak_count(&rc), 1);
+        assert_eq!(*rc, 123);
+
+        assert_eq!(weak.strong_count(), 1);
+        assert_eq!(weak.weak_count(), 1);
+    }
+
+    #[test]
+    fn unique_unwrap() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+
+        match Arc::try_unwrap(rc) {
+            Ok(_) => {},
+            Err(_) => panic!()
+        }
+    }
+
+    #[test]
+    fn non_unique_unwrap() {
+        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc2 = rc.clone();
+
+        match Arc::try_unwrap(rc) {
+            Ok(_) => panic!(),
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn unique_get_mut() {
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+
+        match Arc::get_mut(&mut rc) {
+            None => panic!(),
+            Some(_) => {}
+        }
+    }
+
+    #[test]
+    fn non_unique_get_mut() {
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc2 = rc.clone();
+
+        match Arc::get_mut(&mut rc) {
+            None => {},
+            Some(_) => panic!()
+        }
+    }
+
+    #[test]
+    fn non_unique_make_mut() {
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc2 = rc.clone();
+
+        Arc::make_mut(&mut rc);
+
+        assert!(!Arc::ptr_eq(&rc, &rc2));
+    }
+}

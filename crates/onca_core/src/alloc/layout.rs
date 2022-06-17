@@ -55,7 +55,7 @@ impl Layout {
     /// Create a new layout for type `T`
     pub fn new<T>() -> Self {
         let size = mem::size_of::<T>();
-        let align = mem::size_of::<T>();
+        let align = mem::align_of::<T>();
         Self::new_size_align(size, align)
     }
 
