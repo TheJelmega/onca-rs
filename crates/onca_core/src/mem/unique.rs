@@ -23,7 +23,11 @@ pub struct Unique<T: ?Sized> {
 impl<T: ?Sized> Unique<T> {
 
     /// Create a `Unique<T>` from an allocation
-    pub fn from_raw(ptr: Allocation<T>) -> Self {
+    /// 
+    /// #Safety
+    /// 
+    /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
+    pub unsafe fn from_raw(ptr: Allocation<T>) -> Self {
         Unique { ptr: HeapPtr::<_>::from_raw(ptr) }
     }
     

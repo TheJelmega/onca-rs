@@ -1,6 +1,9 @@
 use core::{any::Any, borrow::*, marker::Unsize, ops::*, ptr::*};
+use std::mem::MaybeUninit;
 
-use super::{Layout, Allocator};
+use crate::mem::MEMORY_MANAGER;
+
+use super::{Layout, Allocator, UseAlloc, layout};
 
 /// Representation of allocated memory
 pub struct Allocation<T: ?Sized>
@@ -104,6 +107,45 @@ impl<T> Allocation<T>
     /// This function is meant for internal use, as calling anything using it is UB
     pub unsafe fn null() -> Self {
         Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null() }
+    }
+
+    /// Create a null heap pointer that store an allocator id for future use
+    pub unsafe fn null_alloc(alloc: UseAlloc) -> Self {
+        let mut layout = Layout::null();
+        match alloc {
+            UseAlloc::Default => layout = layout.with_alloc_id(Layout::MAX_ALLOC_ID),
+            UseAlloc::Alloc(alloc) => layout = layout.with_alloc_id(alloc.alloc_id()),
+            UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
+        }
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout }
+    }
+}
+
+impl<T> Allocation<MaybeUninit<T>> {
+    /// Converts to `Allocation<T>`
+    /// 
+    /// # Safety
+    /// 
+    /// It's up to the user to guarentee that the value is valid
+    pub unsafe fn assume_init(self) -> Allocation<T> {
+        Allocation { ptr: self.ptr.cast(), layout: self.layout }
+    }
+
+    pub fn write(mut this: Self, value: T) -> Allocation<T> {
+        this.get_mut().write(value);
+        unsafe { this.assume_init() }
+    }
+}
+
+impl<T> Allocation<[MaybeUninit<T>]> {
+    /// Converts to `Allocation<T>`
+    /// 
+    /// # Safety
+    /// 
+    /// It's up to the user to guarentee that the value is valid
+    pub unsafe fn assume_init(self) -> Allocation<[T]> {
+        let ptr = core::ptr::slice_from_raw_parts_mut(self.ptr.as_ptr() as *mut T, self.ptr.len());
+        Allocation { ptr: unsafe{ NonNull::new_unchecked(ptr) }, layout: self.layout }
     }
 }
 

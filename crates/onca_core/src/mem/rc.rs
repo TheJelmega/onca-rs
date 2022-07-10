@@ -82,7 +82,7 @@ impl<T: ?Sized> Rc<T> {
 
     pub fn allocator(this: &Self) -> &mut dyn Allocator {
         let id = Self::allocator_id(this);
-        unsafe { &mut *MEMORY_MANAGER.get_allocator(id).unwrap() }
+        unsafe { &mut *MEMORY_MANAGER.get_allocator(UseAlloc::Id(id)).unwrap() }
     }
 
     /// Get a mutable reference to the value, when the `Rc` is unique (only 1 strong and no weak)

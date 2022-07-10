@@ -9,7 +9,7 @@ use core::{
     mem::{MaybeUninit, ManuallyDrop},
     ops::{Deref, DerefMut},
     pin::*,
-    ptr::drop_in_place,
+    ptr::{drop_in_place, null},
 };
 use std::{ops::CoerceUnsized, marker::Unsize};
 use crate::alloc::{Allocator, Allocation, Layout, UseAlloc};
@@ -24,8 +24,12 @@ pub struct HeapPtr<T: ?Sized> {
 impl<T: ?Sized> HeapPtr<T> {
 
     /// Create a `HeapPtr<T>` from an allocation
+    /// 
+    /// #Safety
+    /// 
+    /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
     #[inline]
-    pub fn from_raw(ptr: Allocation<T>) -> Self {
+    pub unsafe fn from_raw(ptr: Allocation<T>) -> Self {
         HeapPtr { ptr, _phantom: PhantomData }
     }
     
@@ -41,6 +45,18 @@ impl<T: ?Sized> HeapPtr<T> {
         unsafe { manual_drop.ptr.duplicate() }
     }
 
+    /// Get a pointer to the underlying memory
+    #[inline]
+    pub fn ptr(&self) -> *const T {
+        self.ptr.ptr()
+    }
+
+    /// Get a mutable pointer to the underlying memory
+    #[inline]
+    pub fn ptr_mut(&self) -> *mut T {
+        self.ptr.ptr_mut()
+    }
+
     /// Get the allocator id
     #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
@@ -51,7 +67,7 @@ impl<T: ?Sized> HeapPtr<T> {
     #[inline]
     pub fn allocator(this: &Self) -> &mut dyn Allocator {
         let id = Self::allocator_id(this);
-        unsafe { &mut *MEMORY_MANAGER.get_allocator(id).unwrap() }
+        unsafe { &mut *MEMORY_MANAGER.get_allocator(UseAlloc::Id(id)).unwrap() }
     }
 }
 
@@ -87,6 +103,19 @@ impl<T> HeapPtr<T> {
         }
     }
 
+    /// Convert a `HeapPtr<T>` into `HeapPtr<[T]>`
+    pub fn into_heap_slice(this: Self) -> HeapPtr<[T]> {
+        let tmp = ManuallyDrop::new(this);
+        HeapPtr { ptr: unsafe{ tmp.ptr.duplicate_cast::<[T; 1]>() }, _phantom: PhantomData }
+    }
+
+    pub fn null() -> HeapPtr<T> {
+        HeapPtr { ptr: unsafe{ Allocation::null() }, _phantom: PhantomData }
+    }
+
+    pub fn null_alloc(alloc: UseAlloc) -> HeapPtr<T> {
+        HeapPtr { ptr: unsafe{ Allocation::null_alloc(alloc) }, _phantom: PhantomData }
+    }
 }
 
 impl<T> HeapPtr<MaybeUninit<T>> {
@@ -105,6 +134,20 @@ impl<T> HeapPtr<MaybeUninit<T>> {
     pub fn write(mut this: Self, value: T) -> HeapPtr<T> {
         this.ptr.get_mut().write(value);
         unsafe { this.assume_init() }
+    }
+}
+
+impl<T> HeapPtr<[MaybeUninit<T>]> {
+
+    /// Converts to `HeapPtr<T>`
+    /// 
+    /// # Safety
+    /// 
+    /// It's up to the user to guarentee that the value is valid
+    pub unsafe fn assume_init(self) -> HeapPtr<[T]> {
+        let this = ManuallyDrop::new(self);
+        let ptr = unsafe{ this.ptr.duplicate().assume_init() };
+        HeapPtr { ptr, _phantom: PhantomData }
     }
 }
 
@@ -203,10 +246,24 @@ impl<T: ?Sized> DerefMut for HeapPtr<T> {
     }
 }
 
+impl<T> HeapPtr<T> {
+    /// Deref and move the value out of the HeapPtr
+    /// 
+    /// Memory will also be deallocated
+    pub fn deref_move(self) -> T {
+        let me = ManuallyDrop::new(self);
+        let val = unsafe{ core::ptr::read(me.ptr()) };
+        MEMORY_MANAGER.dealloc(unsafe{ me.ptr.duplicate() });
+        val
+    }
+}
+
 impl<T: ?Sized> Drop for HeapPtr<T> {
     fn drop(&mut self) {
-        unsafe { drop_in_place(self.ptr.ptr_mut()) };
-        MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+        if self.ptr.ptr() as *const u8 != null() {
+            unsafe { drop_in_place(self.ptr.ptr_mut()) };
+            MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+        }
     }
 }
 
