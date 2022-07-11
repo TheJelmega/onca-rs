@@ -13,7 +13,6 @@ impl Alloc {
     pub fn new(alloc: UseAlloc) -> Self {
         match alloc {
             UseAlloc::Default => Self::with_id(Layout::MAX_ALLOC_ID),
-            UseAlloc::Alloc(alloc) => Self::with_id(alloc.alloc_id()),
             UseAlloc::Id(id) => Self::with_id(id),
         }
     }
@@ -27,7 +26,7 @@ impl Alloc {
     }
 }
 
-unsafe impl std::alloc::Allocator for Alloc {
+unsafe impl alloc::alloc::Allocator for Alloc {
     fn allocate(&self, layout: std::alloc::Layout) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
         let layout = Layout::new_size_align(layout.size(), layout.align());
 

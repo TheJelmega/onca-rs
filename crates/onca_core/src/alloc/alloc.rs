@@ -33,11 +33,24 @@ pub trait ComposableAllocator<Args> : Allocator
 }
 
 /// Enum telling what allocator to use for any structure that allocates memory
-pub enum UseAlloc<'a> {
+pub enum UseAlloc {
     /// Use the default allocator
     Default,
-    /// Use the provided allocator
-    Alloc(&'a mut dyn Allocator),
     /// Use the allocator associated with the given id
     Id(u16)
+}
+
+impl UseAlloc {
+    pub const fn get_id(&self) -> u16 {
+        match self {
+            UseAlloc::Default => Layout::MAX_ALLOC_ID,
+            UseAlloc::Id(id) => *id,
+        }
+    }
+}
+
+impl From<&dyn Allocator> for UseAlloc {
+    fn from(alloc: &dyn Allocator) -> Self {
+        UseAlloc::Id(alloc.alloc_id())
+    }
 }

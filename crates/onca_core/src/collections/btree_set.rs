@@ -179,6 +179,8 @@ impl<T: Ord> BTreeSet<T> {
     }
 }
 
+// TODO(jel): Binary operators should use self's allocator, but BTreeSet cannot return its allocator
+
 impl<T: Ord + Clone> Sub<&'_ BTreeSet<T>> for &BTreeSet<T> {
     type Output = BTreeSet<T>;
 

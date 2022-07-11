@@ -93,9 +93,10 @@ fn as_non_null<T>(node: &Option<HeapPtr<Node<T>>>) -> Option<NonNull<Node<T>>> {
 
 impl<T> LinkedList<T> {
 
+    #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self { head: None, tail: None, len: 0, alloc_id: MEMORY_MANAGER.get_allocator_id(alloc), phantom: PhantomData }
+    pub const fn new(alloc: UseAlloc) -> Self {
+        Self { head: None, tail: None, len: 0, alloc_id: alloc.get_id(), phantom: PhantomData }
     }
 
     pub fn append(&mut self, other: &mut Self) {

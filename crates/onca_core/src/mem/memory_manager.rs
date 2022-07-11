@@ -60,11 +60,10 @@ impl MemoryManager {
     }
 
     /// Get an allocator
-    pub fn get_allocator<'a>(&self, alloc: UseAlloc<'a>) -> Option<&'a mut dyn Allocator> {
+    pub fn get_allocator(&self, alloc: UseAlloc) -> Option<&mut dyn Allocator> {
         let state = unsafe { &mut *self.state.get() };
         match alloc {
             UseAlloc::Default => Some(&mut state.malloc),
-            UseAlloc::Alloc(alloc) => Some(alloc),
             UseAlloc::Id(id) => {
                 if id >= Layout::MAX_ALLOC_ID {
                     Some(&mut state.malloc)
@@ -76,14 +75,6 @@ impl MemoryManager {
                     }
                 }
             }
-        }
-    }
-
-    pub fn get_allocator_id(&self, alloc: UseAlloc) -> u16 {
-        match alloc {
-            UseAlloc::Default => Layout::MAX_ALLOC_ID,
-            UseAlloc::Alloc(alloc) => alloc.alloc_id(),
-            UseAlloc::Id(id) => id,
         }
     }
 

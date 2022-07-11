@@ -114,7 +114,6 @@ impl<T> Allocation<T>
         let mut layout = Layout::null();
         match alloc {
             UseAlloc::Default => layout = layout.with_alloc_id(Layout::MAX_ALLOC_ID),
-            UseAlloc::Alloc(alloc) => layout = layout.with_alloc_id(alloc.alloc_id()),
             UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
         }
         Self { ptr: NonNull::new_unchecked(null_mut()), layout }
