@@ -202,20 +202,24 @@ pub trait SimdSqrtImpl<const BACKEND_TYPE: BackendType> {
     fn simd_sqrt_impl(self) -> Self;
 }
 
-pub trait SimdRsqrtImpl<const BACKEND_TYPE: BackendType> {
+pub trait SimdRsqrtImpl<const BACKEND_TYPE: BackendType> : Sized {
     /// Per element reverse square root
     fn simd_rsqrt_impl(self) -> Self;
 
     /// Per element reverse square root (aproximated, i.e. less precision but could be faster)
-    fn simd_rsqrt_approx_impl(self) -> Self;
+    fn simd_rsqrt_approx_impl(self) -> Self {
+        Self::simd_rsqrt_impl(self)
+    }
 }
 
-pub trait SimdRcpImpl<const BACKEND_TYPE: BackendType> {
+pub trait SimdRcpImpl<const BACKEND_TYPE: BackendType> : Sized {
     /// Per element reciprical
     fn simd_rcp_impl(self) -> Self;
     
     /// Per element reciprical (aproximated, i.e. less precision but could be faster)
-    fn simd_rcp_approx_impl(self) -> Self;
+    fn simd_rcp_approx_impl(self) -> Self {
+        Self::simd_rcp_impl(self)
+    }
 }
 
 pub trait SimdAbsImpl<const BACKEND_TYPE: BackendType> {

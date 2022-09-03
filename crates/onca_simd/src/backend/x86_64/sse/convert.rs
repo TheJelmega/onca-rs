@@ -186,23 +186,21 @@ impl_elem_bitcast!{
 }
 
 // PERF(jel): Only use `min` for unsigned
-macro_rules! impl_narrow_64 {
-    {$from_ty:ty, $to_ty:ty, $signed_to_ty:ty, 
-     $from_lanes128:literal, $to_lanes128:literal,
-     $from_lanes256:literal, $to_lanes256:literal,
-     $from_lanes512:literal, $to_lanes512:literal,
-     $set:ident,
+macro_rules! impl_narrow {
+    {@64
+     $from_ty:ty, $from_lanes128:literal, $from_lanes256:literal, $from_lanes512:literal => 
+     $to_ty:ty, $to_lanes128:literal, $to_lanes256:literal,  $to_lanes512:literal,
+     $signed_to_ty:ty, 
      $mask0:expr;
      $mask1:expr;
      $mask2:expr;
      $mask3:expr;
     } => {
-        impl_narrow_64!{
-            @common
+        impl_narrow!{
+            @common64
             $from_ty, $to_ty, $signed_to_ty,
             $from_lanes128, $to_lanes128,
             $from_lanes256, $to_lanes256,
-            $set,
             $mask0;
             $mask1;
         }
@@ -243,11 +241,10 @@ macro_rules! impl_narrow_64 {
             }
         }
     };
-    {@common
+    {@common64
      $from_ty:ty, $to_ty:ty, $signed_to_ty:ty, 
      $from_lanes128:literal, $to_lanes128:literal,
      $from_lanes256:literal, $to_lanes256:literal,
-     $set:ident,
      $mask0:expr;
      $mask1:expr;
     } => {
@@ -301,25 +298,18 @@ macro_rules! impl_narrow_64 {
             }
         }
     };
-}
-
-macro_rules! impl_narrow_64_32 {
-    {$from_ty:ty, $to_ty:ty, $signed_to_ty:ty, 
-     $from_lanes128:literal, $to_lanes128:literal,
-     $from_lanes256:literal, $to_lanes256:literal,
-     $from_lanes512:literal, $to_lanes512:literal,
-     $set:ident,
-     $mask0:expr;
-     $mask1:expr;
+    {@64_32
+        $from_ty:ty, $from_lanes128:literal, $from_lanes256:literal, $from_lanes512:literal => 
+        $to_ty:ty, $to_lanes128:literal, $to_lanes256:literal,  $to_lanes512:literal,
+         $signed_to_ty:ty
     } => {
-        impl_narrow_64!{
-            @common
+        impl_narrow!{
+            @common64
             $from_ty, $to_ty, $signed_to_ty,
             $from_lanes128, $to_lanes128,
             $from_lanes256, $to_lanes256,
-            $set,
-            $mask0;
-            $mask1;
+            _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
+            _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
         }
 
         impl SimdConvertImpl<$to_ty, $to_lanes512, {BackendType::SSE}> for Simd<$from_ty, $from_lanes512> {
@@ -327,8 +317,8 @@ macro_rules! impl_narrow_64_32 {
             fn simd_convert_impl(self) -> Simd<$to_ty, $to_lanes512> {
                 unsafe {
                     let a : [__m128i; 4] = self.into();
-                    let shuffle_mask0 = $mask0;
-                    let shuffle_mask1 = $mask1;
+                    let shuffle_mask0 = _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
+                    let shuffle_mask1 = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
                     let res = [_mm_or_si128(_mm_shuffle_epi8(a[0], shuffle_mask0), _mm_shuffle_epi8(a[1], shuffle_mask1)),
                                _mm_or_si128(_mm_shuffle_epi8(a[2], shuffle_mask0), _mm_shuffle_epi8(a[3], shuffle_mask1)),
                                _mm_setzero_si128(),
@@ -355,9 +345,6 @@ macro_rules! impl_narrow_64_32 {
             }
         }
     };
-}
-
-macro_rules! impl_narrow {
     {@16_8 $from_ty:ty, $to_ty:ty, $pack16:ident } => {
         impl SimdConvertImpl<$to_ty, 16, {BackendType::SSE}> for Simd<$from_ty, 8> {
             #[inline]
@@ -589,145 +576,77 @@ macro_rules! impl_narrow {
 
 impl_narrow!{ @16_8 i16, i8, _mm_packs_epi16 }
 impl_narrow!{ @32_8 i32, i8, _mm_packs_epi16, _mm_packs_epi32 }
-impl_narrow_64!{i64, i8, i8,
-                2  , 16,
-                4  , 32,
-                8  , 64,
-                _mm_set1_epi8,
-                _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
+impl_narrow!{ @64 i64, 2, 4, 8 => i8, 16, 32, 64, i8,
+                  _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
 }
-
 impl_narrow!{ @32_16 i32, i16, _mm_packs_epi32 }
-impl_narrow_64!{i64, i16, i16,
-                2  , 8,
-                4  , 16,
-                8  , 32,
-                _mm_set1_epi16,
-                _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
+impl_narrow!{ @64 i64, 2, 4, 8 => i16, 8, 16, 32, i16,
+                  _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
 }
-
-impl_narrow_64_32!{i64, i32, i32,
-                   2  , 4,
-                   4  , 8,
-                   8  , 16,
-                   _mm_set1_epi32,
-                   _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
-                   _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
-}
+impl_narrow!{ @64_32 i64, 2, 4, 8 => i32, 4, 8 , 16, i32 }
 
 //==============================================================================================================================
 
 impl_narrow!{ @16_8 u16, u8, _mm_packus_epi16 }
 impl_narrow!{ @32_8 u32, u8, _mm_packus_epi16, _mm_packs_epi32 }
-impl_narrow_64!{u64, u8, i8,
-                2  , 16,
-                4  , 32,
-                8  , 64,
-                _mm_set1_epi8,
-                _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
+impl_narrow!{ @64 u64, 2, 4, 8 => u8, 16, 32, 64, i8,
+                  _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
 }
-
 impl_narrow!{ @32_16 u32, u16, _mm_packus_epi32 }
-impl_narrow_64!{u64, u16, i16,
-                2  , 8,
-                4  , 16,
-                8  , 32,
-                _mm_set1_epi16,
-                _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
+impl_narrow!{ @64 u64, 2, 4, 8 => u16, 8, 16, 32, i16,
+                  _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
 }
-
-impl_narrow_64_32!{u64, u32, i32,
-                   2  , 4,
-                   4  , 8,
-                   8  , 16,
-                   _mm_set1_epi32,
-                   _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
-                   _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
-}
+impl_narrow!{ @64_32 u64, 2, 4, 8 => u32, 4, 8 , 16, i32 }
 
 //==============================================================================================================================
 
 impl_narrow!{ @16_8 u16, i8, _mm_packs_epi16 }
 impl_narrow!{ @32_8 u32, i8, _mm_packs_epi16, _mm_packs_epi32 }
-impl_narrow_64!{u64, i8, i8,
-                2  , 16,
-                4  , 32,
-                8  , 64,
-                _mm_set1_epi8,
-                _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
+impl_narrow!{ @64 u64, 2, 4, 8 => i8, 16, 32, 64, i8,
+                  _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
 }
-
 impl_narrow!{ @32_16 u32, i16, _mm_packs_epi32 }
-impl_narrow_64!{u64, i16, i16,
-                2  , 8,
-                4  , 16,
-                8  , 32,
-                _mm_set1_epi16,
-                _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
+impl_narrow!{ @64 u64, 2, 4, 8 => i16, 8, 16, 32, i16,
+                  _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
 }
-
-impl_narrow_64_32!{u64, i32, i32,
-                   2  , 4,
-                   4  , 8,
-                   8  , 16,
-                   _mm_set1_epi32,
-                   _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
-                   _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
-}
+impl_narrow!{ @64_32 u64, 2, 4, 8 => i32, 4, 8 , 16, i32 }
 
 //==============================================================================================================================
 
 impl_narrow!{ @16_8 i16, u8, _mm_packus_epi16 }
 impl_narrow!{ @32_8 i32, u8, _mm_packus_epi16, _mm_packs_epi32 }
-impl_narrow_64!{i64, u8, i8,
-                2  , 16,
-                4  , 32,
-                8  , 64,
-                _mm_set1_epi8,
-                _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
+impl_narrow!{ @64 i64, 2, 4, 8 => u8, 16, 32, 64, i8,
+                  _mm_setr_epi8( 0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1,  0,  8, -1, -1, -1, -1, -1, -1, -1, -1);
 }
-
 impl_narrow!{ @32_16 i32, u16, _mm_packus_epi32 }
-impl_narrow_64!{i64, u16, i16,
-                2  , 8,
-                4  , 16,
-                8  , 32,
-                _mm_set1_epi16,
-                _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
-                _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
+impl_narrow!{ @64 i64, 2, 4, 8 => u16, 8, 16, 32, i16,
+                  _mm_setr_epi8( 0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9, -1, -1, -1, -1);
+                  _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  8,  9);
 }
-
-impl_narrow_64_32!{i64, u32, i32,
-                   2  , 4,
-                   4  , 8,
-                   8  , 16,
-                   _mm_set1_epi32,
-                   _mm_setr_epi8( 0,  1,  2,  3,  8,  9, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1);
-                   _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1,  0,  1,  2,  3,  8,  9, 10, 11);
-}
+impl_narrow!{ @64_32 i64, 2, 4, 8 => u32, 4, 8 , 16, i32 }
 
 //==============================================================================================================================
 
@@ -970,8 +889,10 @@ impl SimdConvertImpl<f64, 4, {BackendType::SSE}> for Simd<f32, 8> {
     fn simd_convert_impl(self) -> Simd<f64, 4> {
         unsafe {
             let a : [__m128; 2] = self.into();
-            let res = [_mm_cvtps_pd(a[0]), _mm_cvtps_pd(a[1])];
-            res.into()
+            let lower = _mm_cvtps_pd(a[0]);
+            let upper_ps = _mm_castsi128_ps(_mm_bsrli_si128::<8>(_mm_castps_si128(a[0])));
+            let upper = _mm_cvtps_pd(upper_ps);
+            [lower, upper].into()
         }
     }
 }
@@ -980,8 +901,16 @@ impl SimdConvertImpl<f64, 8, {BackendType::SSE}> for Simd<f32, 16> {
     fn simd_convert_impl(self) -> Simd<f64, 8> {
         unsafe {
             let a : [__m128; 4] = self.into();
-            let res = [_mm_cvtps_pd(a[0]), _mm_cvtps_pd(a[1]), _mm_cvtps_pd(a[2]), _mm_cvtps_pd(a[3])];
-            res.into()
+
+            let lower0 = _mm_cvtps_pd(a[0]);
+            let upper0_ps = _mm_castsi128_ps(_mm_bsrli_si128::<8>(_mm_castps_si128(a[0])));
+            let upper0 = _mm_cvtps_pd(upper0_ps);
+
+            let lower1 = _mm_cvtps_pd(a[1]);
+            let upper1_ps = _mm_castsi128_ps(_mm_bsrli_si128::<8>(_mm_castps_si128(a[1])));
+            let upper1 = _mm_cvtps_pd(upper1_ps);
+
+            [lower0, upper0, lower1, upper1].into()
         }
     }
 }
@@ -992,12 +921,9 @@ impl SimdConvertImpl<f32, 4, {BackendType::SSE}> for Simd<f64, 2> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<f32, 4> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(f32::MIN as f64);
-            let max = Simd::<f64, 2>::splat(f32::MAX as f64);
-
-            Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
-        }
+        let min = Simd::<f64, 2>::splat(f32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(f32::MAX as f64);
+        Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
     }  
 }
 
@@ -1012,17 +938,15 @@ impl SimdConvertImpl<f32, 8, {BackendType::SSE}> for Simd<f64, 4> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<f32, 8> {
-        unsafe {
-            let a : [__m128d; 2] = self.into();
-            let min = Simd::<f64, 2>::splat(f32::MIN as f64);
-            let max = Simd::<f64, 2>::splat(f32::MAX as f64);
+        let min = Simd::<f64, 2>::splat(f32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(f32::MAX as f64);
 
-            let clamped : [__m128d; 2] = [
-                Simd::<f64, 2>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f64, 2>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1039,19 +963,17 @@ impl SimdConvertImpl<f32, 16, {BackendType::SSE}> for Simd<f64, 8> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<f32, 16> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(f32::MIN as f64);
-            let max = Simd::<f64, 2>::splat(f32::MAX as f64);
+        let min = Simd::<f64, 2>::splat(f32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(f32::MAX as f64);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1063,12 +985,9 @@ impl SimdConvertImpl<i32, 4, {BackendType::SSE}> for Simd<f32, 4> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 4> {
-        unsafe {
-            let min = Simd::<f32, 4>::splat(i32::MIN as f32);
-            let max = Simd::<f32, 4>::splat(i32::MAX as f32);
-
-            Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
-        }
+        let min = Simd::<f32, 4>::splat(i32::MIN as f32);
+        let max = Simd::<f32, 4>::splat(i32::MAX as f32);
+        Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
     }
 }
 
@@ -1083,17 +1002,15 @@ impl SimdConvertImpl<i32, 8, {BackendType::SSE}> for Simd<f32, 8> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 8> {
-        unsafe {
-            let a : [__m128; 2] = self.into();
-            let min = Simd::<f32, 4>::splat(i32::MIN as f32);
-            let max = Simd::<f32, 4>::splat(i32::MAX as f32);
+        let min = Simd::<f32, 4>::splat(i32::MIN as f32);
+        let max = Simd::<f32, 4>::splat(i32::MAX as f32);
 
-            let clamped : [__m128; 2] = [
-                Simd::<f32, 4>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f32, 4>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1110,19 +1027,17 @@ impl SimdConvertImpl<i32, 16, {BackendType::SSE}> for Simd<f32, 16> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 16> {
-        unsafe {
-            let min = Simd::<f32, 4>::splat(i32::MIN as f32);
-            let max = Simd::<f32, 4>::splat(i32::MAX as f32);
+        let min = Simd::<f32, 4>::splat(i32::MIN as f32);
+        let max = Simd::<f32, 4>::splat(i32::MAX as f32);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1134,11 +1049,9 @@ impl SimdConvertImpl<i32, 4, {BackendType::SSE}> for Simd<f64, 2> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 4> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(u64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(u64::MAX as f64);
-            Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
-        }
+        let min = Simd::<f64, 2>::splat(i32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(i32::MAX as f64);
+        Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
     }
 }
 
@@ -1146,24 +1059,23 @@ impl SimdConvertImpl<i32, 8, {BackendType::SSE}> for Simd<f64, 4> {
     fn simd_convert_impl(self) -> Simd<i32, 8> {
         unsafe { 
             let a : [__m128d; 2] = self.into();
-            let res = [_mm_cvtpd_epi32(a[0]),
-                       _mm_cvtpd_epi32(a[1])];
-            res.into()
+            let lower = _mm_cvtpd_epi32(a[0]);
+            let upper = _mm_cvtpd_epi32(a[1]);
+            let combined = _mm_or_si128(lower, _mm_bslli_si128::<8>(upper));
+            [combined, _mm_setzero_si128()].into()
         }
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 8> {
-        unsafe {
-            let a : [__m128d; 2] = self.into();
-            let min = Simd::<f64, 2>::splat(i32::MIN as f64);
-            let max = Simd::<f64, 2>::splat(i32::MAX as f64);
+        let min = Simd::<f64, 2>::splat(i32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(i32::MAX as f64);
 
-            let clamped : [__m128d; 2] = [
-                Simd::<f64, 2>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f64, 2>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1171,28 +1083,32 @@ impl SimdConvertImpl<i32, 16, {BackendType::SSE}> for Simd<f64, 8> {
     fn simd_convert_impl(self) -> Simd<i32, 16> {
         unsafe { 
             let a : [__m128d; 4] = self.into();
-            let res = [_mm_cvtpd_epi32(a[0]),
-                       _mm_cvtpd_epi32(a[1]),
-                       _mm_cvtpd_epi32(a[2]),
-                       _mm_cvtpd_epi32(a[3])];
-            res.into()
+
+            let lower0 = _mm_cvtpd_epi32(a[0]);
+            let upper0 = _mm_cvtpd_epi32(a[1]);
+            let combined0 = _mm_or_si128(lower0, _mm_bslli_si128::<8>(upper0));
+
+            let lower1 = _mm_cvtpd_epi32(a[0]);
+            let upper1 = _mm_cvtpd_epi32(a[1]);
+            let combined1 = _mm_or_si128(lower1, _mm_bslli_si128::<8>(upper1));
+
+            let zero = _mm_setzero_si128();
+            [combined0, combined1, zero, zero].into()
         }
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i32, 16> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(i32::MIN as f64);
-            let max = Simd::<f64, 2>::splat(i32::MAX as f64);
+        let min = Simd::<f64, 2>::splat(i32::MIN as f64);
+        let max = Simd::<f64, 2>::splat(i32::MAX as f64);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1211,8 +1127,8 @@ impl SimdConvertImpl<i64, 2, {BackendType::SSE}> for Simd<f64, 2> {
 
     fn simd_convert_saturate_impl(self) -> Simd<i64, 2> {
         unsafe {
-            let min = Simd::<f64, 2>::splat(u64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(u64::MAX as f64);
+            let min = Simd::<f64, 2>::splat(i64::MIN as f64);
+            let max = Simd::<f64, 2>::splat(i64::MAX as f64);
             Self::convert(self.simd_clamp::<{BackendType::SSE}>(min, max))
         }
     }
@@ -1233,17 +1149,15 @@ impl SimdConvertImpl<i64, 4, {BackendType::SSE}> for Simd<f64, 4> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i64, 4> {
-        unsafe {
-            let a : [__m128d; 2] = self.into();
-            let min = Simd::<f64, 2>::splat(i64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(i64::MAX as f64);
+        let min = Simd::<f64, 2>::splat(i64::MIN as f64);
+        let max = Simd::<f64, 2>::splat(i64::MAX as f64);
 
-            let clamped : [__m128d; 2] = [
-                Simd::<f64, 2>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f64, 2>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1262,19 +1176,17 @@ impl SimdConvertImpl<i64, 8, {BackendType::SSE}> for Simd<f64, 8> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<i64, 8> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(i64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(i64::MAX as f64);
+        let min = Simd::<f64, 2>::splat(i64::MIN as f64);
+        let max = Simd::<f64, 2>::splat(i64::MAX as f64);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1313,17 +1225,15 @@ impl SimdConvertImpl<u64, 4, {BackendType::SSE}> for Simd<f64, 4> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<u64, 4> {
-        unsafe {
-            let a : [__m128d; 2] = self.into();
-            let min = Simd::<f64, 2>::splat(u64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(u64::MAX as f64);
+        let min = Simd::<f64, 2>::splat(u64::MIN as f64);
+        let max = Simd::<f64, 2>::splat(u64::MAX as f64);
 
-            let clamped : [__m128d; 2] = [
-                Simd::<f64, 2>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f64, 2>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(Simd::<f64, 4>::from(clamped))
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(Simd::<f64, 4>::from(clamped))
     }
 }
 
@@ -1342,19 +1252,17 @@ impl SimdConvertImpl<u64, 8, {BackendType::SSE}> for Simd<f64, 8> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<u64, 8> {
-        unsafe {
-            let min = Simd::<f64, 2>::splat(u64::MIN as f64);
-            let max = Simd::<f64, 2>::splat(u64::MAX as f64);
+        let min = Simd::<f64, 2>::splat(u64::MIN as f64);
+        let max = Simd::<f64, 2>::splat(u64::MAX as f64);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1398,17 +1306,15 @@ impl SimdConvertImpl<u32, 8, {BackendType::SSE}> for Simd<f32, 8> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<u32, 8> {
-        unsafe {
-            let a : [__m128; 2] = self.into();
-            let min = Simd::<f32, 4>::splat(u32::MIN as f32);
-            let max = Simd::<f32, 4>::splat(u32::MAX as f32);
+        let min = Simd::<f32, 4>::splat(u32::MIN as f32);
+        let max = Simd::<f32, 4>::splat(u32::MAX as f32);
 
-            let clamped : [__m128; 2] = [
-                Simd::<f32, 4>::from(a[0]).simd_clamp::<{BackendType::SSE}>(min, max).into(),
-                Simd::<f32, 4>::from(a[1]).simd_clamp::<{BackendType::SSE}>(min, max).into()
-            ];
-            Self::convert(Simd::<f32, 8>::from(clamped))
-        }
+        let unclamped = self.split_2();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max)
+        ];
+        Self::convert(Simd::<f32, 8>::from(clamped))
     }
 }
 
@@ -1431,19 +1337,17 @@ impl SimdConvertImpl<u32, 16, {BackendType::SSE}> for Simd<f32, 16> {
     }
 
     fn simd_convert_saturate_impl(self) -> Simd<u32, 16> {
-        unsafe {
-            let min = Simd::<f32, 4>::splat(u32::MIN as f32);
-            let max = Simd::<f32, 4>::splat(u32::MAX as f32);
+        let min = Simd::<f32, 4>::splat(u32::MIN as f32);
+        let max = Simd::<f32, 4>::splat(u32::MAX as f32);
 
-            let unclamped = self.split_4();
-            let clamped = [
-                unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
-                unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
-            ];
-            Self::convert(clamped.into())
-        }
+        let unclamped = self.split_4();
+        let clamped = [
+            unclamped[0].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[1].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[2].simd_clamp::<{BackendType::SSE}>(min, max),
+            unclamped[3].simd_clamp::<{BackendType::SSE}>(min, max),
+        ];
+        Self::convert(clamped.into())
     }
 }
 
@@ -1491,9 +1395,10 @@ impl SimdConvertImpl<f64, 4, {BackendType::SSE}> for Simd<i32, 8> {
     fn simd_convert_impl(self) -> Simd<f64, 4> {
         unsafe {
             let a : [__m128i; 2] = self.into();
-            let res = [_mm_cvtepi32_pd(a[0]),
-                       _mm_cvtepi32_pd(a[1])];
-            res.into()
+            let lower = _mm_cvtepi32_pd(a[0]);
+            let upper_si = _mm_bslli_si128::<8>(a[0]);
+            let upper = _mm_cvtepi32_pd(upper_si);
+            [lower, upper].into()
         }
     }
 }
@@ -1502,11 +1407,16 @@ impl SimdConvertImpl<f64, 8, {BackendType::SSE}> for Simd<i32, 16> {
     fn simd_convert_impl(self) -> Simd<f64, 8> {
         unsafe {
             let a : [__m128i; 4] = self.into();
-            let res = [_mm_cvtepi32_pd(a[0]),
-                       _mm_cvtepi32_pd(a[1]),
-                       _mm_cvtepi32_pd(a[2]),
-                       _mm_cvtepi32_pd(a[3])];
-            res.into()
+
+            let lower0 = _mm_cvtepi32_pd(a[0]);
+            let upper0_si = _mm_bslli_si128::<8>(a[0]);
+            let upper0 = _mm_cvtepi32_pd(upper0_si);
+
+            let lower1 = _mm_cvtepi32_pd(a[1]);
+            let upper1_si = _mm_bslli_si128::<8>(a[1]);
+            let upper1 = _mm_cvtepi32_pd(upper1_si);
+
+            [lower0, upper0, lower1, upper1].into()
         }
     }
 }

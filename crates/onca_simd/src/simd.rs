@@ -28,7 +28,6 @@ pub unsafe trait SimdElement : Sealed + Copy + PartialEq + PartialOrd + Default
 {
     /// The mask element type corresponding to this element type.
     type Mask : MaskElement;
-    type IdxT;
 }
 
 impl Sealed for i8 {}
@@ -44,43 +43,33 @@ impl Sealed for f64 {}
 
 unsafe impl SimdElement for i8 {
     type Mask = i8;
-    type IdxT = i8;
 }
 unsafe impl SimdElement for i16 {
     type Mask = i16;
-    type IdxT = i16;
 }
 unsafe impl SimdElement for i32 {
     type Mask = i32;
-    type IdxT = i32;
 }
 unsafe impl SimdElement for i64 {
     type Mask = i64;
-    type IdxT = i64;
 }
 unsafe impl SimdElement for u8 {
     type Mask = i8;
-    type IdxT = i8;
 }
 unsafe impl SimdElement for u16 {
     type Mask = i16;
-    type IdxT = i16;
 }
 unsafe impl SimdElement for u32 {
     type Mask = i32;
-    type IdxT = i32;
 }
 unsafe impl SimdElement for u64 {
     type Mask = i64;
-    type IdxT = i64;
 }
 unsafe impl SimdElement for f32 {
     type Mask = i32;
-    type IdxT = i32;
 }
 unsafe impl SimdElement for f64 {
     type Mask = i64;
-    type IdxT = i64;
 }
 
 /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)

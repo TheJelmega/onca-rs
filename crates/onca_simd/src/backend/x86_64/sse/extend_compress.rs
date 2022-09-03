@@ -41,13 +41,7 @@ macro_rules! impl_cvt_int {
                 type ExtendedType = Simd<$e_ty, $e_lanes256>;
             
                 fn simd_extend_lower_impl(self) -> Self::ExtendedType {
-                    unsafe {
-                        let f = self.split_2();
-                        let lower = f[0].simd_convert::<$e_ty, $e_lanes128, {BackendType::SSE}>();
-                        let upper : Simd<$ty, $lanes128> = _mm_srli_si128::<8>(f[0].into()).into();
-                        let upper = upper.simd_convert::<$e_ty, $e_lanes128, {BackendType::SSE}>();
-                        Simd::<$e_ty, $e_lanes256>::combine_2([lower, upper])
-                    }
+                    self.simd_convert::<$e_ty, $e_lanes256, {BackendType::SSE}>()
                 }
             
                 fn simd_extend_upper_impl(self) -> Self::ExtendedType {
@@ -83,19 +77,7 @@ macro_rules! impl_cvt_int {
                 type ExtendedType = Simd<$e_ty, $e_lanes512>;
             
                 fn simd_extend_lower_impl(self) -> Self::ExtendedType {
-                    unsafe {
-                        let f : [__m128i; 4] = self.into();
-            
-                        let lower0 = $cvt_ext(f[0]);
-                        let upper0 = _mm_srli_si128::<8>(f[0]);
-                        let upper0 = $cvt_ext(upper0);
-            
-                        let lower1 = $cvt_ext(f[1]);
-                        let upper1 = _mm_srli_si128::<8>(f[1]);
-                        let upper1 = $cvt_ext(upper1);
-            
-                        [lower0, upper0, lower1, upper1].into()
-                    }
+                    self.simd_convert::<$e_ty, $e_lanes512, {BackendType::SSE}>()
                 }
             
                 fn simd_extend_upper_impl(self) -> Self::ExtendedType {

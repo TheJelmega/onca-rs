@@ -119,10 +119,6 @@ macro_rules! impl_integer {
                         res.assume_init()
                     }
                 }
-
-                fn simd_rsqrt_approx_impl(self) -> Self {
-                    self.simd_rsqrt_impl()
-                }
             }
 
             impl<const LANES: usize> SimdRcpImpl<{BackendType::Scalar}> for Simd<$ty, LANES>
@@ -134,10 +130,6 @@ macro_rules! impl_integer {
                         ptr::write_bytes(res.as_mut_ptr(), 0, 1);
                         res.assume_init()
                     }
-                }
-
-                fn simd_rcp_approx_impl(self) -> Self {
-                    self.simd_rcp_impl()
                 }
             }
         )*
@@ -692,10 +684,6 @@ impl<const LANES: usize> SimdRsqrtImpl<{BackendType::Scalar}> for Simd<f64, LANE
             res.assume_init()
         }
     }
-
-    fn simd_rsqrt_approx_impl(self) -> Self {
-        self.simd_rsqrt_impl()
-    }
 }
 
 impl<const LANES: usize> SimdRcpImpl<{BackendType::Scalar}> for Simd<f64, LANES>
@@ -709,10 +697,6 @@ impl<const LANES: usize> SimdRcpImpl<{BackendType::Scalar}> for Simd<f64, LANES>
             }
             res.assume_init()
         }
-    }
-
-    fn simd_rcp_approx_impl(self) -> Self {
-        self.simd_rcp_impl()
     }
 }
 
