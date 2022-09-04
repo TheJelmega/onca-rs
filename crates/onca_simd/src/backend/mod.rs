@@ -25,14 +25,46 @@ pub trait SimdSetImpl<T: SimdElement, const BACKEND_TYPE: BackendType>
     fn simd_splat_impl(val: T) -> Self;
 }
 
-pub trait SimdLoadStoreImpl<T: SimdElement, const BACKEND_TYPE: BackendType>
-    where T : SimdElement
-{
+pub trait SimdLoadStoreImpl<T: SimdElement, const BACKEND_TYPE: BackendType> {
     // Load all elements from memory
     fn simd_load_impl(mem: *const T) -> Self;
 
     // Store all elements into the given memory
     fn simd_store_impl(self, mem: *mut T);
+}
+
+pub trait SimdGatherImpl<T: SimdElement, const LANES: usize, const BACKEND_TYPE: BackendType>
+    where LaneCount<LANES> : SupportedLaneCount
+{
+    /// Gather all element from their given indices
+    fn simd_gather_impl(mem: *const T, idxs: Simd<T::Idx, LANES>) -> Self;
+    
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element
+    fn simd_gather_select_impl(mem: *const T, idxs: Simd<T::Idx, LANES>, mask: Mask<T::Mask, LANES>, or: Self) -> Self;
+
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element
+    /// If the index is out of range (larger than `max_idx`), the `or` element will be picked
+    fn simd_gather_select_clamped_impl(mem: *const T, idxs: Simd<T::Idx, LANES>, mask: Mask<T::Mask, LANES>, or: Self, max_idx: usize) -> Self;
+
+    /// Gather all element from their given indices, with the indexes being 32-bit values
+    fn simd_gather_idx32_impl(mem: *const T, idxs: [u32; LANES]) -> Self;
+    
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element, with the indexes being 32-bit values
+    fn simd_gather_idx32_select_impl(mem: *const T, idxs: [u32; LANES], mask: Mask<T::Mask, LANES>, or: Self) -> Self;
+
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element, with the indexes being 32-bit values
+    /// If the index is out of range (larger than `max_idx`), the `or` element will be picked
+    fn simd_gather_idx32_select_clamped_impl(mem: *const T, idxs: [u32; LANES], mask: Mask<T::Mask, LANES>, or: Self, max_idx: usize) -> Self;
+
+    /// Gather all element from their given indices, with the indexes being 64-bit values
+    fn simd_gather_idx64_impl(mem: *const T, idxs: [u64; LANES]) -> Self;
+    
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element, with the indexes being 64-bit values
+    fn simd_gather_idx64_select_impl(mem: *const T, idxs: [u64; LANES], mask: Mask<T::Mask, LANES>, or: Self) -> Self;
+    
+    /// Gather all element from their given indices if the mask is set, otherwise get the value of the corresponding `or` element, with the indexes being 64-bit values
+    /// If the index is out of range (larger than `max_idx`), the `or` element will be picked
+    fn simd_gather_idx64_select_clamped_impl(mem: *const T, idxs: [u64; LANES], mask: Mask<T::Mask, LANES>, or: Self, max_idx: usize) -> Self;
 }
 
 /// Trait for converting between same sized simd registers with same sized element types

@@ -28,6 +28,9 @@ pub unsafe trait SimdElement : Sealed + Copy + PartialEq + PartialOrd + Default
 {
     /// The mask element type corresponding to this element type.
     type Mask : MaskElement;
+    
+    /// The index type used for gather/scatter
+    type Idx : SimdElement;
 }
 
 impl Sealed for i8 {}
@@ -43,33 +46,43 @@ impl Sealed for f64 {}
 
 unsafe impl SimdElement for i8 {
     type Mask = i8;
+    type Idx = u8;
 }
 unsafe impl SimdElement for i16 {
     type Mask = i16;
+    type Idx = u16;
 }
 unsafe impl SimdElement for i32 {
     type Mask = i32;
+    type Idx = u32;
 }
 unsafe impl SimdElement for i64 {
     type Mask = i64;
+    type Idx = u64;
 }
 unsafe impl SimdElement for u8 {
     type Mask = i8;
+    type Idx = u8;
 }
 unsafe impl SimdElement for u16 {
     type Mask = i16;
+    type Idx = u16;
 }
 unsafe impl SimdElement for u32 {
     type Mask = i32;
+    type Idx = u32;
 }
 unsafe impl SimdElement for u64 {
     type Mask = i64;
+    type Idx = u64;
 }
 unsafe impl SimdElement for f32 {
     type Mask = i32;
+    type Idx = u32;
 }
 unsafe impl SimdElement for f64 {
     type Mask = i64;
+    type Idx = u64;
 }
 
 /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
@@ -165,13 +178,8 @@ impl<T, const LANES: usize> Simd<T, LANES>
     #[must_use]
     pub const fn from_slice(slice: &[T]) -> Self {
         assert!(slice.len() >= LANES, "slice length must be at least the number of lanes");
-        let mut array = [slice[0]; LANES];
-        let mut i = 0;
-        while i < LANES {
-            array[i] = slice[i];
-            i += 1;
-        }
-        Self(array)
+        let arr = unsafe{ *(slice as *const [T] as *const [T; LANES]) };
+        Self(arr)
     }
 
     /// Performs lanewise conversion of a SIMD register's elements to another SIMD-valid type.
@@ -179,16 +187,29 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// and from floats to integers (truncating, or saturating at the limits) for each lane, or vice versa
     #[must_use]
     #[inline]
-    pub fn cast<U: SimdElement>(self) -> Simd<U, LANES> {
-        todo!()
+    pub fn cast<U: SimdElement>(self) -> Simd<U, LANES> 
+        where Self : SimdConvertImpl<U, LANES, DEF_BACKEND_TYPE>
+    {
+        self.simd_convert::<U, LANES, DEF_BACKEND_TYPE>()
     }
 
-    /// Reads from potential discontiguous indices in `slice` to construct666 a SIMD register.
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
+    #[must_use]
+    #[inline]
+    pub fn gather(mem: *const T, idxs: Simd<T::Idx, LANES>) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather::<DEF_BACKEND_TYPE>(mem, idxs)
+    }
+
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
     /// If an index is out-of-bounds, the lane is instead selected from the `or` register
     #[must_use]
     #[inline]
-    pub fn gather_or(slice: &[T], idxs: Simd<u64, LANES>, or: Self) -> Self
-        where Self : SimdSetImpl<T, DEF_BACKEND_TYPE>
+    pub fn gather_or(slice: &[T], idxs: Simd<T::Idx, LANES>, or: Self) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
     {
         Self::simd_gather_or::<DEF_BACKEND_TYPE>(slice, idxs, or)
     }
@@ -197,9 +218,10 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// If an index is out-of-bounds, the lane is set to the default value for the type
     #[must_use]
     #[inline]
-    pub fn gather_or_default(slice: &[T], idxs: Simd<u64, LANES>) -> Self 
+    pub fn gather_or_default(slice: &[T], idxs: Simd<T::Idx, LANES>) -> Self 
         where T : Default,
-              Self : SimdSetImpl<T, DEF_BACKEND_TYPE>
+              Self : SimdSetImpl<T, DEF_BACKEND_TYPE> + SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
     {
         Self::simd_gather_or_default::<DEF_BACKEND_TYPE>(slice, idxs)
     }
@@ -209,7 +231,9 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// If an index is disabled or is out-of-bounds, the lane is selected from the `or` vector
     #[must_use]
     #[inline]
-    pub fn gather_select(slice: &[T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>, or: Self) -> Self {
+    pub fn gather_select(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: Simd<T::Idx, LANES>, or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
         Self::simd_gather_select::<DEF_BACKEND_TYPE>(slice, enable, idxs, or)
     }
 
@@ -218,8 +242,121 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// If an index is disabled, the lane is selected from the `or` vector
     #[must_use]
     #[inline]
-    pub unsafe fn gather_select_unchecked(slice: &[T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>, or: Self) -> Self {
-        Self::simd_gather_select_unchecked::<DEF_BACKEND_TYPE>(slice, enable, idxs, or)
+    pub unsafe fn gather_mem_select(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: Simd<T::Idx, LANES>, or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_mem_select::<DEF_BACKEND_TYPE>(mem, enable, idxs, or)
+    }
+
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
+    /// Indices are 32-bit unsigned integers
+    #[must_use]
+    #[inline]
+    pub fn gather_idx32(mem: *const T, idxs: [u32; LANES]) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_idx32::<DEF_BACKEND_TYPE>(mem, idxs)
+    }
+
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
+    /// If an index is out-of-bounds, the lane is instead selected from the `or` register
+    #[must_use]
+    #[inline]
+    pub fn gather_or_idx32(slice: &[T], idxs: [u32; LANES], or: Self) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_or_idx32::<DEF_BACKEND_TYPE>(slice, idxs, or)
+    }
+
+    /// Reads from potentially discontiguous indices in `slice` to construct a SIMD register
+    /// If an index is out-of-bounds, the lane is set to the default value for the type
+    #[must_use]
+    #[inline]
+    pub fn gather_or_default_idx32(slice: &[T], idxs: [u32; LANES]) -> Self 
+        where T : Default,
+              Self : SimdSetImpl<T, DEF_BACKEND_TYPE> + SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_or_default_idx32::<DEF_BACKEND_TYPE>(slice, idxs)
+    }
+
+    /// Reads from potentially dicontiguous indices in `slice` to construct a SIMD register.
+    /// The mask `enable`s all `true` lanes and disables all `false` lanes
+    /// If an index is disabled or is out-of-bounds, the lane is selected from the `or` vector
+    #[must_use]
+    #[inline]
+    pub fn gather_select_idx32(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: [u32; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_select_idx32::<DEF_BACKEND_TYPE>(slice, enable, idxs, or)
+    }
+
+    /// Reads from potentially dscontiguous indices in `slice` to construct a SIMD register
+    /// The mask `enable`s all `true` lanes and disables all `false` lanes
+    /// If an index is disabled, the lane is selected from the `or` vector
+    #[must_use]
+    #[inline]
+    pub unsafe fn gather_mem_select_idx32(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: [u32; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_mem_select_idx32::<DEF_BACKEND_TYPE>(mem, enable, idxs, or)
+    }
+
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
+    #[must_use]
+    #[inline]
+    pub fn gather_idx64(mem: *const T, idxs: [u64; LANES]) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_idx64::<DEF_BACKEND_TYPE>(mem, idxs)
+    }
+
+    /// Reads from potential discontiguous indices in `slice` to construct a SIMD register.
+    /// If an index is out-of-bounds, the lane is instead selected from the `or` register
+    #[must_use]
+    #[inline]
+    pub fn gather_or_idx64(slice: &[T], idxs: [u64; LANES], or: Self) -> Self
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_or_idx64::<DEF_BACKEND_TYPE>(slice, idxs, or)
+    }
+
+    /// Reads from potentially discontiguous indices in `slice` to construct a SIMD register
+    /// If an index is out-of-bounds, the lane is set to the default value for the type
+    #[must_use]
+    #[inline]
+    pub fn gather_or_default_idx64(slice: &[T], idxs: [u64; LANES]) -> Self 
+        where T : Default,
+              Self : SimdSetImpl<T, DEF_BACKEND_TYPE> + SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_or_default_idx64::<DEF_BACKEND_TYPE>(slice, idxs)
+    }
+
+    /// Reads from potentially dicontiguous indices in `slice` to construct a SIMD register.
+    /// The mask `enable`s all `true` lanes and disables all `false` lanes
+    /// If an index is disabled or is out-of-bounds, the lane is selected from the `or` vector
+    #[must_use]
+    #[inline]
+    pub fn gather_select_idx64(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: [u64; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_select_idx64::<DEF_BACKEND_TYPE>(slice, enable, idxs, or)
+    }
+
+    /// Reads from potentially dscontiguous indices in `slice` to construct a SIMD register
+    /// The mask `enable`s all `true` lanes and disables all `false` lanes
+    /// If an index is disabled, the lane is selected from the `or` vector
+    #[must_use]
+    #[inline]
+    pub unsafe fn gather_mem_select_idx64(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: [u64; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, DEF_BACKEND_TYPE>
+    {
+        Self::simd_gather_mem_select_idx64::<DEF_BACKEND_TYPE>(mem, enable, idxs, or)
     }
 
     /// Writes the values in a SIMD register to potentially discontiguous indices in `slice`
@@ -638,10 +775,11 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// S : Scalar (Unknown latency, as this partially depends on the compiler)
     #[must_use]
     #[inline]
-    pub fn simd_gather_or<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: Simd<u64, LANES>, or: Self) -> Self 
-        where Self : SimdSetImpl<T, BACKEND_TYPE>
+    pub fn simd_gather<const BACKEND_TYPE: BackendType>(mem: *const T, idxs: Simd<T::Idx, LANES>) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
     {
-        Self::simd_gather_select::<BACKEND_TYPE>(slice, Mask::simd_splat::<BACKEND_TYPE>(true), idxs, or)
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_impl(mem, idxs)
     }
 
     /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
@@ -660,9 +798,33 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// S : Scalar (Unknown latency, as this partially depends on the compiler)
     #[must_use]
     #[inline]
-    pub fn simd_gather_or_default<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: Simd<u64, LANES>) -> Self 
+    pub fn simd_gather_or<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: Simd<T::Idx, LANES>, or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_select_clamped_impl(slice.as_ptr(), idxs, Mask::<T::Mask, LANES>::simd_splat::<BACKEND_TYPE>(true), or, slice.len())
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_or_default<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: Simd<T::Idx, LANES>) -> Self 
         where T : Default,
-              Self : SimdSetImpl<T, BACKEND_TYPE>
+              Self : SimdSetImpl<T, BACKEND_TYPE> + SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
     {
         Self::simd_gather_or::<BACKEND_TYPE>(slice, idxs, Self::simd_splat::<BACKEND_TYPE>(T::default()))
     }
@@ -683,8 +845,10 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// S : Scalar (Unknown latency, as this partially depends on the compiler)
     #[must_use]
     #[inline]
-    pub fn simd_gather_select<const BACKEND_TYPE: BackendType>(slize: &[T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>, or: Self) -> Self {
-        todo!()
+    pub fn simd_gather_select<const BACKEND_TYPE: BackendType>(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: Simd<T::Idx, LANES>, or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_select_clamped_impl(slice.as_ptr(), idxs, enable, or, slice.len())
     }
 
     /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
@@ -703,8 +867,238 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// S : Scalar (Unknown latency, as this partially depends on the compiler)
     #[must_use]
     #[inline]
-    pub unsafe fn simd_gather_select_unchecked<const BACKEND_TYPE: BackendType>(slice: &[T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>, or: Self) -> Self {
-        todo!()
+    pub unsafe fn simd_gather_mem_select<const BACKEND_TYPE: BackendType>(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: Simd<T::Idx, LANES>, or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_select_impl(mem, idxs, enable, or)
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_idx32<const BACKEND_TYPE: BackendType>(mem: *const T, idxs: [u32; LANES]) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx32_impl(mem, idxs)
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_or_idx32<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: [u32; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx32_select_clamped_impl(slice.as_ptr(), idxs, Mask::<T::Mask, LANES>::simd_splat::<BACKEND_TYPE>(true), or, slice.len())
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_or_default_idx32<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: [u32; LANES]) -> Self 
+        where T : Default,
+              Self : SimdSetImpl<T, BACKEND_TYPE> + SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        Self::simd_gather_or_idx32::<BACKEND_TYPE>(slice, idxs, Self::simd_splat::<BACKEND_TYPE>(T::default()))
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_select_idx32<const BACKEND_TYPE: BackendType>(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: [u32; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx32_select_clamped_impl(slice.as_ptr(), idxs, enable, or, slice.len())
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub unsafe fn simd_gather_mem_select_idx32<const BACKEND_TYPE: BackendType>(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: [u32; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx32_select_impl(mem, idxs, enable, or)
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_idx64<const BACKEND_TYPE: BackendType>(mem: *const T, idxs: [u64; LANES]) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx64_impl(mem, idxs)
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_or_idx64<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: [u64; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx64_select_clamped_impl(slice.as_ptr(), idxs, Mask::<T::Mask, LANES>::simd_splat::<BACKEND_TYPE>(true), or, slice.len())
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_or_default_idx64<const BACKEND_TYPE: BackendType>(slice: &[T], idxs: [u64; LANES]) -> Self 
+        where T : Default,
+              Self : SimdSetImpl<T, BACKEND_TYPE> + SimdGatherImpl<T, LANES, BACKEND_TYPE>,
+              Simd<T::Mask, LANES> : SimdSetImpl<T::Mask, BACKEND_TYPE>
+    {
+        Self::simd_gather_or_idx64::<BACKEND_TYPE>(slice, idxs, Self::simd_splat::<BACKEND_TYPE>(T::default()))
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub fn simd_gather_select_idx64<const BACKEND_TYPE: BackendType>(slice: &[T], enable: Mask<T::Mask, LANES>, idxs: [u64; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx64_select_clamped_impl(slice.as_ptr(), idxs, enable, or, slice.len())
+    }
+
+    /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
+    /// 
+    /// | intrin | u8  | u16 | u32 | u64 | i8  | i16 | i32 | i64 | | 128 | 256 | 512 | | f32 | f64 | | 128 | 256 | 512 
+    /// |--------|-----|-----|-----|-----|-----|-----|-----|-----|-|-----|-----|-----|-|-----|-----|-|-----|-----|-----
+    /// | scalar |  S  |  S  |  S  |  S  |  S  |  S  |  S  |  S  | | 1x  | 2x  | 4x  | |  S  |  S  | | 1x  | 2x  | 4x  
+    /// |  SSE   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// |  AVX   | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// |  AVX2  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 2x  | | TBD | TBD | | 1x  | 1x  | 2x  
+    /// | AVX512 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 1x  | 1x  | | TBD | TBD | | 1x  | 1x  | 1x  
+    /// |  NEON  | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | | 1x  | 2x  | 4x  | | TBD | TBD | | 1x  | 2x  | 4x  
+    /// 
+    /// SSE means all SSE extension, up to and including SSE4.2
+    /// 
+    /// S : Scalar (Unknown latency, as this partially depends on the compiler)
+    #[must_use]
+    #[inline]
+    pub unsafe fn simd_gather_mem_select_idx64<const BACKEND_TYPE: BackendType>(mem: *const T, enable: Mask<T::Mask, LANES>, idxs: [u64; LANES], or: Self) -> Self 
+        where Self : SimdGatherImpl<T, LANES, BACKEND_TYPE>
+    {
+        <Self as SimdGatherImpl<T, LANES, BACKEND_TYPE>>::simd_gather_idx64_select_impl(mem, idxs, enable, or)
     }
 
     /// Performance (in cycles, numbers represent estimated latency, not including throughput, and are therefore not 100% accurate and are meant as a guide)
