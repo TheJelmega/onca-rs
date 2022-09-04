@@ -43,7 +43,7 @@ impl<T, const LANES: usize> SimdLoadStoreImpl<T, {BackendType::Scalar}> for Simd
     }
 }
 
-macro_rules! impl_gather {
+macro_rules! impl_gather_scatter {
     {@single $ty:ty, $lanes:literal, $mask_ty:ty, $idx_ty:ty} => {
         impl SimdGatherImpl<$ty, $lanes, {BackendType::Scalar}> for Simd<$ty, $lanes>
         {
@@ -137,16 +137,84 @@ macro_rules! impl_gather {
                 }
             }
         }
+
+        impl SimdScatterImpl<$ty, $lanes, {BackendType::Scalar}> for Simd<$ty, $lanes> {
+            fn simd_scatter_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>) {
+                for i in 0..$lanes {
+                    unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                }
+            }
+        
+            fn simd_scatter_select_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>, mask: Mask<$mask_ty, $lanes>) {
+                for i in 0..$lanes {
+                    if mask.test(i) {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        
+            fn simd_scatter_select_clamped_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>, mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                for i in 0..$lanes {
+                    if mask.test(i) && idxs[i] as usize <= max_idx {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        
+            fn simd_scatter_idx32_impl(self, mem: *mut $ty, idxs: [u32; $lanes]) {
+                for i in 0..$lanes {
+                    unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                }
+            }
+        
+            fn simd_scatter_idx32_select_impl(self, mem: *mut $ty, idxs: [u32; $lanes], mask: Mask<$mask_ty, $lanes>) {
+                for i in 0..$lanes {
+                    if mask.test(i) {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        
+            fn simd_scatter_idx32_select_clamped_impl(self, mem: *mut $ty, idxs: [u32; $lanes], mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                for i in 0..$lanes {
+                    if mask.test(i) && idxs[i] as usize <= max_idx {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        
+            fn simd_scatter_idx64_impl(self, mem: *mut $ty, idxs: [u64; $lanes]) {
+                for i in 0..$lanes {
+                    unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                }
+            }
+        
+            fn simd_scatter_idx64_select_impl(self, mem: *mut $ty, idxs: [u64; $lanes], mask: Mask<$mask_ty, $lanes>) {
+                for i in 0..$lanes {
+                    if mask.test(i) {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        
+            fn simd_gather_idx64_select_clamped_impl(self, mem: *mut $ty, idxs: [u64; $lanes], mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                for i in 0..$lanes {
+                    if mask.test(i) && idxs[i] as usize <= max_idx {
+                        unsafe{ ptr::write(mem.add(idxs[i] as usize), self[i]) };
+                    }
+                }
+            }
+        }
     };
     {$([$ty:ty, $lanes128:literal, $lanes256:literal, $lanes512:literal, $mask_ty:ty, $idx_ty:ty])*} => {
         $(
-            impl_gather!{ @single $ty, $lanes128, $mask_ty, $idx_ty }
-            impl_gather!{ @single $ty, $lanes256, $mask_ty, $idx_ty }
-            impl_gather!{ @single $ty, $lanes512, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes128, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes256, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes512, $mask_ty, $idx_ty }
         )*
     };
 }
-impl_gather!{
+impl_gather_scatter!{
     [i8 , 16, 32, 64, i8 , u8 ]
     [i16,  8, 16, 32, i16, u16]
     [i32,  4,  8, 16, i32, u32]

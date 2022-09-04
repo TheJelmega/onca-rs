@@ -371,7 +371,7 @@ impl<T, const LANES: usize> Simd<T, LANES>
     /// Writes the values in a SIMD register to multiple potentially discontiguous indices in `slice`
     /// The mask `enable`s all `true` lanes and disables all `false` lanes
     /// If an enable index is out-of-bounds, the lane is not written
-    /// If two enabled lanes in the scattered vector would write to the same index, only the last lane is guearanteed to actually be written
+    /// If two enabled lanes in the scattered vector would write to the same index, only the last lane is guaranteed to actually be written
     #[inline]
     pub fn scatter_select(self, slice: &mut [T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>) {
         self.simd_scatter_select::<DEF_BACKEND_TYPE>(slice, enable, idxs)
@@ -379,7 +379,7 @@ impl<T, const LANES: usize> Simd<T, LANES>
 
     /// Writes the values in a SIMD register to multiple potentially discontiguous indices in `slice`
     /// The mask `enable`s all `true` lanes and disables all `false` lanes
-    /// If two enabled lanes in the scattered vector would write to the same index, only the last lane is guearanteed to actually be written
+    /// If two enabled lanes in the scattered vector would write to the same index, only the last lane is guaranteed to actually be written
     #[inline]
     pub fn scatter_select_unchecked(self, slice: &mut [T], enable: Mask<i64, LANES>, idxs: Simd<u64, LANES>) {
         self.simd_scatter_select_unchecked::<DEF_BACKEND_TYPE>(slice, enable, idxs)

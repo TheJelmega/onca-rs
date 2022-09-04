@@ -8,7 +8,7 @@ use crate::{
     mask::sealed::Sealed, Simd
 };
 
-macro_rules! impl_gather {
+macro_rules! impl_gather_scatter {
     {@single $ty:ty, $lanes:literal, $mask_ty:ty, $idx_ty:ty} => {
         impl SimdGatherImpl<$ty, $lanes, {BackendType::AVX}> for Simd<$ty, $lanes>
         {
@@ -48,16 +48,54 @@ macro_rules! impl_gather {
                 <Self as SimdGatherImpl<$ty, $lanes, {BackendType::SSE}>>::simd_gather_idx64_select_clamped_impl(mem, idxs, mask, or, max_idx)
             }
         }
+
+        impl SimdScatterImpl<$ty, $lanes, {BackendType::AVX}> for Simd<$ty, $lanes> {
+            fn simd_scatter_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_impl(self, mem, idxs)
+            }
+        
+            fn simd_scatter_select_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>, mask: Mask<$mask_ty, $lanes>) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_select_impl(self, mem, idxs, mask)
+            }
+        
+            fn simd_scatter_select_clamped_impl(self, mem: *mut $ty, idxs: Simd<$idx_ty, $lanes>, mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_select_clamped_impl(self, mem, idxs, mask, max_idx)
+            }
+        
+            fn simd_scatter_idx32_impl(self, mem: *mut $ty, idxs: [u32; $lanes]) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_idx32_impl(self, mem, idxs)
+            }
+        
+            fn simd_scatter_idx32_select_impl(self, mem: *mut $ty, idxs: [u32; $lanes], mask: Mask<$mask_ty, $lanes>) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_idx32_select_impl(self, mem, idxs, mask)
+            }
+        
+            fn simd_scatter_idx32_select_clamped_impl(self, mem: *mut $ty, idxs: [u32; $lanes], mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_idx32_select_clamped_impl(self, mem, idxs, mask, max_idx)
+            }
+        
+            fn simd_scatter_idx64_impl(self, mem: *mut $ty, idxs: [u64; $lanes]) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_idx64_impl(self, mem, idxs)
+            }
+        
+            fn simd_scatter_idx64_select_impl(self, mem: *mut $ty, idxs: [u64; $lanes], mask: Mask<$mask_ty, $lanes>) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_scatter_idx64_select_impl(self, mem, idxs, mask)
+            }
+        
+            fn simd_gather_idx64_select_clamped_impl(self, mem: *mut $ty, idxs: [u64; $lanes], mask: Mask<$mask_ty, $lanes>, max_idx: usize) {
+                <Self as SimdScatterImpl<$ty, $lanes, {BackendType::SSE}>>::simd_gather_idx64_select_clamped_impl(self, mem, idxs, mask, max_idx)
+            }
+        }
     };
     {$([$ty:ty, $lanes128:literal, $lanes256:literal, $lanes512:literal, $mask_ty:ty, $idx_ty:ty])*} => {
         $(
-            impl_gather!{ @single $ty, $lanes128, $mask_ty, $idx_ty }
-            impl_gather!{ @single $ty, $lanes256, $mask_ty, $idx_ty }
-            impl_gather!{ @single $ty, $lanes512, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes128, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes256, $mask_ty, $idx_ty }
+            impl_gather_scatter!{ @single $ty, $lanes512, $mask_ty, $idx_ty }
         )*
     };
 }
-impl_gather!{
+impl_gather_scatter!{
     [i8 , 16, 32, 64, i8 , u8 ]
     [i16,  8, 16, 32, i16, u16]
     [i32,  4,  8, 16, i32, u32]

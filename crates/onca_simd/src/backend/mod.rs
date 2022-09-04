@@ -67,6 +67,40 @@ pub trait SimdGatherImpl<T: SimdElement, const LANES: usize, const BACKEND_TYPE:
     fn simd_gather_idx64_select_clamped_impl(mem: *const T, idxs: [u64; LANES], mask: Mask<T::Mask, LANES>, or: Self, max_idx: usize) -> Self;
 }
 
+pub trait SimdScatterImpl<T: SimdElement, const LANES: usize, const BACKEND_TYPE: BackendType>
+    where LaneCount<LANES> : SupportedLaneCount
+{
+    /// Scatter all element to their given indices
+    fn simd_scatter_impl(self, mem: *mut T, idxs: Simd<T::Idx, LANES>);
+    
+    /// Scatter all element to their given indices if the mask is set
+    fn simd_scatter_select_impl(self, mem: *mut T, idxs: Simd<T::Idx, LANES>, mask: Mask<T::Mask, LANES>);
+
+    /// Scatter all element to their given indices if the mask is set, otherwise get the value of the corresponding `or` element
+    /// If the index is out of range (larger than `max_idx`), the element will be ignored
+    fn simd_scatter_select_clamped_impl(self, mem: *mut T, idxs: Simd<T::Idx, LANES>, mask: Mask<T::Mask, LANES>, max_idx: usize);
+
+    /// Scatter all element to their given indices, with the indexes being 32-bit values
+    fn simd_scatter_idx32_impl(self, mem: *mut T, idxs: [u32; LANES]);
+    
+    /// Scatter all element to their given indices if the mask is set, with the indexes being 32-bit values
+    fn simd_scatter_idx32_select_impl(self, mem: *mut T, idxs: [u32; LANES], mask: Mask<T::Mask, LANES>);
+
+    /// Scatter all element to their given indices if the mask is set, with the indexes being 32-bit values
+    /// If the index is out of range (larger than `max_idx`), the element will be ignored
+    fn simd_scatter_idx32_select_clamped_impl(self, mem: *mut T, idxs: [u32; LANES], mask: Mask<T::Mask, LANES>, max_idx: usize);
+
+    /// Scatter all element to their given indices, with the indexes being 64-bit values
+    fn simd_scatter_idx64_impl(self, mem: *mut T, idxs: [u64; LANES]);
+    
+    /// Scatter all element to their given indices if the mask is set, with the indexes being 64-bit values
+    fn simd_scatter_idx64_select_impl(self, mem: *mut T, idxs: [u64; LANES], mask: Mask<T::Mask, LANES>);
+    
+    /// Scatter all element to their given indices if the mask is set, with the indexes being 64-bit values
+    /// If the index is out of range (larger than `max_idx`), the element will be ignored
+    fn simd_gather_idx64_select_clamped_impl(self, mem: *mut T, idxs: [u64; LANES], mask: Mask<T::Mask, LANES>, max_idx: usize);
+}
+
 /// Trait for converting between same sized simd registers with same sized element types
 /// 
 /// int <-> uint: bitcast
