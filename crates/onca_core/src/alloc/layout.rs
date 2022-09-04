@@ -48,7 +48,7 @@ impl Layout {
             (size as u64) << Self::SIZE_SHIFT |
             (tag as u64) << Self::TAG_SHIFT |
             (alloc_id << Self::ALLOC_ID_SHIFT) as u64 & Self::ALLOC_ID_MASK |
-            align.log2() as u64 & Self::ALIGN_MASK
+            align.ilog2() as u64 & Self::ALIGN_MASK
         }
     }
 
