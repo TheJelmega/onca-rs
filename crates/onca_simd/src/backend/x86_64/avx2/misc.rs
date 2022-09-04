@@ -126,8 +126,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_select_clamped_impl(mem: *const $ty, idxs: Simd<u32, 4>, mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+                let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx32_impl(mem: *const $ty, idxs: [u32; 4]) -> Self {
@@ -146,8 +147,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_idx32_select_clamped_impl(mem: *const $ty, idxs: [u32; 4], mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u32, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+                let idxs_mask = Simd::<u32, 4>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx64_impl(mem: *const $ty, idxs: [u64; 4]) -> Self {
@@ -179,8 +181,12 @@ macro_rules! impl_gather {
             }
             
             fn simd_gather_idx64_select_clamped_impl(mem: *const $ty, idxs: [u64; 4], mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u64, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+                let wide_idxs = Simd::<u64, 4>::from_array(idxs);
+                let narrow_idxs = wide_idxs.simd_convert_saturate::<u32, 8, {BackendType::AVX2}>().split_2()[0];
+                let idxs_mask = narrow_idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
             }
         }
         
@@ -197,8 +203,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_select_clamped_impl(mem: *const $ty, idxs: Simd<u32, 8>, mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-                let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+                let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx32_impl(mem: *const $ty, idxs: [u32; 8]) -> Self {
@@ -217,8 +224,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_idx32_select_clamped_impl(mem: *const $ty, idxs: [u32; 8], mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u32, 8>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+                let idxs_mask = Simd::<u32, 8>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx64_impl(mem: *const $ty, idxs: [u64; 8]) -> Self {
@@ -249,8 +257,11 @@ macro_rules! impl_gather {
             }
             
             fn simd_gather_idx64_select_clamped_impl(mem: *const $ty, idxs: [u64; 8], mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u64, 8>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+                let wide_idxs = Simd::<u64, 8>::from_array(idxs);
+                let narrow_idxs = wide_idxs.simd_convert_saturate::<u32, 16, {BackendType::AVX2}>().split_2()[0];
+                let idxs_mask = narrow_idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 8, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
             }
         }   
     };
@@ -268,8 +279,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_select_clamped_impl(mem: *const $ty, idxs: Simd<u64, 2>, mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-                let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+                let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx32_impl(mem: *const $ty, idxs: [u32; 2]) -> Self {
@@ -292,8 +304,12 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_idx32_select_clamped_impl(mem: *const $ty, idxs: [u32; 2], mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-                let indices = [core::cmp::min(idxs[0], max_idx as u32), core::cmp::min(idxs[1], max_idx as u32)];
-                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices, mask, or)
+                let mut arr = [0u32; 4];
+                unsafe{ core::ptr::copy_nonoverlapping(idxs.as_ptr(), arr.as_mut_ptr(), 2) };
+                let indices = Simd::<u32, 4>::from_array(arr).simd_convert::<u64, 2, {BackendType::AVX2}>();
+                let idxs_mask = indices.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx64_impl(mem: *const $ty, idxs: [u64; 2]) -> Self {
@@ -318,8 +334,9 @@ macro_rules! impl_gather {
             }
             
             fn simd_gather_idx64_select_clamped_impl(mem: *const $ty, idxs: [u64; 2], mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u64, 2>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+                let idxs_mask = Simd::<u64, 2>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 2, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
             }
         }
         impl SimdGatherImpl<$ty, 4, {BackendType::AVX2}> for Simd<$ty, 4> {
@@ -335,8 +352,9 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_select_clamped_impl(mem: *const $ty, idxs: Simd<u64, 4>, mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+                let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx32_impl(mem: *const $ty, idxs: [u32; 4]) -> Self {
@@ -359,8 +377,12 @@ macro_rules! impl_gather {
             }
         
             fn simd_gather_idx32_select_clamped_impl(mem: *const $ty, idxs: [u32; 4], mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u32, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+                let mut arr = [0u32; 8];
+                unsafe{ core::ptr::copy_nonoverlapping(idxs.as_ptr(), arr.as_mut_ptr(), 4) };
+                let indices = Simd::<u32, 8>::from_array(arr).simd_convert::<u64, 4, {BackendType::AVX2}>();
+                let idxs_mask = indices.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
             }
         
             fn simd_gather_idx64_impl(mem: *const $ty, idxs: [u64; 4]) -> Self {
@@ -385,8 +407,9 @@ macro_rules! impl_gather {
             }
             
             fn simd_gather_idx64_select_clamped_impl(mem: *const $ty, idxs: [u64; 4], mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-                let indices = Simd::<u64, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+                let idxs_mask = Simd::<u64, 4>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+                let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+                <Self as SimdGatherImpl<$ty, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
             }
         }
     };
@@ -411,8 +434,9 @@ impl SimdGatherImpl<f32, 4, {BackendType::AVX2}> for Simd<f32, 4> {
     }
 
     fn simd_gather_select_clamped_impl(mem: *const f32, idxs: Simd<u32, 4>, mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+        let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx32_impl(mem: *const f32, idxs: [u32; 4]) -> Self {
@@ -431,8 +455,9 @@ impl SimdGatherImpl<f32, 4, {BackendType::AVX2}> for Simd<f32, 4> {
     }
 
     fn simd_gather_idx32_select_clamped_impl(mem: *const f32, idxs: [u32; 4], mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u32, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+        let idxs_mask = Simd::<u32, 4>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx64_impl(mem: *const f32, idxs: [u64; 4]) -> Self {
@@ -464,8 +489,11 @@ impl SimdGatherImpl<f32, 4, {BackendType::AVX2}> for Simd<f32, 4> {
     }
             
     fn simd_gather_idx64_select_clamped_impl(mem: *const f32, idxs: [u64; 4], mask: Mask<i32, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u64, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+        let wide_idxs = Simd::<u64, 4>::from_array(idxs);
+        let narrow_idxs = wide_idxs.simd_convert_saturate::<u32, 8, {BackendType::AVX2}>().split_2()[0];
+        let idxs_mask = narrow_idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
     }
 }
 
@@ -482,8 +510,9 @@ impl SimdGatherImpl<f32, 8, {BackendType::AVX2}> for Simd<f32, 8> {
     }
 
     fn simd_gather_select_clamped_impl(mem: *const f32, idxs: Simd<u32, 8>, mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-        let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+        let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx32_impl(mem: *const f32, idxs: [u32; 8]) -> Self {
@@ -502,8 +531,9 @@ impl SimdGatherImpl<f32, 8, {BackendType::AVX2}> for Simd<f32, 8> {
     }
 
     fn simd_gather_idx32_select_clamped_impl(mem: *const f32, idxs: [u32; 8], mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u32, 8>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+        let idxs_mask = Simd::<u32, 8>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx64_impl(mem: *const f32, idxs: [u64; 8]) -> Self {
@@ -533,8 +563,11 @@ impl SimdGatherImpl<f32, 8, {BackendType::AVX2}> for Simd<f32, 8> {
     }
             
     fn simd_gather_idx64_select_clamped_impl(mem: *const f32, idxs: [u64; 8], mask: Mask<i32, 8>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u64, 8>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+        let wide_idxs = Simd::<u64, 8>::from_array(idxs);
+        let narrow_idxs = wide_idxs.simd_convert_saturate::<u32, 16, {BackendType::AVX2}>().split_2()[0];
+        let idxs_mask = narrow_idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u32, 8>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f32, 8, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
     }
 }
 
@@ -553,8 +586,9 @@ impl SimdGatherImpl<f64, 2, {BackendType::AVX2}> for Simd<f64, 2> {
     }
 
     fn simd_gather_select_clamped_impl(mem: *const f64, idxs: Simd<u64, 2>, mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-        let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+        let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx32_impl(mem: *const f64, idxs: [u32; 2]) -> Self {
@@ -577,8 +611,12 @@ impl SimdGatherImpl<f64, 2, {BackendType::AVX2}> for Simd<f64, 2> {
     }
 
     fn simd_gather_idx32_select_clamped_impl(mem: *const f64, idxs: [u32; 2], mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-        let indices = [core::cmp::min(idxs[0], max_idx as u32), core::cmp::min(idxs[1], max_idx as u32)];
-        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices, mask, or)
+        let mut arr = [0u32; 4];
+        unsafe{ core::ptr::copy_nonoverlapping(idxs.as_ptr(), arr.as_mut_ptr(), 2) };
+        let indices = Simd::<u32, 4>::from_array(arr).simd_convert::<u64, 2, {BackendType::AVX2}>();
+        let idxs_mask = indices.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx64_impl(mem: *const f64, idxs: [u64; 2]) -> Self {
@@ -603,8 +641,9 @@ impl SimdGatherImpl<f64, 2, {BackendType::AVX2}> for Simd<f64, 2> {
     }
             
     fn simd_gather_idx64_select_clamped_impl(mem: *const f64, idxs: [u64; 2], mask: Mask<i64, 2>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u64, 2>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+        let idxs_mask = Simd::<u64, 2>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u64, 2>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 2, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
     }
 }
 
@@ -621,8 +660,9 @@ impl SimdGatherImpl<f64, 4, {BackendType::AVX2}> for Simd<f64, 4> {
     }
 
     fn simd_gather_select_clamped_impl(mem: *const f64, idxs: Simd<u64, 4>, mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = idxs.simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, indices, mask, or)
+        let idxs_mask = idxs.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx32_impl(mem: *const f64, idxs: [u32; 4]) -> Self {
@@ -645,8 +685,12 @@ impl SimdGatherImpl<f64, 4, {BackendType::AVX2}> for Simd<f64, 4> {
     }
 
     fn simd_gather_idx32_select_clamped_impl(mem: *const f64, idxs: [u32; 4], mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u32, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u32, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u32));
-        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, indices.to_array(), mask, or)
+        let mut arr = [0u32; 8];
+        unsafe{ core::ptr::copy_nonoverlapping(idxs.as_ptr(), arr.as_mut_ptr(), 4) };
+        let indices = Simd::<u32, 8>::from_array(arr).simd_convert::<u64, 4, {BackendType::AVX2}>();
+        let idxs_mask = indices.simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_idx32_select_impl(mem, idxs, new_mask, or)
     }
 
     fn simd_gather_idx64_impl(mem: *const f64, idxs: [u64; 4]) -> Self {
@@ -671,8 +715,9 @@ impl SimdGatherImpl<f64, 4, {BackendType::AVX2}> for Simd<f64, 4> {
     }
             
     fn simd_gather_idx64_select_clamped_impl(mem: *const f64, idxs: [u64; 4], mask: Mask<i64, 4>, or: Self, max_idx: usize) -> Self {
-        let indices = Simd::<u64, 4>::from_array(idxs).simd_min::<{BackendType::AVX2}>(Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
-        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, indices.to_array(), mask, or)
+        let idxs_mask = Simd::<u64, 4>::from_array(idxs).simd_le::<{BackendType::AVX2}>(&Simd::<u64, 4>::simd_splat::<{BackendType::AVX2}>(max_idx as u64));
+        let new_mask = mask.simd_and::<{BackendType::AVX2}>(idxs_mask);
+        <Self as SimdGatherImpl<f64, 4, {BackendType::AVX2}>>::simd_gather_idx64_select_impl(mem, idxs, new_mask, or)
     }
 }
 
