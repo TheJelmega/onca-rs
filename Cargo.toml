@@ -22,6 +22,7 @@ members = [ "crates/*" ]
 [dependencies]
 onca_simd_macros = { path = "crates/onca_simd_macros" }
 onca_simd = { path = "crates/onca_simd" }
+onca_math = { path = "crates/onca_math" }
 onca_core = { path = "crates/onca_core" }
 
 
