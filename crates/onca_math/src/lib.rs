@@ -47,4 +47,7 @@ pub use sphere::*;
 mod ray;
 pub use ray::*;
 
+mod line;
+pub use line::*;
+
 mod intersections;

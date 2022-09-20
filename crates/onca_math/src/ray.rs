@@ -57,28 +57,18 @@ impl<T: Real> Ray<T> {
         ray_param.clamp(T::zero(), T::one())
     }
 
-    /// Calculate the squared distance of the point on the ray
-    pub fn dist_sq(self, point: Vec3<T>) -> T {
+    /// Calculate the distance of the point on the ray
+    pub fn dist(self, point: Vec3<T>) -> T {
         let to_point = point - self.origin;
         self.dir.dot(to_point)
     }
 
-    /// Calculate the squared distance of the point on the ray
-    pub fn dist(self, point: Vec3<T>) -> T {
-        self.dist_sq(point).sqrt()
-    }
-
-    /// Calculate the squared distance of the point on the ray
-    pub fn closest_dist_sq(self, point: Vec3<T>) -> T {
+    /// Calculate the distance of the point on the ray
+    pub fn closest_dist(self, point: Vec3<T>) -> T {
         let to_point = point - self.origin;
         let min = self.min_t * self.min_t;
         let max = self.max_t * self.max_t; 
         self.dir.dot(to_point).clamp(min, max)
-    }
-
-    /// Calculate the squared distance of the point on the ray
-    pub fn closest_dist(self, point: Vec3<T>) -> T {
-        self.dist(point).clamp(self.min_t, self.max_t)
     }
 }
 
@@ -152,28 +142,18 @@ impl<T: Real> Ray2D<T> {
         ray_param.clamp(T::zero(), T::one())
     }
 
-    /// Calculate the squared distance of the point on the ray
-    pub fn dist_sq(self, point: Vec2<T>) -> T {
+    /// Calculate the distance of the point on the ray
+    pub fn dist(self, point: Vec2<T>) -> T {
         let to_point = point - self.origin;
         self.dir.dot(to_point)
     }
 
-    /// Calculate the squared distance of the point on the ray
-    pub fn dist(self, point: Vec2<T>) -> T {
-        self.dist_sq(point).sqrt()
-    }
-
-    /// Calculate the squared distance of the point on the ray
-    pub fn closest_dist_sq(self, point: Vec2<T>) -> T {
+    /// Calculate the distance of the point on the ray
+    pub fn closest_dist(self, point: Vec2<T>) -> T {
         let to_point = point - self.origin;
         let min = self.min_t * self.min_t;
         let max = self.max_t * self.max_t; 
         self.dir.dot(to_point).clamp(min, max)
-    }
-
-    /// Calculate the squared distance of the point on the ray
-    pub fn closest_dist(self, point: Vec2<T>) -> T {
-        self.dist(point).clamp(self.min_t, self.max_t)
     }
 }
 
