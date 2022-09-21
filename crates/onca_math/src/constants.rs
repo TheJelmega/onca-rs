@@ -66,6 +66,11 @@ pub trait MathConsts {
     const RAD_TO_DEG : Self;
 }
 
+pub trait MathRealConsts {
+    /// Infinity
+    const INF : Self;
+}
+
 macro_rules! impl_math_constants {
     {$($ty:ty),*} => {
         $(
@@ -110,5 +115,15 @@ macro_rules! impl_math_constants {
         )*
     };
 }
-
 impl_math_constants!{ i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 }
+
+macro_rules! impl_math_real_constants {
+    ($($ty:ty),*) => {
+        $(
+            impl MathRealConsts for $ty {
+                const INF : $ty = <$ty>::INFINITY;
+            }
+        )*
+    };
+}
+impl_math_real_constants!{f32, f64}

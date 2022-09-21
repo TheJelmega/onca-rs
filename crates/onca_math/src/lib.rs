@@ -51,3 +51,4 @@ mod line;
 pub use line::*;
 
 mod intersections;
+pub use intersections::*;

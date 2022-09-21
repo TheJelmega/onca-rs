@@ -1,5 +1,5 @@
 use std::ops::*;
-use crate::MathConsts;
+use crate::{MathConsts, MathRealConsts};
 
 /// Defines a type which has a 0-value, i.e. the additive identity
 pub trait Zero {
@@ -365,7 +365,7 @@ impl Signed for f32 {}
 impl Signed for f64 {}
 
 /// Arithmatic type representing a real number
-pub trait Real : Signed {
+pub trait Real : Signed + MathRealConsts {
     /// Get a ceil of the value
     fn ceil(self) -> Self;
     /// Get a floor of the value
