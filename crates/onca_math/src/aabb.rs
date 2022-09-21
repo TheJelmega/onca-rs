@@ -9,16 +9,21 @@ pub struct AABB<T: Numeric> {
 
 impl<T: Numeric> AABB<T> {
     /// Get the size of the aabb
+    #[inline]
+    #[must_use]
     pub fn size(self) -> Vec3<T> {
         self.max - self.min
     }
 
     /// Get the center of the aabb
+    #[inline]
+    #[must_use]
     pub fn center(self) -> Vec3<T> {
         (self.min + self.max) / T::from_i32(2)
     }
 
     /// Resize the aabb around its center
+    #[must_use]
     pub fn resize(self, size: Vec3<T>) -> Self {
         debug_assert!(size.x >= T::zero());
         debug_assert!(size.y >= T::zero());
@@ -30,33 +35,45 @@ impl<T: Numeric> AABB<T> {
     }
 
     /// Recenter the aabb
+    #[inline]
+    #[must_use]
     pub fn recenter(self, center: Vec3<T>) -> Self {
         let half_size = self.size() / T::from_i32(2);
         Self { min: center - half_size, max: center + half_size }
     }
 
     /// Expand the aabb, passed as half the extend the aabb should be expanded by
+    #[inline]
+    #[must_use]
     pub fn expand(self, half_extend: Vec3<T>) -> Self {
         Self { min: self.min - half_extend, max: self.max + half_extend }
     }
 
     /// Move the aabb by the given delta
+    #[inline]
+    #[must_use]
     pub fn move_by(self, delta: Vec3<T>) -> Self {
         Self { min: self.min + delta, max: self.max + delta }
     }
 
     /// Create the smallest aabb fitting both aabbs
+    #[inline]
+    #[must_use]
     pub fn merge(self, other: Self) -> Self {
         Self { min: self.min.min(other.min), max: self.max.max(other.max) }
     }
 
     /// Calculate the area of the aabb
+    #[inline]
+    #[must_use]
     pub fn volume(self) -> T {
         let size = self.size();
         size.x * size.y * size.z
     }
 
     /// Check if the aabb fully contains another aabb
+    #[inline]
+    #[must_use]
     pub fn contains(self, other: Self) -> bool {
         other.min.x >= self.min.x && other.max.x <= self.max.x &&
         other.min.y >= self.min.y && other.max.y <= self.max.y &&
@@ -65,6 +82,8 @@ impl<T: Numeric> AABB<T> {
     }
 
     /// Check if the aabb contains a point
+    #[inline]
+    #[must_use]
     pub fn contains_point(self, point: Vec3<T>) -> bool {
         point.x >= self.min.x && point.x >= self.min.x &&
         point.y <= self.max.y && point.y <= self.max.y &&
@@ -73,6 +92,8 @@ impl<T: Numeric> AABB<T> {
 
     // TODO(jel): should we distiguish between overlap and touching?
     /// Check if 2 aabbs overlap
+    #[inline]
+    #[must_use]
     pub fn overlaps(self, other: Self) -> bool {
         self.min.x < other.max.x && self.max.x < other.min.x &&
         self.min.y < other.max.y && self.max.y < other.min.y &&
@@ -80,6 +101,7 @@ impl<T: Numeric> AABB<T> {
     }
 
     /// Calculate the squared distance from the aabb to a point, 0 if the point is inside the aabb
+    #[must_use]
     pub fn dist_to_point_sq(self, point: Vec3<T>) -> T {
         let dist_min_x = self.min.x - point.x;
         let dist_max_x = point.x - self.max.x;
@@ -101,11 +123,14 @@ impl<T: Numeric> AABB<T> {
     }
 
     /// Calculate the distance from the aabb to a point, 0 if the point is inside the aabb
+    #[inline]
+    #[must_use]
     pub fn dist_to_point(self, point: Vec3<T>) -> T {
         self.dist_to_point_sq(point).sqrt()
     }
 
-    /// Clculate the squared distance from the aabb to another aabb
+    /// Calculate the squared distance from the aabb to another aabb
+    #[must_use]
     pub fn dist_sq(self, other: Self) -> T {
         let dist_min_x = self.min.x - other.max.x;
         let dist_max_x = other.min.x - self.max.x;
@@ -127,6 +152,8 @@ impl<T: Numeric> AABB<T> {
     }
 
     /// Clculate the distance from the aabb to another aabb
+    #[inline]
+    #[must_use]
     pub fn dist(self, other: Self) -> T {
         self.dist_sq(other).sqrt()
     }

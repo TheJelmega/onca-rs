@@ -8,12 +8,16 @@ pub struct Plane<T: Real> {
 }
 
 impl<T: Real> Plane<T> {
-    /// Calculate the distance from a point to the plane, distance is signed, positive when above the plane, negative when below```
+    /// Calculate the distance from a point to the plane, distance is signed, positive when above the plane, negative when below
+    #[inline]
+    #[must_use]
     pub fn distance(self, point: Vec3<T>) -> T {
         self.normal.dot(point) - self.dist
     }
 
     /// Check if a point is above the plane
+    #[inline]
+    #[must_use]
     pub fn is_above(self, point: Vec3<T>) -> bool {
         self.normal.dot(point) > self.dist
     }

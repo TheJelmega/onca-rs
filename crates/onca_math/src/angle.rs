@@ -123,56 +123,78 @@ angle_pre_multiplication!{Degrees, f32, f64}
 
 impl<T: Real> Degrees<T> {
     /// Create a new angle
+    #[inline]
+    #[must_use]
     pub fn new(val: T) -> Self {
         Self(val)
     }
     
     /// Wrap the angle so it's in the range of [-360, 360]
+    #[inline]
+    #[must_use]
     pub fn wrap(self) -> Self {
         Self(self.0 % T::from_f32(360f32))
     }
     
     /// Convert degrees to radians
+    #[inline]
+    #[must_use]
     pub fn to_radians(self) -> Radians<T> {
         Radians(self.0 * T::DEG_TO_RAD)
     }
 
     /// Calculate the sin of the angle
+    #[inline]
+    #[must_use]
     pub fn sin(self) -> T {
         self.to_radians().sin()
     }
 
     /// Calculate the cosin of the angle
+    #[inline]
+    #[must_use]
     pub fn cos(self) -> T {
         self.to_radians().cos()
     }
 
     /// Calculate the sine and cosine simultaniously (this may result in a faster calculation)
+    #[inline]
+    #[must_use]
     pub fn sin_cos(self) -> (T, T) {
         self.to_radians().sin_cos()
     }
 
     /// Calculate the tangent of the angle
+    #[inline]
+    #[must_use]
     pub fn tan(self) -> T {
         self.to_radians().tan()
     }
 
     /// Get the angle from its arcsine
+    #[inline]
+    #[must_use]
     pub fn asin(val: T) -> Self {
         Radians(val.asin()).to_degrees()
     }
 
     /// Get the angle from its arccosine
+    #[inline]
+    #[must_use]
     pub fn acos(val: T) -> Self {
         Radians(val.acos()).to_degrees()
     }
 
     /// Get the angle from its arctangent
+    #[inline]
+    #[must_use]
     pub fn atan(val: T) -> Self {
         Radians(val.atan()).to_degrees()
     }
 
     /// Get the angle from its arctangent, from a given x and y coordinate
+    #[inline]
+    #[must_use]
     pub fn atan2(y: T, x: T) -> Self {
         Radians(T::atan2(y, x)).to_degrees()
     }
@@ -192,51 +214,71 @@ angle_pre_multiplication!{Radians, f32, f64}
 
 impl<T: Real> Radians<T> {
     /// Create a new angle
+    #[inline]
+    #[must_use]
     pub fn new(val: T) -> Self {
         Self(val)
     }
     
     /// Wrap the angle so it's in the range of [-360, 360]
+    #[inline]
+    #[must_use]
     pub fn wrap(self) -> Self {
         Self(self.0 % T::TWO_PI)
     }
     
     /// Convert radians to degrees
+    #[inline]
+    #[must_use]
     pub fn to_degrees(self) -> Degrees<T> {
         Degrees(self.0 * T::RAD_TO_DEG)
     }
 
     /// Calculate the sine of the angle
+    #[inline]
+    #[must_use]
     pub fn sin(self) -> T {
         self.0.sin()
     }
 
     /// Calculate the cosine of the angle
+    #[inline]
+    #[must_use]
     pub fn cos(self) -> T {
         self.0.cos()
     }
 
     /// Calculate the sine and cosine simultaniously (this may result in a faster calculation)
+    #[inline]
+    #[must_use]
     pub fn sin_cos(self) -> (T, T) {
         self.0.sin_cos()
     }
 
     /// Calculate the tangent of the angle
+    #[inline]
+    #[must_use]
     pub fn tan(self) -> T {
         self.0.tan()
     }
 
     /// Get the angle from its arcsine
+    #[inline]
+    #[must_use]
     pub fn asin(val: T) -> Self {
         Self(val.asin())
     }
 
     /// Get the angle from its arccosine
+    #[inline]
+    #[must_use]
     pub fn acos(val: T) -> Self {
         Self(val.acos())
     }
 
     /// Get the angle from its arctangent
+    #[inline]
+    #[must_use]
     pub fn atan(val: T) -> Self {
         Self(val.atan())
     }
@@ -263,16 +305,22 @@ pub struct EulerAngles<T: Real> {
 
 impl<T: Real> EulerAngles<T> {
     /// Create a set of euler angles in radians
+    #[inline]
+    #[must_use]
     pub fn new(pitch: Radians<T>, yaw: Radians<T>, roll: Radians<T>) -> Self {
         Self { pitch, yaw, roll }
     }
 
     /// Create a set of euler angles in degrees
+    #[inline]
+    #[must_use]
     pub fn new_degrees(pitch: Degrees<T>, yaw: Degrees<T>, roll: Degrees<T>) -> Self {
         Self { pitch: pitch.to_radians(), yaw: yaw.to_radians(), roll: roll.to_radians() }
     }
 
     /// Extract the pitch, yaw, and roll as degrees
+    #[inline]
+    #[must_use]
     pub fn as_degrees(self) -> (Degrees<T>, Degrees<T>, Degrees<T>) {
         (self.pitch.to_degrees(), self.yaw.to_degrees(), self.roll.to_degrees())
     }

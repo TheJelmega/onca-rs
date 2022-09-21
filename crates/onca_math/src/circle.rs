@@ -8,36 +8,48 @@ pub struct Circle<T: Numeric> {
 }
 
 impl<T: Numeric> Circle<T> {
-    /// Get the area of the 
+    /// Get the area of the circle
+    #[inline]
+    #[must_use]
     pub fn area(self) -> T {
         self.radius * self.radius * T::PI
     }
 
     /// Check if the circle fully contains another circle
+    #[inline]
+    #[must_use]
     pub fn contains(self, other: Self) -> bool {
         let furthest_point = self.center.dist(other.center) + other.radius;
         furthest_point <= self.radius
     }
 
     /// Check if the circle contains a point
+    #[inline]
+    #[must_use]
     pub fn contains_point(self, point: Vec2<T>) -> bool {
         self.center.dist_sq(point) <= self.radius * self.radius
     }
 
     // TODO(jel): should we distiguish between overlap and touching?
     /// Check if 2 circles overlap
+    #[inline]
+    #[must_use]
     pub fn overlaps(self, other: Self) -> bool {
         let max_dist = self.radius + other.radius;
         self.center.dist_sq(other.center) < max_dist * max_dist
     }
 
     /// Calculate the distance between the circle and a point
+    #[inline]
+    #[must_use]
     pub fn dist_to_point(self, point: Vec2<T>) -> T {
         let dist = self.center.dist(point);
         if dist > self.radius { dist - self.radius } else { T::zero() }
     }
 
     /// Calculate the distance between the circle and another circle
+    #[inline]
+    #[must_use]
     pub fn dist_to_circle(self, other: Self) -> T {
         let dist = self.center.dist_sq(other.center);
         let min_dist = self.radius + other.radius;
@@ -49,6 +61,7 @@ impl<T: Numeric> Circle<T> {
 impl<T: Real> Circle<T> {
     // TODO(jel): is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest circle fitting both circles
+    #[must_use]
     pub fn merge(self, other: Self) -> Self {
         let dist = self.center.dist(other.center);
 

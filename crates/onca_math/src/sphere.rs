@@ -8,23 +8,31 @@ pub struct Sphere<T: Numeric> {
 }
 
 impl<T: Numeric> Sphere<T> {
-    /// Get the area of the 
-    pub fn area(self) -> T {
-        self.radius * self.radius * T::PI
+    /// Get the volume of the sphere
+    #[inline]
+    #[must_use]
+    pub fn volume(self) -> T {
+        T::from_i32(4) * self.radius * self.radius * self.radius * T::PI / T::from_i32(3)
     }
 
     /// Check if the sphere fully contains another sphere
+    #[inline]
+    #[must_use]
     pub fn contains(self, other: Self) -> bool {
         let furthest_point = self.center.dist(other.center) + other.radius;
         furthest_point <= self.radius
     }
 
     /// Check if the sphere contains a point
+    #[inline]
+    #[must_use]
     pub fn contains_point(self, point: Vec3<T>) -> bool {
         self.center.dist_sq(point) <= self.radius * self.radius
     }
 
     // TODO(jel): should we distiguish between overlap and touching?
+    #[inline]
+    #[must_use]
     /// Check if 2 spheres overlap
     pub fn overlaps(self, other: Self) -> bool {
         let max_dist = self.radius + other.radius;
@@ -32,12 +40,16 @@ impl<T: Numeric> Sphere<T> {
     }
 
     /// Calculate the distance between the sphere and a point
+    #[inline]
+    #[must_use]
     pub fn dist_to_point(self, point: Vec3<T>) -> T {
         let dist = self.center.dist(point);
         if dist > self.radius { dist - self.radius } else { T::zero() }
     }
 
     /// Calculate the distance between the sphere and another sphere
+    #[inline]
+    #[must_use]
     pub fn dist_to_sphere(self, other: Self) -> T {
         let dist = self.center.dist_sq(other.center);
         let min_dist = self.radius + other.radius;
@@ -49,6 +61,7 @@ impl<T: Numeric> Sphere<T> {
 impl<T: Real> Sphere<T> {
     // TODO(jel): is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest sphere fitting both spheres
+    #[inline]
     pub fn merge(self, other: Self) -> Self {
         let dist = self.center.dist(other.center);
 

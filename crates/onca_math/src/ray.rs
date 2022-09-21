@@ -11,16 +11,22 @@ pub struct Ray<T: Real> {
 
 impl<T: Real> Ray<T> {
     /// Create a new ray
+    #[inline]
+    #[must_use]
     pub fn new(orig: Vec3<T>, dir: Vec3<T>, min: T, max: T) -> Self {
         Self { orig, min_t: min, dir, max_t: max }
     }
 
     /// Create a new ray from just an origin an a direction, implicitly sets `min_t == 0` and `max_t == T::MAX`
+    #[inline]
+    #[must_use]
     pub fn from_orig_and_dir(orig: Vec3<T>, dir: Vec3<T>) -> Self {
         Self { orig, min_t: T::zero(), dir: dir, max_t: T::MAX }
     }
 
     /// Create a ray from a line
+    #[inline]
+    #[must_use]
     pub fn from_line(line: Line<T>) -> Self {
         Self { orig: line.orig, min_t: T::zero(), dir: line.dir, max_t: T::MAX }
     }
@@ -31,32 +37,43 @@ impl<T: Real> Ray<T> {
     }
 
     /// Check if a point at a given distance is on the ray
+    #[inline]
+    #[must_use]
     pub fn is_on_ray(self, dist: T) -> bool {
         dist >= self.min_t && dist <= self.max_t
     }
 
     /// Get the point at a given distance on the ray
+    #[inline]
+    #[must_use]
     pub fn point_at(self, dist: T) -> Vec3<T> {
         self.orig + self.dir * dist
     }
 
     /// Get the closts point to the point at the value that is still on the ray
+    #[inline]
+    #[must_use]
     pub fn closest_point(self, dist: T) -> Vec3<T> {
         self.orig + self.dir * dist.clamp(self.min_t, self.max_t)
     }
 
     /// Clamp the given ray param so it fits on the ray
+    #[inline]
+    #[must_use]
     pub fn clamp_dist(self, dist: T) -> T {
         dist.clamp(self.min_t, self.max_t)
     }
 
     /// Calculate the distance of the point on the ray
+    #[inline]
+    #[must_use]
     pub fn dist(self, point: Vec3<T>) -> T {
         let to_point = point - self.orig;
         self.dir.dot(to_point)
     }
 
     /// Calculate the distance of the point on the ray
+    #[must_use]
     pub fn closest_dist(self, point: Vec3<T>) -> T {
         let to_point = point - self.orig;
         let min = self.min_t * self.min_t;
@@ -95,52 +112,71 @@ pub struct Ray2D<T: Real> {
 
 impl<T: Real> Ray2D<T> {
     /// Create a new ray
+    #[inline]
+    #[must_use]
     pub fn new(orig: Vec2<T>, dir: Vec2<T>, min: T, max: T) -> Self {
         Self { orig, min_t: min, dir, max_t: max }
     }
 
     /// Create a new ray from just an origin an a direction, implicitly sets `min_t == 0` and `max_t == T::MAX`
+    #[inline]
+    #[must_use]
     pub fn from_orig_and_dir(orig: Vec2<T>, dir: Vec2<T>) -> Self {
         Self { orig, min_t: T::zero(), dir: dir, max_t: T::MAX }
     }
 
     /// Create a ray from a line
+    #[inline]
+    #[must_use]
     pub fn from_line(line: Line2D<T>) -> Self {
         Self { orig: line.orig, min_t: T::zero(), dir: line.dir, max_t: T::MAX }
     }
 
     /// Create a ray from a line
+    #[inline]
+    #[must_use]
     pub fn from_line_between(line: Line2D<T>, min: T, max: T) -> Self {
         Self { orig: line.orig, min_t: min, dir: line.dir, max_t: max }
     }
 
     /// Check if a point at a given distance is on the ray
+    #[inline]
+    #[must_use]
     pub fn is_on_ray(self, dist: T) -> bool {
         dist >= self.min_t && dist <= self.max_t
     }
 
     /// Get the point at a given distance on the ray
+    #[inline]
+    #[must_use]
     pub fn point_at(self, dist: T) -> Vec2<T> {
         self.orig + self.dir * dist
     }
 
     /// Get the closts point to the point at the value that is still on the ray
+    #[inline]
+    #[must_use]
     pub fn closest_point(self, dist: T) -> Vec2<T> {
         self.orig + self.dir * dist.clamp(self.min_t, self.max_t)
     }
 
     /// Clamp the given ray param so it fits on the ray
+    #[inline]
+    #[must_use]
     pub fn clamp_dist(self, dist: T) -> T {
         dist.clamp(self.min_t, self.max_t)
     }
 
     /// Calculate the distance of the point on the ray
+    #[inline]
+    #[must_use]
     pub fn dist(self, point: Vec2<T>) -> T {
         let to_point = point - self.orig;
         self.dir.dot(to_point)
     }
 
     /// Calculate the distance of the point on the ray
+    #[must_use]
     pub fn closest_dist(self, point: Vec2<T>) -> T {
         let to_point = point - self.orig;
         let min = self.min_t * self.min_t;
