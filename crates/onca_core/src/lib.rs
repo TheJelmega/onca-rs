@@ -12,6 +12,12 @@
 #![feature(min_specialization)]
 #![feature(hasher_prefixfree_extras)]
 
+// Used by string.rs
+#![feature(utf8_chunks)]
+#![feature(slice_range)]
+#![feature(pattern)]
+#![feature(fmt_internals)]
+
 
 mod bytes;
 
@@ -20,5 +26,6 @@ pub mod os;
 pub mod sync;
 pub mod mem;
 pub mod collections;
+pub mod strings;
 
 pub use bytes::*;
