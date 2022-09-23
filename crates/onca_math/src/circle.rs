@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Numeric, Vec2, ApproxEq, Real};
 
 /// 2D circle
@@ -88,5 +90,11 @@ impl<T: Numeric> ApproxEq for Circle<T> {
     fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
         self.center.is_close_to(rhs.center, epsilon) &&
         self.radius.is_close_to(rhs.radius, epsilon)
+    }
+}
+
+impl<T: Real + Display> Display for Circle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ c: {}, r: {} }}", self.center, self.radius))
     }
 }

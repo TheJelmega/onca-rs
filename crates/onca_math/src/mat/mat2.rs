@@ -1,4 +1,4 @@
-use std::ops::{Mul, MulAssign};
+use std::{ops::{Mul, MulAssign}, fmt::Display};
 use crate::{*, angle::Radians};
 
 impl<T: Real> Mat2<T> {
@@ -200,6 +200,14 @@ impl<T: Real> MulAssign for Mat2<T> {
         self[1] = row0.dot(column1);
         self[2] = row1.dot(column0);
         self[3] = row1.dot(column1);
+    }
+}
+
+impl<T: Real + Display> Display for Mat2<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("[[{}, {}], [{}, {}]",
+                    self[0], self[1],
+                    self[2], self[3]))
     }
 }
 

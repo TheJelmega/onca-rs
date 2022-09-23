@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Vec3, ApproxEq, Real};
 
 /// Representation of a plane, represented by its normal and its distance from the origin
@@ -29,5 +31,11 @@ impl<T: Real> ApproxEq for Plane<T> {
     fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
         self.normal.is_close_to(rhs.normal, epsilon) &&
         self.dist.is_close_to(rhs.dist, epsilon)
+    }
+}
+
+impl<T: Real + Display> Display for Plane<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ n: {}, d: {} }}", self.normal, self.dist))
     }
 }

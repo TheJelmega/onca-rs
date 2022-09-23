@@ -2,6 +2,7 @@ use core::{
     ops::*,
     mem
 };
+use std::fmt::Display;
 use crate::*;
 
 /// Quaternion
@@ -558,6 +559,11 @@ impl<T: Real> ApproxZero for Quat<T> {
     }
 }
 
+impl <T: Real + Display> Display for Quat<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("( {}, ( {}, {}, {} ))", self.w, self.x, self.y, self.z))
+    }
+}
 
 #[allow(non_camel_case_types)] type f32quat = Quat<f32>;
 #[allow(non_camel_case_types)] type f64quat = Quat<f64>;

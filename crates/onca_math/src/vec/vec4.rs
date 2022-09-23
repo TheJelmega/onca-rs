@@ -1,4 +1,4 @@
-use std::ops::{Mul, MulAssign};
+use std::{ops::{Mul, MulAssign}, fmt::Display};
 use crate::*;
 
 impl<T: Numeric> Vec4<T> {
@@ -76,6 +76,12 @@ impl<T: Real> MulAssign<Mat4<T>> for Vec4<T> {
     #[inline]
     fn mul_assign(&mut self, rhs: Mat4<T>) {
         *self = self.transform(rhs)
+    }
+}
+
+impl<T: Numeric + Display> Display for Vec4<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("({}, {}, {}, {})", self.x, self.y, self.z, self.w))
     }
 }
 

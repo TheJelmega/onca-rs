@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Numeric, Vec2, ApproxEq};
 
 /// 2D rectangle (can also be used as a 2D AABB)
@@ -153,5 +155,11 @@ impl<T: Numeric> ApproxEq for Rect<T> {
     fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
         self.min.is_close_to(rhs.min, epsilon) &&
         self.max.is_close_to(rhs.max, epsilon)
+    }
+}
+
+impl<T: Numeric + Display> Display for Rect<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ min: {}, max: {} }}", self.min, self.max))
     }
 }

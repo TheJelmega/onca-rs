@@ -1,5 +1,6 @@
 use crate::{Real, ApproxEq, ApproxZero, Zero};
 use core::ops::*;
+use std::fmt::Display;
 
 macro_rules! angle_common {
     {$name:ident} => {
@@ -206,6 +207,21 @@ impl<T: Real> From<Radians<T>> for Degrees<T> {
     }
 }
 
+impl<T: Real + Display> Display for Degrees<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let deg_fract = self.0.fract();
+        let degs = self.0 - deg_fract;
+
+        let minutes = deg_fract * T::from_i32(60);
+        let minutes_fract = minutes.fract();
+        let minutes = minutes - minutes_fract;
+
+        let seconds = minutes_fract * T::from_i32(60);
+
+        f.write_fmt(format_args!("{}°{}'{}\"", degs, minutes, seconds))
+    }
+}
+
 /// An angle represented as radians
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
 pub struct Radians<T: Real>(pub T);
@@ -292,6 +308,12 @@ impl<T: Real> Radians<T> {
 impl<T: Real> From<Degrees<T>> for Radians<T> {
     fn from(degs: Degrees<T>) -> Self {
         degs.to_radians()
+    }
+}
+
+impl<T: Real + Display> Display for Radians<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}rads", self.0))
     }
 }
 

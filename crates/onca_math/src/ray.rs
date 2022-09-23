@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Real, ApproxEq, Vec3, Vec2, Line, Line2D};
 
 /// 3D Ray
@@ -96,6 +98,12 @@ impl<T: Real> ApproxEq for Ray<T> {
 impl<T: Real> From<Line<T>> for Ray<T> {
     fn from(line: Line<T>) -> Self {
         Self::from_line(line)
+    }
+}
+
+impl<T: Real + Display> Display for Ray<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ o: {}, d: {}, t: [{}, {}] }}", self.orig, self.dir, self.min_t, self.max_t))
     }
 }
 
@@ -200,5 +208,11 @@ impl<T: Real> ApproxEq for Ray2D<T> {
 impl<T: Real> From<Line2D<T>> for Ray2D<T> {
     fn from(line: Line2D<T>) -> Self {
         Self::from_line(line)
+    }
+}
+
+impl<T: Real + Display> Display for Ray2D<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ o: {}, d: {}, t: [{}, {}] }}", self.orig, self.dir, self.min_t, self.max_t))
     }
 }

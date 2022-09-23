@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Real, Numeric, ApproxEq, Vec2, Vec3, Ray, Ray2D};
 
 /// 3D line
@@ -79,6 +81,12 @@ impl<T: Real> ApproxEq for Line<T> {
     }
 }
 
+impl<T: Real + Display> Display for Line<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ o: {}, d: {} }}", self.orig, self.dir))
+    }
+}
+
 impl<T: Real> From<LineSegment<T>> for Line<T> {
     fn from(segment: LineSegment<T>) -> Self {
         Self::from_segment(segment)
@@ -149,6 +157,12 @@ impl<T: Numeric> ApproxEq for LineSegment<T> {
     fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
         self.begin.is_close_to(rhs.begin, epsilon) &&
         self.end.is_close_to(rhs.end, epsilon)
+    }
+}
+
+impl<T: Real + Display> Display for LineSegment<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ a: {}, b: {} }}", self.begin, self.end))
     }
 }
 
@@ -234,6 +248,12 @@ impl<T: Real> ApproxEq for Line2D<T> {
     }
 }
 
+impl<T: Real + Display> Display for Line2D<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ o: {}, d: {} }}", self.orig, self.dir))
+    }
+}
+
 impl<T: Real> From<LineSegment2D<T>> for Line2D<T> {
     fn from(segment: LineSegment2D<T>) -> Self {
         Self::from_segment(segment)
@@ -304,5 +324,11 @@ impl<T: Numeric> ApproxEq for LineSegment2D<T> {
     fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
         self.begin.is_close_to(rhs.begin, epsilon) &&
         self.end.is_close_to(rhs.end, epsilon)
+    }
+}
+
+impl<T: Real + Display> Display for LineSegment2D<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{{ a: {}, b: {} }}", self.begin, self.end))
     }
 }
