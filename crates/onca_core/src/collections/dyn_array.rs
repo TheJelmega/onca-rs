@@ -19,14 +19,15 @@ use alloc::{
 /// 
 /// Currently this is a wrapper around alloc::vec::Vec, but this will not always be the case
 /// 
-/// For information about the functions, check https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// For information about the functions, check <https://doc.rust-lang.org/std/vec/struct.Vec.html>
+#[derive(Debug)]
 pub struct DynArray<T>(pub(crate) Vec<T, Alloc>);
 
 pub type Drain<'a, T> = alloc::vec::Drain<'a, T, Alloc>;
 pub type Splice<'a, I> = alloc::vec::Splice<'a, I, Alloc>;
 pub type IntoIter<T> = alloc::vec::IntoIter<T, Alloc>;
 
-// feature(drain_filter ), issue: https://github.com/rust-lang/rust/issues/43244
+// feature(drain_filter), issue: https://github.com/rust-lang/rust/issues/43244
 // pub type DrainFilter<'a, T, F> = alloc::vec::DrainFilter<'a, T, F, Alloc>;
 
 impl<T> DynArray<T> {
@@ -62,6 +63,10 @@ impl<T> DynArray<T> {
 
     pub fn shrink_to_fit(&mut self) {
         self.0.shrink_to_fit()
+    }
+
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.0.shrink_to(min_capacity)
     }
 
     pub fn truncate(&mut self, len: usize) {

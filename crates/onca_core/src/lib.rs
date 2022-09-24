@@ -17,6 +17,7 @@
 #![feature(slice_range)]
 #![feature(pattern)]
 #![feature(fmt_internals)]
+#![feature(unicode_internals)]
 
 
 mod bytes;

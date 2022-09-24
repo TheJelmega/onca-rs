@@ -471,6 +471,20 @@ impl String {
         self.len() == 0
     }
 
+    /// Get the id of the allocator used by this `String`
+    #[inline]
+    #[must_use]
+    pub fn allocator_id(&self) -> u16 {
+        self.arr.allocator_id()
+    }
+
+    /// Get the allocator used by this `String`
+    #[inline]
+    #[must_use]
+    pub fn allocator(&mut self) -> &mut dyn Allocator {
+        self.arr.allocator()
+    }
+
     /// Splits the string into two at the given byte index
     /// 
     /// Returns a newly allocated `String` with the same allocator as this `String`.
@@ -560,6 +574,261 @@ impl String {
         // WARNING: Inlining this variable would be unsound (#81138)
         // We assume the bounds reported by `range` remian the same, but an adversarial implementation could change between calls
         unsafe { self.as_mut_dynarr() }.splice((start, end), replace_with.bytes());
+    }
+}
+
+// TODO(jel): How to make this work on string slices directly? As it seems that the `alloc` crate only is allowed to do that, cause it's a special crate
+// This implements functions that are otherwise done via `str`, but which would have returned a rust `String`, instead of an onca `String`
+impl String {
+    /// Replaces all matches of a patter with another string.
+    /// 
+    /// `replace` creates a new `String`, and copies the data from this string into it.
+    /// While doing so, it attempts to find matches of a pattern.
+    /// If it finds any, it replaces them with the replacement string slice
+    #[inline]
+    #[must_use = "this returns the replaced string as a new allocation, without modifying the original"]
+    pub fn replace<'a, P: Pattern<'a>>(&'a self, from: P, to: &str) -> String {
+        let mut res = String::new(UseAlloc::Id(self.allocator_id()));
+        let mut last_end = 0;
+        for (start, part) in self.match_indices(from) {
+            res.push_str(unsafe { self.get_unchecked(last_end..start) });
+            res.push_str(to);
+            last_end = start + part.len();
+        }
+        res.push_str(unsafe{ self.get_unchecked(last_end..self.len()) });
+        res
+    }
+
+    /// Replaces the first N matches of a patter with another string.
+    /// 
+    /// `replacen` create a new `String`, and copeis the data from this string into it.
+    /// While doing so, it attempts to find matches of a pattern.
+    /// If it finds any, it replaces them with the replacement string slice at the most `count` times
+    pub fn replacen<'a, P: Pattern<'a>>(&'a self, pat: P, to: &str, count: usize) -> String {
+        // Hope to reduce the times of re-allocation
+        let mut res = String::with_capacity(32, UseAlloc::Id(self.allocator_id()));
+        let mut last_end = 0;
+        for (start, part) in self.match_indices(pat).take(count) {
+            res.push_str(unsafe { self.get_unchecked(last_end..start) });
+            res.push_str(to);
+            last_end = start + part.len();
+        }
+        res.push_str(unsafe{ self.get_unchecked(last_end..self.len()) });
+        res
+    }
+
+    /// Returns the lowercase equivalent of this `String`, as a new `String`
+    /// 
+    /// 'Lowercase' is defined according to the terms of the Unicode Derived Core Properties `Lowercase`
+    /// 
+    /// Since some charactes can expend into multiple characters when changing case, this functions returns a `String` instead of modifying the paramter in-place
+    pub fn to_lowercase(&self) -> String {
+        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_lowercase, UseAlloc::Id(self.allocator_id()));
+
+        // Safety: we know this is a valid char boundary since out.len() is only progressed if ascii bytes are found
+        let rest = unsafe { self.get_unchecked(out.len()..) };
+
+        // Safety: We have written only valid ASCII to out dynarray
+        let mut s = unsafe { String::from_utf8_unchecked(out) };
+
+        for (i, c) in rest[..].char_indices() {
+            if c == 'Σ' {
+                // Σ maps to σ, except at the end of a word wher it maps to ς.
+                // This is hte only conditional (contextual), but language-independent mapping in `SpecialCasing.txt`, so hard-code it rather thn have a generic "condition" mechanism
+                // See https://github.com/rust-lang/rust/issues/26035
+                map_uppercase_sigma(rest, i, &mut s);
+            } else {
+                match core::unicode::conversions::to_lower(c) {
+                    [a, '\0', _] => s.push(a),
+                    [a, b, '\0'] => {
+                        s.push(a);
+                        s.push(b);
+                    },
+                    [a, b, c] => {
+                        s.push(a);
+                        s.push(b);
+                        s.push(c);
+                    }
+                }
+            }
+        }
+
+        return s;
+
+        fn map_uppercase_sigma(from: &str, i: usize, to: &mut String) {
+            // See https://www.unicode.org/versions/Unicode7.0.0/ch03.pdf#G33992
+            // for the definition of `Final_Sigma`.
+            debug_assert!('Σ'.len_utf8() == 2);
+            let is_word_final = case_ignorable_then_cased(from[..i].chars().rev()) &&
+                                !case_ignorable_then_cased(from[i + 2..].chars());
+            to.push_str(if is_word_final { "ς" } else { "σ" });
+        }
+
+        fn case_ignorable_then_cased<I: Iterator<Item = char>>(iter: I) -> bool {
+            use core::unicode::{Case_Ignorable, Cased};
+            match iter.skip_while(|&c| Case_Ignorable(c)).next() {
+                Some(c) => Cased(c),
+                None => false
+            }
+        }
+    }
+
+    /// Returns the uppercase equivalent of this string slice, as a new `String`
+    /// 
+    /// 'Uppercase' is defined according to the terms of the Unicode Derived Core Property `Uppercase`.
+    /// 
+    /// SInce some characters can expand into multiple characters when changing the case, this funciton reutns a `String` instead of modigying the paramter in-place.
+    #[must_use = "this returns the uppercase string as a new String, without modigying the original"]
+    pub fn to_uppercase(&self) -> String {
+        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_uppercase, UseAlloc::Id(self.allocator_id()));
+
+        // Safety: we know this is a valid char boundary since out.len() is only progressed if ascii bytes are found
+        let rest = unsafe { self.get_unchecked(out.len()..) };
+
+        // Safety: We have written only valid ASCII to out vec
+        let mut s = unsafe { String::from_utf8_unchecked(out) };
+
+        for c in rest.chars() {
+            match core::unicode::conversions::to_upper(c) {
+                [a, '\0', _] => s.push(a),
+                [a, b, '\0'] => {
+                    s.push(a);
+                    s.push(b);
+                },
+                [a, b, c] => {
+                    s.push(a);
+                    s.push(b);
+                    s.push(c);
+                }
+            }
+        }
+        s
+    }
+
+    // NOTE(jel): re-implements iter.repeat(n), as we don't use std::Vec
+    /// Create a new `String` by repeating a string `n` times.
+    /// 
+    /// # Panics
+    /// 
+    /// This function will panic if th capacity would overflow
+    #[must_use]
+    pub fn repeat(&self, n: usize) -> String {
+        if n == 0 {
+            return String::new(UseAlloc::Id(self.allocator_id()));
+        }
+
+        // If `n` is larger than zero, it can be split as
+        // `n = 2^expn + rem (2^expn > rem, expn >= 0, rem >= 0)`.
+        // `2^expn` is the number represented by the leftmost '1' bit of `n`,
+        // and `rem` is the remaining part of `n`.
+
+        let capacity = self.len().checked_mul(n).expect("capacity overflow");
+        let mut buf = DynArray::<u8>::with_capacity(capacity, UseAlloc::Id(self.allocator_id()));
+
+        // `2^exp` repetition is done by doubling `buf` `expn`-times
+        buf.extend(self.as_bytes());
+        {
+            let mut m = n >> 1;
+            // if m > 0, ther eare remaining bits up to the leftmost `1`.
+            while m > 0 {
+                unsafe {
+                    ptr::copy_nonoverlapping(buf.as_ptr(), (buf.as_mut_ptr().add(buf.len())), buf.len());
+                    let buf_len = buf.len();
+                    buf.set_len(buf_len * 2);
+                }
+
+                m >>= 1;
+            }
+        }
+
+        // `rem` (`= n - 2^expn`) repetition is done by copying `rem` repetitions from buf itself
+        let rem_len = capacity - buf.len();
+        if rem_len > 0 {
+            unsafe {
+                // This is non-overlapping since `2^expn > rem`
+                ptr::copy_nonoverlapping(buf.as_ptr(), buf.as_mut_ptr().add(buf.len()), rem_len);
+                // `buf.len() + rem_len` eqauls to `but.capacity` (`= self.len() * n`).
+                buf.set_len(capacity);
+            }
+        }
+
+        unsafe { String::from_utf8_unchecked(buf) }
+    }
+
+    /// Returns a copy of this string where each character is mapped to its ASCII upper case equivalent
+    /// 
+    /// ASCII letters 'a' to 'z' are mapped to 'A' to 'Z'.
+    /// 
+    /// To uppercase the value in-place, use [`make_ascii_uppercase`].
+    /// 
+    /// To uppercase ASCII characters in addition to non-ASCII characters, use [`to_uppercase`]
+    /// 
+    /// [`make_ascii_uppercase`]: str::make_ascii_uppercase
+    /// ['to_uppercase`]: #method.to_uppercase
+    #[must_use = "to uppercase the value in-place, use `make_ascii_uppercase()`"]
+    #[inline]
+    pub fn to_ascii_uppercase(&self) -> String {
+        let mut bytes = self.arr.clone();
+        bytes.make_ascii_uppercase();
+        // make_ascii uppercase) preserves the UTF-8 invarient
+        unsafe { String::from_utf8_unchecked(bytes) }
+    }
+
+    /// Returns a copy of this string where each character is mapped to its ASCII lower case equivalent
+    /// 
+    /// ASCII letters 'A' to 'Z' are mapped to 'a' to 'z'.
+    /// 
+    /// To lowercase the value in-place, use [`make_ascii_lowercase`].
+    /// 
+    /// To lowercase ASCII characters in addition to non-ASCII characters, use [`to_lowercase`]
+    /// 
+    /// [`make_ascii_lowercase`]: str::make_ascii_uppercase
+    /// ['to_lowercase`]: #method.to_uppercase
+    #[must_use = "to lowercase the value in-place, use `make_ascii_lowercase()`"]
+    #[inline]
+    pub fn to_ascii_lowercase(&self) -> String {
+        let mut bytes = self.arr.clone();
+        bytes.make_ascii_lowercase();
+        // make_ascii uppercase) preserves the UTF-8 invarient
+        unsafe { String::from_utf8_unchecked(bytes) }
+    }
+
+    fn convert_while_ascii(b: &[u8], convert: fn(&u8) -> u8, alloc: UseAlloc) -> DynArray<u8> {
+        let mut out = DynArray::with_capacity(b.len(), alloc);
+
+        const USIZE_SIZE : usize = core::mem::size_of::<usize>();
+        const MAGIC_UNROLL : usize = 2;
+        const N : usize = USIZE_SIZE * MAGIC_UNROLL;
+        const NONASCII_MASK : usize = usize::from_ne_bytes([0x80; USIZE_SIZE]);
+
+        let mut i = 0;
+        unsafe {
+            while i + N <= b.len() {
+                let in_chunk = b.get_unchecked(i..i + N);
+                let out_chunk = out.spare_capacity_mut().get_unchecked_mut(i..i + N);
+
+                let mut bits = 0;
+                for j in 0..MAGIC_UNROLL {
+                    // read the bytes ` usize at a time (unaligned since we haven't checked the alignment)
+                    // safety: in_chunk are valid bytes in the range
+                    bits |= in_chunk.as_ptr().cast::<usize>().add(j).read_unaligned();
+                }
+
+                if bits & NONASCII_MASK != 0 {
+                    break;
+                }
+
+                // peform the case conversions on N bytes
+                for j in 0..N {
+                    let out = out_chunk.get_unchecked_mut(j);
+                    out.write(convert(in_chunk.get_unchecked(j)));
+                }
+                i += N;
+            }
+            out.set_len(i);
+        }
+
+        out
     }
 }
 
