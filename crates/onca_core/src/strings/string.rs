@@ -64,7 +64,7 @@ impl String {
     /// Creat a string from raw utf8 bytes, including invalid characters
     /// 
     /// Unlike `std::String`, we cannot return a `Cow<'_, str>` for 2 reasons
-    ///   - str already has ToOwned implemented, returning `std::String`'
+    ///   - str already has ToOwned implemented, returning `std::string::String`'
     ///   - We would be missing info about the request allocator, because of how `Cow::Borrowed` works
     #[must_use]
     pub fn from_utf8_lossy(v: &[u8], alloc: UseAlloc) -> String {
@@ -124,6 +124,15 @@ impl String {
         decode_utf16(v.iter().cloned()).map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
     }
 
+    /// Convert a `str` into a `String` with a given allocator
+    #[inline]
+    #[must_use]
+    pub fn from_str(s: &str, alloc: UseAlloc) -> Self {
+        let mut res = String::new(alloc);
+        res.push_str(s);
+        res
+    }
+
     /// Convert a dynamic array of bytes to a `String` without checking that the string contains valid UTF-8
     #[inline]
     #[must_use]
@@ -152,7 +161,7 @@ impl String {
         self
     }
 
-    /// Appends a fiven string slice onto the end of this `String`
+    /// Appends a given string slice onto the end of this `String`
     #[inline]
     pub fn push_str(&mut self, string: &str) {
         self.arr.extend_from_slice(string.as_bytes())
@@ -1228,7 +1237,7 @@ impl FromStr for String {
 
 /// A trait for converting a value to a `String`
 /// 
-/// This trait is automatically implemented for any type which implements the [`Display`] trait. As such, `ToString` shouldn't be implemented directly: ['Display`] should be implemented instead, and you ge the ToString implementation for free
+/// This trait is automatically implemented for any type which implements the [`Display`] trait. As such, `ToString` shouldn't be implemented directly: [`Display`] should be implemented instead, and you ge the ToString implementation for free
 /// 
 /// ['Display']: fmt::Display
 pub trait ToString {

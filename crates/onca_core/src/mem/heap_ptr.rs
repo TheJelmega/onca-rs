@@ -11,11 +11,11 @@ use core::{
     pin::*,
     ptr::{drop_in_place, null},
 };
-use std::{ops::CoerceUnsized, marker::Unsize};
+use std::{ops::{CoerceUnsized}, marker::Unsize, ptr::NonNull};
 use crate::alloc::{Allocator, Allocation, Layout, UseAlloc};
 use super::MEMORY_MANAGER;
 
-
+#[derive(Debug)]
 pub struct HeapPtr<T: ?Sized> {
     ptr      : Allocation<T>,
     _phantom : PhantomData<T>
@@ -23,7 +23,7 @@ pub struct HeapPtr<T: ?Sized> {
 
 impl<T: ?Sized> HeapPtr<T> {
 
-    /// Create a `HeapPtr<T>` from an allocation
+    /// Create a `HeapPtr` from an allocation
     /// 
     /// #Safety
     /// 
@@ -31,6 +31,26 @@ impl<T: ?Sized> HeapPtr<T> {
     #[inline]
     pub unsafe fn from_raw(ptr: Allocation<T>) -> Self {
         HeapPtr { ptr, _phantom: PhantomData }
+    }
+
+    /// Create a `HeapPtr` from a pointer and a layour
+    /// 
+    /// #Safety
+    /// 
+    /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
+    #[inline]
+    pub unsafe fn from_raw_components(ptr: NonNull<T>, layout: Layout) -> Self {
+        HeapPtr { ptr: Allocation::from_raw(ptr, layout), _phantom: PhantomData }
+    }
+
+    /// Cast a `HeapPtr` to another `HeapPtr` that holds a different type
+    /// 
+    /// # Safety
+    /// 
+    /// The user is fully resposible to make sure the resulting cast is valid
+    pub unsafe fn cast<U>(self) -> HeapPtr<U> {
+        let alloc = Self::leak(self);
+        HeapPtr::<U>::from_raw(alloc.cast::<U>())
     }
     
     /// Pin the `HeapPtr<T>`, if T does not implement 'Unpin', then x will be pinned in memory and unable to move
@@ -103,6 +123,27 @@ impl<T> HeapPtr<T> {
         }
     }
 
+    /// Creates new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
+    #[inline]
+    pub fn new_uninit_slice(len: usize, alloc: UseAlloc) -> HeapPtr<[MaybeUninit<T>]> {
+        Self::try_new_uninit_slice(len, alloc).expect("Failed to allocate memory")
+    }
+
+    /// Try to create a new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
+    pub fn try_new_uninit_slice(len: usize, alloc: UseAlloc) -> Option<HeapPtr<[MaybeUninit<T>]>> {
+        let layout = Layout::array::<MaybeUninit<T>>(len);
+        let uninit = MEMORY_MANAGER.alloc_raw(alloc, layout);
+        unsafe {
+            match uninit {
+                None => None,
+                Some(ptr) => {
+                    let mem = core::slice::from_raw_parts_mut(ptr.ptr_mut() as *mut MaybeUninit<T>, len);
+                    Some(HeapPtr::<[MaybeUninit<T>]>{ ptr: Allocation::from_raw(NonNull::new_unchecked(mem), *ptr.layout()), _phantom: PhantomData })
+                }
+            }
+        }
+    }
+
     /// Convert a `HeapPtr<T>` into `HeapPtr<[T]>`
     pub fn into_heap_slice(this: Self) -> HeapPtr<[T]> {
         let tmp = ManuallyDrop::new(this);
@@ -151,12 +192,13 @@ impl<T> HeapPtr<[MaybeUninit<T>]> {
     }
 }
 
+
 impl HeapPtr<dyn Any>
 {
     /// Try to downcast to a concrete type, if the conversion failed, the original value will be found in the Err value
-    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, HeapPtr<dyn Any>>
+    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, Self>
     {
-        if unsafe { self.ptr.get_ref().is::<T>() } {
+        if self.is::<T>() {
             Ok(unsafe { self.downcast_unchecked() })
         } else {
             Err(self)
@@ -173,9 +215,9 @@ impl HeapPtr<dyn Any>
 impl HeapPtr<dyn Any + Send>
 {
     /// Try to downcast to a concrete type, if the conversion failed, the original value will be found in the Err value
-    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, HeapPtr<dyn Any + Send>>
+    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, Self>
     {
-        if unsafe { self.ptr.get_ref().is::<T>() } {
+        if self.is::<T>() {
             Ok(unsafe { self.downcast_unchecked() })
         } else {
             Err(self)
@@ -192,9 +234,9 @@ impl HeapPtr<dyn Any + Send>
 impl HeapPtr<dyn Any + Send + Sync>
 {
     /// Try to downcast to a concrete type, if the conversion failed, the original value will be found in the Err value
-    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, HeapPtr<dyn Any + Send + Sync>>
+    pub fn downcast<T: Any>(self) -> Result<HeapPtr<T>, Self>
     {
-        if unsafe { self.ptr.get_ref().is::<T>() } {
+        if self.is::<T>() {
             Ok(unsafe { self.downcast_unchecked() })
         } else {
             Err(self)
@@ -207,6 +249,7 @@ impl HeapPtr<dyn Any + Send + Sync>
         HeapPtr::<T>{ ptr: HeapPtr::<_>::leak(self).cast(), _phantom: PhantomData }
     }
 }
+
 
 impl<T: ?Sized> AsMut<T> for HeapPtr<T> {
     fn as_mut(&mut self) -> &mut T {
@@ -408,6 +451,7 @@ impl<T: Ord + ?Sized> Ord for HeapPtr<T> {
 impl<T: ?Sized> Unpin for HeapPtr<T> {}
 
 impl<T, U> CoerceUnsized<HeapPtr<U>> for HeapPtr<T>
-    where T : Unsize<U> + ?Sized,
-          U : ?Sized
+where 
+    T : Unsize<U> + ?Sized,
+    U : ?Sized
 {}

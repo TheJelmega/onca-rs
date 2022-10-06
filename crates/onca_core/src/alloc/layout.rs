@@ -1,4 +1,8 @@
-use core::{ mem, cmp };
+use core::{
+    mem,
+    cmp,
+    fmt
+};
 
 /// Memory layout
 /// 
@@ -145,15 +149,21 @@ impl Layout {
 
     /// Get the size of the allocation
     #[inline]
-    pub fn size(&self) -> usize { (self.packed >> Self::SIZE_SHIFT) as usize }
+    pub fn size(&self) -> usize {
+        (self.packed >> Self::SIZE_SHIFT) as usize
+    }
 
     /// Get the pow2 of the alignment
     #[inline]
-    pub fn log2_align(&self) -> u8 { (self.packed & Self::ALIGN_MASK) as u8 }
+    pub fn log2_align(&self) -> u8 {
+        (self.packed & Self::ALIGN_MASK) as u8
+    }
 
     /// Get the alignment of the allocation
     #[inline]
-    pub fn align(&self) -> usize { 1usize << self.log2_align() }
+    pub fn align(&self) -> usize {
+        1usize << self.log2_align() 
+    }
 
     /// Get the allocator id
     #[inline]
@@ -165,9 +175,9 @@ impl Layout {
         self.packed &= !Self::ALLOC_ID_MASK; 
         self.packed |= ((id as u64) << Self::ALLOC_ID_SHIFT) & Self::ALLOC_ID_MASK;
     }
+
     /// Get a copy of the layout with the allocator id set
-    pub fn with_alloc_id(&self, id: u16) -> Self
-    {
+    pub fn with_alloc_id(&self, id: u16) -> Self {
         let mut layout = *self;
         layout.packed &= !Self::ALLOC_ID_MASK; 
         layout.packed |= ((id as u64) << Self::ALLOC_ID_SHIFT) & Self::ALLOC_ID_MASK;
@@ -176,13 +186,26 @@ impl Layout {
 
     /// Get the tag
     #[inline]
-    pub fn tag(&self) -> u8 { (self.packed >> Self::TAG_SHIFT) as u8 }
+    pub fn tag(&self) -> u8 {
+        (self.packed >> Self::TAG_SHIFT) as u8 
+    }
     /// Set the allocator id
     /// 
     /// This function is mainly used when allocating the memory
     pub fn set_tag(&mut self, tag: u8) {
         self.packed &= !Self::TAG_MASK; 
         self.packed |= ((tag as u64) << Self::TAG_SHIFT) & Self::TAG_MASK;
+    }
+}
+
+impl fmt::Debug for Layout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Layout")
+        .field("size", &self.size())
+        .field("alignment", &self.align())
+        .field("allocator id", &self.alloc_id())
+        .field("tag", &self.tag())
+        .finish()
     }
 }
 

@@ -9,7 +9,6 @@
 // Used by collections/*.rs
 #![feature(allocator_api)]
 #![feature(btreemap_alloc)]
-#![feature(min_specialization)]
 #![feature(hasher_prefixfree_extras)]
 
 // Used by string.rs
@@ -18,6 +17,17 @@
 #![feature(pattern)]
 #![feature(fmt_internals)]
 #![feature(unicode_internals)]
+
+// Used by io
+#![feature(strict_provenance)]
+#![feature(slice_internals)]
+#![feature(ptr_as_uninit)]
+#![feature(maybe_uninit_slice)]
+#![feature(maybe_uninit_write_slice)]
+#![feature(mixed_integer_ops)]
+
+// General
+#![feature(min_specialization)]
 
 
 mod bytes;
@@ -28,5 +38,7 @@ pub mod sync;
 pub mod mem;
 pub mod collections;
 pub mod strings;
+
+pub mod io;
 
 pub use bytes::*;
