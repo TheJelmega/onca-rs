@@ -75,10 +75,10 @@ impl<T: Real> Intersect<Circle<T>> for Ray2D<T> {
         let mid = self.orig + self.dir * dist_to_mid;
         let dist_from_center_sq = (mid - rhs.center).len_sq();
 
-        if dist_from_center_sq > rhs.radius {
+        let radius2 = rhs.radius * rhs.radius;
+        if dist_from_center_sq > radius2 {
             T::INF
         } else {
-            let radius2 = rhs.radius * rhs.radius;
             if dist_from_center_sq.is_approx_eq(radius2) {
                 dist_to_mid
             } else {
@@ -165,7 +165,7 @@ impl<T: Real> Intersect<Ray<T>> for Plane<T> {
 impl<T: Real> Intersect<Sphere<T>> for Ray<T> {
     type Output = T;
 
-    /// Calculate the itnersection point between a 2D ray and a circle
+    /// Calculate the itnersection point between a ray and a sphere
     /// 
     /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
     fn intersect(self, rhs: Sphere<T>) -> T {
@@ -173,10 +173,10 @@ impl<T: Real> Intersect<Sphere<T>> for Ray<T> {
         let mid = self.orig + self.dir * dist_to_mid;
         let dist_from_center_sq = (mid - rhs.center).len_sq();
 
-        if dist_from_center_sq > rhs.radius {
+        let radius2 = rhs.radius * rhs.radius;
+        if dist_from_center_sq > radius2 {
             T::INF
         } else {
-            let radius2 = rhs.radius * rhs.radius;
             if dist_from_center_sq.is_approx_eq(radius2) {
                 dist_to_mid
             } else {

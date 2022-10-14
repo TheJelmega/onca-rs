@@ -75,10 +75,10 @@ impl<T: Real> Intersect<Circle<T>> for Line2D<T> {
         let mid = self.orig + self.dir * dist_to_mid;
         let dist_from_center_sq = (mid - rhs.center).len_sq();
 
-        if dist_from_center_sq > rhs.radius {
+        let radius2 = rhs.radius * rhs.radius;
+        if dist_from_center_sq > radius2 {
             (T::INF, T::INF)
         } else {
-            let radius2 = rhs.radius * rhs.radius;
             if dist_from_center_sq.is_approx_eq(radius2) {
                 (dist_to_mid, T::INF)
             } else {
@@ -176,10 +176,10 @@ impl<T: Real> Intersect<Sphere<T>> for Line<T> {
         let mid = self.orig + self.dir * dist_to_mid;
         let dist_from_center_sq = (mid - rhs.center).len_sq();
 
-        if dist_from_center_sq > rhs.radius {
+        let radius2 = rhs.radius * rhs.radius;
+        if dist_from_center_sq > radius2 {
             (T::INF, T::INF)
         } else {
-            let radius2 = rhs.radius * rhs.radius;
             if dist_from_center_sq.is_approx_eq(radius2) {
                 (dist_to_mid, T::INF)
             } else {
