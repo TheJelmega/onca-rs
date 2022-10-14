@@ -6,6 +6,7 @@ use crate::mem::MEMORY_MANAGER;
 use super::{Layout, Allocator, UseAlloc, layout};
 
 /// Representation of allocated memory
+#[derive(Debug)]
 pub struct Allocation<T: ?Sized>
 {
     /// Pointer to memory
@@ -60,12 +61,12 @@ impl<T: ?Sized> Allocation<T>
         unsafe { &mut *self.ptr_mut() }
     }
 
-    /// Cast the allocation to contain a value of another type
+    /// Cast the `Allocation`  to contain a value of another type
     pub fn cast<U>(self) -> Allocation<U> {
         Allocation { ptr: self.ptr.cast(), layout: self.layout }
     }
 
-    /// Duplicate the allocation
+    /// Duplicate the `Allocation` 
     /// 
     /// # Safety
     /// 
@@ -74,13 +75,31 @@ impl<T: ?Sized> Allocation<T>
         Self::new(self.ptr.as_ptr(), self.layout)
     }
 
-    /// Duplicate the allocation and cast it
+    /// Duplicate the `Allocation`  and cast it
     /// 
     /// # Safety
     /// 
     /// Duplicating the allocation is unsafe, as it could cause double deallocations
     pub unsafe fn duplicate_cast<U>(&self) -> Allocation<U> {
         self.duplicate().cast()
+    }
+
+    /// Create an `Allocation` from its raw components
+    /// 
+    /// # Safety
+    /// 
+    /// An allocation should only be created from the values given by [`Self::from_raw`]
+    pub unsafe fn from_raw(ptr: NonNull<T>, layout: Layout) -> Allocation<T> {
+        Self { ptr, layout }
+    }
+
+    /// Converts an `Allocation` into its raw components
+    /// 
+    /// # Safety
+    /// 
+    /// The components given by this value should only be change when absolutely certain
+    pub unsafe fn into_raw(self) -> (NonNull<T>, Layout) {
+        (self.ptr, self.layout)
     }
 }
 
@@ -206,6 +225,7 @@ impl Allocation<dyn Any + Send + Sync>
 }
 
 impl<T, U> CoerceUnsized<Allocation<U>> for Allocation<T>
-    where T : Unsize<U> + ?Sized,
-          U : ?Sized
+where 
+    T : Unsize<U> + ?Sized,
+    U : ?Sized
 {}

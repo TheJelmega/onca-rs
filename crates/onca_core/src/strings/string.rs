@@ -487,13 +487,6 @@ impl String {
         self.arr.allocator_id()
     }
 
-    /// Get the allocator used by this `String`
-    #[inline]
-    #[must_use]
-    pub fn allocator(&mut self) -> &mut dyn Allocator {
-        self.arr.allocator()
-    }
-
     /// Splits the string into two at the given byte index
     /// 
     /// Returns a newly allocated `String` with the same allocator as this `String`.

@@ -317,6 +317,8 @@ impl<T, const N: usize> From<[T; N]> for VecDeque<T> {
     }
 }
 
+// TODO(jel)
+/*
 impl<T> From<DynArray<T>> for VecDeque<T> {
     fn from(dyn_arr: DynArray<T>) -> Self {
         Self(<alloc_vec_deque::VecDeque<T, Alloc> as From<Vec<T, Alloc>>>::from(dyn_arr.0))
@@ -328,6 +330,7 @@ impl<T> From<VecDeque<T>> for DynArray<T> {
         DynArray(<alloc::vec::Vec<T, Alloc> as From<alloc_vec_deque::VecDeque<T, Alloc>>>::from(deque.0))
     }
 }
+*/
 
 impl<T> FromIterator<T> for VecDeque<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {

@@ -1,424 +1,511 @@
-extern crate alloc;
-
-use crate::{alloc::{UseAlloc, Allocator}, mem::MEMORY_MANAGER};
-use super::collections_alloc::Alloc;
 use core::{
-    mem::MaybeUninit, 
-    borrow::{Borrow, BorrowMut},
-    ops::{RangeBounds, Deref, DerefMut, Index, IndexMut},
-    hash::Hash,
-    slice::{SliceIndex, Iter, IterMut}
+    fmt,
+    slice::{self, SliceIndex},
+    iter,
+    iter::FusedIterator,
+    mem::{self, MaybeUninit, ManuallyDrop},
+    ops::{RangeBounds, Range, Deref, DerefMut, Index, IndexMut},
+    ptr::{self, NonNull},
+    hash::{Hash, Hasher},
+    array,
+    cmp,
 };
-use alloc::{
-    collections::TryReserveError,
-    vec::Vec,
-    borrow::Cow
-};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self}, KiB, mem::MEMORY_MANAGER};
 
-/// Dynamically size array
-/// 
-/// Currently this is a wrapper around alloc::vec::Vec, but this will not always be the case
-/// 
-/// For information about the functions, check <https://doc.rust-lang.org/std/vec/struct.Vec.html>
-#[derive(Debug)]
-pub struct DynArray<T>(pub(crate) Vec<T, Alloc>);
+use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
+use super::imp::dyn_array as imp;
+use imp::DynArrayBuffer;
 
-pub type Drain<'a, T> = alloc::vec::Drain<'a, T, Alloc>;
-pub type Splice<'a, I> = alloc::vec::Splice<'a, I, Alloc>;
-pub type IntoIter<T> = alloc::vec::IntoIter<T, Alloc>;
+extern crate alloc as rs_alloc;
 
-// feature(drain_filter), issue: https://github.com/rust-lang/rust/issues/43244
-// pub type DrainFilter<'a, T, F> = alloc::vec::DrainFilter<'a, T, F, Alloc>;
+// TODO: move into allocators
+enum AllocInit {
+    /// The contents of the new memeory are uninitialized
+    Uninitialized,
+    /// The new memory is guaranteed to be zeroed
+    Zeroed,
+}
+
+// Even if we wanted to, we can't exactly wrap alloc::vec::RawVec as it isn't public
+pub(super) struct DynamicBuffer<T> {
+    ptr : Allocation<T>,
+    cap : usize
+}
+
+impl<T> DynamicBuffer<T> {
+    // Tiny Buffers are dumb, skip to:
+    // - 8 if the element size is 1, because any heap allocator is likely to round up a request of less than 8 bytes to at least 8 bytes.
+    // - 4 if elements are moderate-size (<= `KiB).
+    // - 1 otherwise, to acoid wastin too much space for very short dynarrs
+    const MIN_NON_ZERO_CAP : usize = if mem::size_of::<T>() == 1 {
+        8
+    } else if mem::size_of::<T>() <= KiB(1) {
+        4
+    } else {
+        1
+    };
+
+    fn allocate(capacity: usize, init: AllocInit, alloc: UseAlloc) -> Self {
+        if mem::size_of::<T>() == 0 || capacity == 0 {
+            Self::new(alloc)
+        } else {
+            let layout = Layout::array::<T>(capacity);
+            let res = match init {
+                AllocInit::Uninitialized => MEMORY_MANAGER.alloc_raw(alloc, layout),
+                AllocInit::Zeroed => MEMORY_MANAGER.alloc_raw_zeroed(alloc, layout),
+            };
+            let ptr = match res {
+                Some(ptr) => ptr,
+                None => panic!("Failed to allocate memory")
+            }.cast();
+
+            Self { ptr, cap:capacity }
+        }
+    }
+
+    fn needs_to_grow(&self, len: usize, additional: usize) -> bool {
+        additional > self.cap.wrapping_sub(len)
+    }
+
+    fn grow_amortized(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
+        // This is ensured by the calling contexts.
+        debug_assert!(additional > 0);
+
+        if mem::size_of::<T>() == 0 {
+            // Since we return a capacity of `usize::MAX` when `elem_size` is 0, getting to here necessarily means that `DynamicBuffer` is overfull
+            return Err(std::collections::TryReserveErrorKind::CapacityOverflow.into());
+        }
+
+        // Nothing we can really do about these checks, sadly
+        let required_cap = len.checked_add(additional).ok_or(std::collections::TryReserveErrorKind::CapacityOverflow)?;
+
+        // This guarantees exponential growth. The doubling cannot overflow because `cap <= isize::MAX` and the type of `cap` is usize.
+        // While rust increases the capacity by 2x, we will increase it by 1.5x, so we don't get to a run-away capacity as fast
+        // PERF(jel): What impact does 1.5x have compared to 2x?
+        let cap = cmp::max(self.cap + self.cap / 2, required_cap);
+        let cap = cmp::max(Self::MIN_NON_ZERO_CAP, cap);
+
+        let new_layout = Layout::array::<T>(cap);
+
+        self.finish_grow(new_layout, cap)
+    }
+
+    fn grow_exact(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
+        if mem::size_of::<T>() == 0 {
+            // Since we return a capacity of `usize::MAX` when `elem_size` is 0, getting to here necessarily means that `DynamicBuffer` is overfull
+            return Err(std::collections::TryReserveErrorKind::CapacityOverflow.into());
+        }
+
+        let cap = len.checked_add(additional).ok_or(std::collections::TryReserveErrorKind::CapacityOverflow)?;
+
+        let new_layout = Layout::array::<T>(cap);
+
+
+        self.finish_grow(new_layout, cap)
+    }
+
+    pub fn finish_grow(&mut self, new_layout: Layout, new_cap: usize) -> Result<usize, std::collections::TryReserveError> {
+        if self.cap == 0 {
+            let res = MEMORY_MANAGER.alloc_raw(UseAlloc::Id(self.ptr.layout().alloc_id()), new_layout);
+            self.ptr = match res {
+                Some(ptr) => ptr.cast(),
+                None => {
+                    let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
+                    let err_kind = std::collections::TryReserveErrorKind::AllocError { layout: rs_layout, non_exhaustive: () };
+                    return Err(err_kind.into());
+                }
+            };
+        } else {
+            self.ptr = match MEMORY_MANAGER.grow(mem::replace(&mut self.ptr, unsafe { Allocation::null() }), new_layout) {
+                Ok(ptr) => ptr,
+                Err(_) => {
+                    let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
+                    let err_kind = std::collections::TryReserveErrorKind::AllocError { layout: rs_layout, non_exhaustive: () };
+                    return Err(err_kind.into());
+                }
+            };
+        }
+        self.cap = new_cap;
+        Ok(new_cap)
+    }
+
+}
+
+impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
+    fn new(alloc: UseAlloc) -> Self {
+        Self { ptr: unsafe { Allocation::null_alloc(alloc) }, cap: 0 }
+    }
+
+    fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
+        Self::allocate(capacity, AllocInit::Uninitialized, alloc)
+    }
+
+    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
+        Self::allocate(capacity, AllocInit::Zeroed, alloc)
+    }
+
+    fn reserve(&mut self, len: usize, additional: usize) -> usize {
+        if self.needs_to_grow(len, additional) {
+            self.grow_amortized(len, additional).expect("Failed to allocate memory");
+        }
+        self.cap
+    }
+
+    fn try_reserve(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
+        if self.needs_to_grow(len, additional) {
+            self.grow_amortized(len, additional)
+        } else {
+            Ok(self.cap)
+        }       
+    }
+
+    fn reserve_exact(&mut self, len: usize, additional: usize) -> usize {
+        self.try_reserve_exact(len, additional).expect("Failed to allocate memory")
+    }
+
+    fn try_reserve_exact(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
+        if self.needs_to_grow(len, additional) {
+            self.grow_exact(len, additional)
+        } else {
+            Ok(self.cap)
+        }
+    }
+
+    fn shrink_to_fit(&mut self, cap: usize) {
+        assert!(cap < self.cap, "Tried to shrink to a larger capacity");
+
+        if self.cap == 0 {
+            return;
+        }
+
+        let new_layout = Layout::array::<T>(cap);
+        self.ptr = match MEMORY_MANAGER.shrink(mem::replace(&mut self.ptr, unsafe { Allocation::null() }), new_layout) {
+            Ok(ptr) => ptr,
+            Err(_) => {
+                //let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
+                //let err_kind = std::collections::TryReserveErrorKind::AllocError { layout: rs_layout, non_exhaustive: () };
+                //return Err(err_kind.into());
+                panic!("Could not shrink buffer")
+            }
+        };
+        self.cap = cap;
+    }
+
+    fn capacity(&self) -> usize {
+        if mem::size_of::<T>() == 0 {
+            usize::MAX
+        } else {
+            self.cap
+        }
+    }
+
+    fn as_ptr(&self) -> *const T {
+        self.ptr.ptr()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut T {
+        self.ptr.ptr_mut()
+    }
+
+    fn allocator_id(&self) -> u16 {
+        self.ptr.layout().alloc_id()
+    }
+}
+
+impl<T> Drop for DynamicBuffer<T> {
+    fn drop(&mut self) {
+        if self.cap > 0 {
+            MEMORY_MANAGER.dealloc(mem::replace(&mut self.ptr, unsafe { Allocation::null() }))
+        }
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
+// A [`DynArray`] that exlusively stores its data on the stack, i.e. all elements are stored inline.
+pub struct DynArray<T> (imp::DynArray<T, DynamicBuffer<T>>);
 
 impl<T> DynArray<T> {
-    
+    #[inline]
     #[must_use]
     pub fn new(alloc: UseAlloc) -> Self {
-        Self(Vec::new_in(Alloc::new(alloc)))
+        Self(imp::DynArray::new(alloc))
     }
 
+    #[inline]
+    #[must_use]
     pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self(Vec::with_capacity_in(capacity, Alloc::new(alloc)))
+        Self(imp::DynArray::with_capacity(capacity, alloc))
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.0.capacity()
     }
 
-    pub fn reserve(&mut self, additional: usize) {
-        self.0.reserve(additional)
+    
+    #[inline]
+    pub fn reserve(&mut self, additional:usize) {
+        self.0.reserve(additional);
     }
 
-    pub fn reserve_exact(&mut self, additional: usize) {
-        self.0.reserve_exact(additional)
+    #[inline]
+    pub fn try_reserve(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+        self.0.try_reserve(additional).map(|_| ())
     }
 
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
-        self.0.try_reserve(additional)
+    #[inline]
+    pub fn reserve_exact(&mut self, additional:usize) {
+        self.0.reserve_exact(additional);
     }
 
-    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError> {
-        self.0.try_reserve_exact(additional)
+    #[inline]
+    pub fn try_reserve_exact(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+        self.0.try_reserve_exact(additional).map(|_| ())
     }
 
+    #[inline]
     pub fn shrink_to_fit(&mut self) {
         self.0.shrink_to_fit()
     }
 
+    #[inline]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.0.shrink_to(min_capacity)
     }
 
+    #[inline]
     pub fn truncate(&mut self, len: usize) {
         self.0.truncate(len)
     }
 
+    #[inline]
     pub fn as_slice(&self) -> &[T] {
-        self.0.as_slice()
+        self
     }
 
+    #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        self.0.as_mut_slice()
+        self
     }
 
+    #[inline]
     pub fn as_ptr(&self) -> *const T {
         self.0.as_ptr()
     }
 
+    #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut T {
         self.0.as_mut_ptr()
     }
 
+    #[inline]
     pub unsafe fn set_len(&mut self, new_len: usize) {
         self.0.set_len(new_len)
     }
 
+    #[inline]
     pub fn swap_remove(&mut self, index: usize) -> T {
         self.0.swap_remove(index)
     }
 
+    #[inline]
     pub fn insert(&mut self, index: usize, element: T) {
-        self.0.insert(index, element)        
+        self.0.insert(index, element)   
     }
 
+    #[inline]
     pub fn remove(&mut self, index: usize) -> T {
         self.0.remove(index)
     }
 
-    pub fn retain<F>(&mut self, pred: F)
-        where F: FnMut(&T) -> bool
+    #[inline]
+    pub fn retain<F>(&mut self, pred: F) 
+    where
+        F : FnMut(&T) -> bool
     {
         self.0.retain(pred)
     }
 
+    #[inline]
     pub fn retain_mut<F>(&mut self, pred: F)
-        where F: FnMut(&mut T) -> bool
+    where
+        F : FnMut(&mut T) -> bool
     {
         self.0.retain_mut(pred)
     }
 
-    pub fn dedup_by_key<F, K>(&mut self, key: F) 
-        where F : FnMut(&mut T) -> K,
-              K : PartialEq<K>
+    #[inline]
+    pub fn dedup_by_key<F, K>(&mut self, mut key: F)
+    where
+        F : FnMut(&mut T) -> K,
+        K : PartialEq<K>
     {
         self.0.dedup_by_key(key)
     }
 
+    #[inline]
     pub fn dedup_by<F>(&mut self, same_bucket: F)
-        where F : FnMut(&mut T, &mut T) -> bool
+    where
+        F : FnMut(&mut T, &mut T) -> bool
     {
         self.0.dedup_by(same_bucket)
     }
 
-    pub fn push(&mut self, value: T)
-    {
+    #[inline]
+    pub fn push(&mut self, value: T) {
         self.0.push(value)
     }
 
+    #[inline]
     pub fn pop(&mut self) -> Option<T> {
         self.0.pop()
     }
 
+    #[inline]
     pub fn append(&mut self, other: &mut DynArray<T>) {
         self.0.append(&mut other.0)
     }
 
+    #[inline]
     pub fn drain<R: RangeBounds<usize>>(&mut self, range: R) -> Drain<'_, T> {
-        self.0.drain(range)
+        Drain(self.0.drain(range))
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.0.clear()
     }
 
-    #[must_use]
+    #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
-    #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    pub fn split_off(&mut self, at: usize) -> DynArray<T> {
+    #[inline]
+    pub fn split_off(&mut self, at: usize) -> Self {
         Self(self.0.split_off(at))
     }
 
-    pub fn resize_with<F>(&mut self, new_len: usize, f: F) 
-        where F : FnMut() -> T
+    #[inline]
+    pub fn resize_with<F>(&mut self, new_len: usize, f: F)
+    where
+        F : FnMut() -> T
     {
         self.0.resize_with(new_len, f)
     }
 
+    #[inline]
     pub fn spare_capacity_mut(&mut self) -> &mut [MaybeUninit<T>] {
         self.0.spare_capacity_mut()
     }
 
-    // feature(vec_split_at_spare), issue: https://github.com/rust-lang/rust/issues/81944
-    /* 
+    #[inline]
     pub fn split_at_spare_mut(&mut self) -> (&mut [T], &mut [MaybeUninit<T>]) {
         self.0.split_at_spare_mut()
     }
-    */
 
-    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, <I as IntoIterator>::IntoIter>
-        where R : RangeBounds<usize>,
-              I : IntoIterator<Item = T>
+    #[inline]
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, I::IntoIter>
+    where
+        R : RangeBounds<usize>,
+        I : IntoIterator<Item = T>
     {
-        self.0.splice(range, replace_with)
+        Splice(self.0.splice(range, replace_with))
     }
 
-    // feature(drain_filter ), issue: https://github.com/rust-lang/rust/issues/43244
-    /*
-    pub fn drain_filter<F>(&mut self, filter: F) -> DrainFilter<'_, T, F>
-        where F : FnMut(&mut T) -> bool
-    {
-        self.0.drain_filter(filter)
-    }
-    */
-
-    pub fn from_str(val: &str, alloc: UseAlloc) -> DynArray<u8> {
-        DynArray::from_slice(val.as_bytes(), alloc)
-    }
-
-    pub fn from_array<const N: usize>(val: [T; N], alloc: UseAlloc) -> Self {
-        Self(<[T]>::into_vec(Box::new_in(val, Alloc::new(alloc))))
-    }
-
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
-        let mut arr = Self::new(alloc);
-        arr.extend(iter);
-        arr
-    }
-
-    pub fn allocator(&mut self) -> &mut dyn Allocator {
-        MEMORY_MANAGER.get_allocator(UseAlloc::Id(self.allocator_id())).unwrap()
-    }
-
+    #[inline]
     pub fn allocator_id(&self) -> u16 {
-        self.0.allocator().layout().alloc_id()
-    }
-
-    pub unsafe fn get_underlying_container(&self) -> &alloc::vec::Vec<T, Alloc> {
-        &self.0
-    }
-
-    pub unsafe fn get_underlying_container_mut(&mut self) -> &mut alloc::vec::Vec<T, Alloc> {
-        &mut self.0
+        self.0.allocator_id()
     }
 }
 
 impl<T: Clone> DynArray<T> {
+    #[inline]
     pub fn resize(&mut self, new_len: usize, value: T) {
         self.0.resize(new_len, value)
     }
 
+    #[inline]
     pub fn extend_from_slice(&mut self, other: &[T]) {
         self.0.extend_from_slice(other)
     }
 
-    pub fn extend_from_within<R>(&mut self, src: R) 
-        where R : RangeBounds<usize>
-    {
+    #[inline]
+    pub fn extend_from_within<R: RangeBounds<usize>>(&mut self, src: R) {
         self.0.extend_from_within(src)
     }
-
-    pub fn from_slice(val: &[T], alloc: UseAlloc) -> Self {
-        Self(val.to_vec_in(Alloc::new(alloc)))
-    }
 }
 
-impl<T, const N: usize> DynArray<[T; N]> {
-    // feature(slice_flatten), issue: https://github.com/rust-lang/rust/issues/95629
-    /*
-    pub fn into_flattened(self) -> DynArray<T> {
-        DynArray::<_>(self.0.into_flattened())
-    }
-    */
-}
-
-impl<T: PartialEq<T>> DynArray<T> {
+impl<T: PartialEq> DynArray<T> {
+    #[inline]
     pub fn dedup(&mut self) {
         self.0.dedup()
     }
 }
 
-impl<T> AsMut<[T]> for DynArray<T> {
-    fn as_mut(&mut self) -> &mut [T] {
-        self.0.as_mut()
-    }
-}
-
-impl<T> AsMut<DynArray<T>> for DynArray<T> {
-    fn as_mut(&mut self) -> &mut DynArray<T> {
-        self
-    }
-}
-
-impl<T> AsRef<[T]> for DynArray<T> {
-    fn as_ref(&self) -> &[T] {
-        self.0.as_ref()
-    }
-}
-
-impl<T> AsRef<DynArray<T>> for DynArray<T> {
-    fn as_ref(&self) -> &DynArray<T> {
-        self
-    }
-}
-
-impl<T> Borrow<[T]> for DynArray<T> {
-    fn borrow(&self) -> &[T] {
-        self.0.borrow()
-    }
-}
-
-impl<T> BorrowMut<[T]> for DynArray<T> {
-    fn borrow_mut(&mut self) -> &mut [T] {
-        self.0.borrow_mut()
-    }
-}
-
-impl<T: Clone> Clone for DynArray<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<T> Default for DynArray<T> {
-    fn default() -> Self {
-        Self::new(UseAlloc::Default)
-    }
-}
+//------------------------------------------------------------------------------------------------------------------------------
 
 impl<T> Deref for DynArray<T> {
     type Target = [T];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        &*(self.0)
     }
 }
 
 impl<T> DerefMut for DynArray<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.deref_mut()
+        &mut *(self.0)
     }
 }
 
-impl<'a, T: Copy + 'a> Extend<&'a T> for DynArray<T> {
-    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
-        self.0.extend(iter)
+impl<T: Clone> Clone for DynArray<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
     }
 
-    // feature(extend_one , issue: https://github.com/rust-lang/rust/issues/72631
-    /*
-    fn extend_one(&mut self, item: &'a T) {
-        self.extend_one(item)
-    }
-    */
-
-    // feature(extend_one), issue: https://github.com/rust-lang/rust/issues/72631
-    /*
-    fn extend_reserve(&mut self, additional: usize) {
-        self.extend_reserve(additional)
-    }
-    */
-}
-
-impl<T> Extend<T> for DynArray<T> {
-    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        self.0.extend(iter)
-    }
-
-    // feature(extend_one), issue: https://github.com/rust-lang/rust/issues/72631
-    /*
-    fn extend_one(&mut self, item: &'a T) {
-        self.extend_one(item)
-    }
-    */
-
-    // feature(extend_one), issue: https://github.com/rust-lang/rust/issues/72631
-    /*
-    fn extend_reserve(&mut self, additional: usize) {
-        self.extend_reserve(additional)
-    }
-    */
-}
-
-impl<T: Clone> From<&[T]> for DynArray<T> {
-    fn from(val: &[T]) -> Self {
-        Self::from_slice(val, UseAlloc::Default)
-    }
-}
-
-impl<T: Clone> From<&mut [T]> for DynArray<T> {
-    fn from(val: &mut [T]) -> Self {
-        Self::from_slice(val, UseAlloc::Default)
-    }
-}
-
-impl From<&str> for DynArray<u8> {
-    fn from(val: &str) -> Self {
-        Self::from_str(val, UseAlloc::Default)
-    }
-}
-
-impl<'a, T: Clone> From<&'a DynArray<T>> for Cow<'a, [T]> {
-    fn from(arr: &'a DynArray<T>) -> Self {
-        Cow::Borrowed(arr.as_slice())
-    }
-}
-
-impl<T, const N: usize> From<[T; N]> for DynArray<T> {
-    fn from(val: [T; N]) -> Self {
-        Self::from_array(val, UseAlloc::Default)
-    }
-}
-
-impl<T> FromIterator<T> for DynArray<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter(iter, UseAlloc::Default)
+    #[inline]
+    fn clone_from(&mut self, source: &Self) {
+        self.0.clone_from(&source.0)
     }
 }
 
 impl<T: Hash> Hash for DynArray<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Hash::hash(&**self, state)
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
     }
 }
 
-impl<T, I: SliceIndex<[T]>> Index<I> for DynArray<T> {
-    type Output = <I as SliceIndex<[T]>>::Output;
+impl<T: Hash, I: SliceIndex<[T]>> Index<I> for DynArray<T> {
+    type Output = I::Output;
 
+    #[inline]
     fn index(&self, index: I) -> &Self::Output {
-        Index::index(&**self, index)
+        self.0.index(index)
     }
 }
 
-impl<T, I: SliceIndex<[T]>> IndexMut<I> for DynArray<T> {
+impl<T: Hash, I: SliceIndex<[T]>> IndexMut<I> for DynArray<T> {
+    #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        IndexMut::index_mut(&mut **self, index)
+        self.0.index_mut(index)
+    }
+}
+
+impl<T> FromIterator<T> for DynArray<T> {
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(FromIterator::from_iter(iter))
     }
 }
 
@@ -426,81 +513,309 @@ impl<T> IntoIterator for DynArray<T> {
     type Item = T;
     type IntoIter = IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        IntoIter(self.0.into_iter())
     }
 }
 
 impl<'a, T> IntoIterator for &'a mut DynArray<T> {
     type Item = &'a mut T;
-    type IntoIter = IterMut<'a, T>;
+    type IntoIter = slice::IterMut<'a, T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.0).into_iter()
+        self.0.iter_mut()
     }
 }
 
-impl<'a, T> IntoIterator for &'a DynArray<T> {
-    type Item = &'a T;
-    type IntoIter = Iter<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        (&self.0).into_iter()
+impl<T> Extend<T> for DynArray<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.0.extend(iter)
     }
 }
 
-macro_rules! impl_dyn_arr_slice_eq {
-    ([$($vars:tt)*] $lhs: ty, $rhs: ty $(where $ty:ty: $bound:ident)?) => {
-        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs
-            where T: PartialEq<U>,
-                  $($ty : $bound)?
-        {
-            #[inline]
-            fn eq(&self, other:&$rhs) -> bool { self[..] == other[..] }
-            #[inline]
-            fn ne(&self, other:&$rhs) -> bool { self[..] != other[..] }
-        }
-    };
-}
-impl_dyn_arr_slice_eq!([] DynArray<T>, DynArray<U>);
-impl_dyn_arr_slice_eq!([] DynArray<T>, [U]);
-impl_dyn_arr_slice_eq!([] DynArray<T>, &[U]);
-impl_dyn_arr_slice_eq!([] DynArray<T>, &mut [U]);
-impl_dyn_arr_slice_eq!([] [T], DynArray<U>);
-impl_dyn_arr_slice_eq!([] &[T], DynArray<U>);
-impl_dyn_arr_slice_eq!([] &mut [T], DynArray<U>);
-impl_dyn_arr_slice_eq!([const N: usize] DynArray<T>, [U; N]);
-impl_dyn_arr_slice_eq!([const N: usize] DynArray<T>, &[U; N]);
-impl_dyn_arr_slice_eq!([const N: usize] DynArray<T>, &mut [U; N]);
-impl_dyn_arr_slice_eq!([const N: usize] [T; N], DynArray<U>);
-impl_dyn_arr_slice_eq!([const N: usize] &[T; N], DynArray<U>);
-impl_dyn_arr_slice_eq!([const N: usize] &mut [T; N], DynArray<U>);
-
-impl<T: Eq> Eq for DynArray<T> {}
-
-impl<T: PartialOrd> PartialOrd for DynArray<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        PartialOrd::partial_cmp(&**self, &**other)
+impl<'a, T: Copy + 'a> Extend<&'a T> for DynArray<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
+        self.0.extend(iter)
     }
 }
 
-impl<T: Ord> Ord for DynArray<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        Ord::cmp(&**self, &**other)
+impl<T> Default for DynArray<T> {
+    #[inline]
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for DynArray<T> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T> AsRef<DynArray<T>> for DynArray<T> {
+    #[inline]
+    fn as_ref(&self) -> &DynArray<T> {
+        self
+    }
+}
+
+impl<T> AsMut<DynArray<T>> for DynArray<T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut DynArray<T> {
+       self 
+    }
+}
+
+impl<T> AsRef<[T]> for DynArray<T> {
+    #[inline]
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<T> AsMut<[T]> for DynArray<T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut [T] {
+       self 
+    }
+}
+
+impl<T: Clone> From<&[T]> for DynArray<T> {
+    #[inline]
+    fn from(s: &[T]) -> Self {
+        Self(From::from(s))
+    }
+}
+
+impl<T: Clone> From<&mut [T]> for DynArray<T> {
+    #[inline]
+    fn from(s: &mut [T]) -> Self {
+        Self(From::from(s))
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for DynArray<T> {
+    #[inline]
+    fn from(s: [T; N]) -> Self {
+        Self(From::from(s))
+    }
+}
+
+impl<> From<&str> for DynArray<u8> {
+    #[inline]
+    fn from(s: &str) -> Self {
+        Self(From::from(s))
     }
 }
 
 impl<T, const N: usize> TryFrom<DynArray<T>> for [T; N] {
     type Error = DynArray<T>;
 
-    fn try_from(mut value: DynArray<T>) -> Result<Self, Self::Error> {
-        if value.len() != N {
-            Err(value)
-        } else {
-            unsafe { value.set_len(0) }
-            let array = unsafe { core::ptr::read(value.as_ptr() as *const [T; N]) };
-            Ok(array)
+    #[inline]
+    fn try_from(dynarr: DynArray<T>) -> Result<Self, Self::Error> {
+        match <[T; N]>::try_from(dynarr.0) {
+            Ok(arr) => Ok(arr),
+            Err(dynarr) => Err(DynArray(dynarr))
         }
     }
 }
 
+//------------------------------------------------------------------------------------------------------------------------------
+
+
+impl_slice_partial_eq!{ [] DynArray<T>, DynArray<U> }
+impl_slice_partial_eq!{ [] DynArray<T>, [U] }
+impl_slice_partial_eq!{ [] DynArray<T>, &[U] }
+impl_slice_partial_eq!{ [] DynArray<T>, &mut [U] }
+impl_slice_partial_eq!{ [const M: usize] DynArray<T>, [U; M] }
+impl_slice_partial_eq!{ [const M: usize] DynArray<T>, &[U; M] }
+impl_slice_partial_eq!{ [const M: usize] DynArray<T>, &mut [U; M] }
+impl_slice_partial_eq!{ [] [T], DynArray<U> }
+impl_slice_partial_eq!{ [] &[T], DynArray<U> }
+impl_slice_partial_eq!{ [] &mut [T], DynArray<U> }
+impl_slice_partial_eq!{ [const N: usize] [T; N], DynArray<U> }
+impl_slice_partial_eq!{ [const N: usize] &[T; N], DynArray<U> }
+impl_slice_partial_eq!{ [const N: usize] &mut [T; N], DynArray<U> }
+
+
+impl<T: Eq> Eq for DynArray<T> {}
+
+impl<T: PartialOrd> PartialOrd for DynArray<T> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: Ord> Ord for DynArray<T> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
+pub struct IntoIter<T>(imp::IntoIter<T, DynamicBuffer<T>>);
+
+impl<T> IntoIter<T> {
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self.0.as_slice()
+    }
+
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        self.0.as_mut_slice()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+
+    #[inline]
+    fn count(self) -> usize{
+        self.0.count()
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back()
+    }
+}
+
+impl<T> ExactSizeIterator for IntoIter<T> {}
+impl<T> FusedIterator for IntoIter<T> {}
+
+impl<T: Clone> Clone for IntoIter<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+unsafe impl<T: Send> Send for IntoIter<T> {}
+unsafe impl<T: Sync> Sync for IntoIter<T> {}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
+pub struct Drain<'a, T>(imp::Drain<'a, T, DynamicBuffer<T>>);
+
+impl<T> Drain<'_, T> {
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self.0.as_slice()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Drain<'_, T> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<'a, T: 'a> AsRef<[T]> for Drain<'a, T> {
+    #[inline]
+    fn as_ref(&self) -> &[T] {
+        self.0.as_ref()
+    }
+}
+
+impl<T> Iterator for Drain<'_, T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl<T> DoubleEndedIterator for Drain<'_, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back()
+    }
+}
+
+impl<T> ExactSizeIterator for Drain<'_, T> {}
+
+unsafe impl<T: Send> Send for Drain<'_, T> {}
+unsafe impl<T: Sync> Sync for Drain<'_, T> {}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
+pub struct Splice<'a, I>(imp::Splice<'a, I, DynamicBuffer<I::Item>>)
+where
+    I : Iterator + 'a
+;
+
+impl<I: Iterator<Item = T>, T> Iterator for Splice<'_, I> {
+    type Item = I::Item;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl<I: Iterator<Item = T>, T> DoubleEndedIterator for Splice<'_, I> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back()
+    }
+}
+
+impl<I: Iterator<Item = T>, T> ExactSizeIterator for Splice<'_, I> {}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
+pub trait SliceToDynArray<T: Clone> {
+    fn to_static_dynarray(&self) -> DynArray<T>;
+}
+
+impl<T: Clone> SliceToDynArray<T> for [T] {
+    default fn to_static_dynarray(&self) -> DynArray<T> {
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default))
+    }
+}
+
+impl<T: Copy> SliceToDynArray<T> for [T] {
+    fn to_static_dynarray(&self) -> DynArray<T> {
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default))
+    }
+}

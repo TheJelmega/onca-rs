@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+// NOTE(jel): Currently, we have a lot of features we need for the implementations, we should be looking to reduce this in the future.
+//            While not having to use unstable features might not be possible, we might be able to reduce the amount we need
+
 // Used by alloc/heap_ptr/unique/rc/arc.rs
 #![feature(coerce_unsized)]
 #![feature(unsize)]
@@ -10,6 +13,8 @@
 #![feature(allocator_api)]
 #![feature(btreemap_alloc)]
 #![feature(hasher_prefixfree_extras)]
+#![feature(try_reserve_kind)]
+#![feature(ptr_sub_ptr)]
 
 // Used by string.rs
 #![feature(utf8_chunks)]
@@ -27,7 +32,10 @@
 #![feature(mixed_integer_ops)]
 
 // General
-#![feature(min_specialization)]
+#![allow(incomplete_features)]
+#![feature(specialization, rustc_attrs)]
+// NOTE: as `min_specialization` doesn't work for a minor use-case, we use full specialization here, all code added that needs `specialization` and not just `minspecialization` should be mentioned below:
+//     - crate::collections::imp::generic_dyn_array: `impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for GenericDynArray<T, B> {`, as `B` needs to be the same, but does not care about the specialization
 
 
 mod bytes;

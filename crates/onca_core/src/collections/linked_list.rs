@@ -531,7 +531,7 @@ impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
 
 impl<T> Extend<T> for LinkedList<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        <Self as SpecExtend<I>>::spec_extend(self, iter);
+        <Self as SpecExtend<T, I>>::spec_extend(self, iter);
     }
 
     // feature(extend_one), issue: https://github.com/rust-lang/rust/issues/72631
@@ -542,13 +542,13 @@ impl<T> Extend<T> for LinkedList<T> {
     */
 }
 
-impl<I: IntoIterator> SpecExtend<I> for LinkedList<I::Item> {
+impl<I: IntoIterator> SpecExtend<I::Item, I> for LinkedList<I::Item> {
     default fn spec_extend(&mut self, iter: I) {
         iter.into_iter().for_each(move |elt| self.push_back(elt));
     }
 }
 
-impl<T> SpecExtend<LinkedList<T>> for LinkedList<T> {
+impl<T> SpecExtend<T, LinkedList<T>> for LinkedList<T> {
     fn spec_extend(&mut self, ref mut other: LinkedList<T>) {
         self.append(other);
     }
