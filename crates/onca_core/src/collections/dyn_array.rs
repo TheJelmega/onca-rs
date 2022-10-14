@@ -243,7 +243,6 @@ impl<T> DynArray<T> {
         self.0.capacity()
     }
 
-    
     #[inline]
     pub fn reserve(&mut self, additional:usize) {
         self.0.reserve(additional);

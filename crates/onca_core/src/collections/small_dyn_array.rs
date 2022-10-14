@@ -17,59 +17,6 @@ use super::imp::dyn_array as imp;
 use imp::DynArrayBuffer;
 use super::dyn_array::DynamicBuffer;
 
-struct StaticBuf<T, const N: usize> {
-    buf: MaybeUninit<[T; N]>
-}
-
-impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
-    fn new(alloc: UseAlloc) -> Self {
-        Self { buf: MaybeUninit::uninit() }
-    }
-
-    fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { buf: MaybeUninit::uninit() }
-    }
-
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { buf: MaybeUninit::uninit() }
-    }
-
-    fn reserve(&mut self, len: usize, additional: usize) -> usize {
-        N
-    }
-
-    fn try_reserve(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
-        Ok(N)
-    }
-
-    fn reserve_exact(&mut self, len: usize, additional: usize) -> usize {
-        N
-    }
-
-    fn try_reserve_exact(&mut self, len: usize, additional: usize) -> Result<usize, std::collections::TryReserveError> {
-        Ok(N)
-    }
-
-    fn shrink_to_fit(&mut self, cap: usize) {
-    }
-
-    fn capacity(&self) -> usize {
-        N
-    }
-
-    fn as_ptr(&self) -> *const T {
-        self.buf.as_ptr() as *const T
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut T {
-        self.buf.as_mut_ptr() as *mut T
-    }
-
-    fn allocator_id(&self) -> u16 {
-        u16::MAX
-    }
-}
-
 union SmallBufferData<T, const N: usize> {
     inline  : (ManuallyDrop<MaybeUninit<[T; N]>>, u16),
     dynamic : ManuallyDrop<DynamicBuffer<T>>,
@@ -237,9 +184,9 @@ impl<T, const N: usize> Drop for SmallBuffer<T, N> {
 //------------------------------------------------------------------------------------------------------------------------------
 
 // A [`DynArray`] that exlusively stores its data on the stack, i.e. all elements are stored inline.
-pub struct StaticDynArray<T, const N: usize> (imp::DynArray<T, StaticBuf<T, N>>);
+pub struct SmallDynArray<T, const N: usize> (imp::DynArray<T, SmallBuffer<T, N>>);
 
-impl<T, const N: usize> StaticDynArray<T, N> {
+impl<T, const N: usize> SmallDynArray<T, N> {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
@@ -249,6 +196,36 @@ impl<T, const N: usize> StaticDynArray<T, N> {
     #[inline]
     pub fn capacity(&self) -> usize {
         self.0.capacity()
+    }
+
+    #[inline]
+    pub fn reserve(&mut self, additional:usize) {
+        self.0.reserve(additional);
+    }
+
+    #[inline]
+    pub fn try_reserve(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+        self.0.try_reserve(additional).map(|_| ())
+    }
+
+    #[inline]
+    pub fn reserve_exact(&mut self, additional:usize) {
+        self.0.reserve_exact(additional);
+    }
+
+    #[inline]
+    pub fn try_reserve_exact(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+        self.0.try_reserve_exact(additional).map(|_| ())
+    }
+
+    #[inline]
+    pub fn shrink_to_fit(&mut self) {
+        self.0.shrink_to_fit()
+    }
+
+    #[inline]
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.0.shrink_to(min_capacity)
     }
 
     #[inline]
@@ -341,7 +318,7 @@ impl<T, const N: usize> StaticDynArray<T, N> {
     }
 
     #[inline]
-    pub fn append<const M: usize>(&mut self, other: &mut StaticDynArray<T, M>) {
+    pub fn append<const M: usize>(&mut self, other: &mut SmallDynArray<T, M>) {
         self.0.append(&mut other.0)
     }
 
@@ -396,9 +373,14 @@ impl<T, const N: usize> StaticDynArray<T, N> {
     {
         Splice(self.0.splice(range, replace_with))
     }
+
+    #[inline]
+    pub fn allocator_id(&self) -> u16 {
+        self.0.allocator_id()
+    }
 }
 
-impl<T: Clone, const N: usize> StaticDynArray<T, N> {
+impl<T: Clone, const N: usize> SmallDynArray<T, N> {
     #[inline]
     pub fn resize(&mut self, new_len: usize, value: T) {
         self.0.resize(new_len, value)
@@ -415,7 +397,7 @@ impl<T: Clone, const N: usize> StaticDynArray<T, N> {
     }
 }
 
-impl<T: PartialEq, const N: usize> StaticDynArray<T, N> {
+impl<T: PartialEq, const N: usize> SmallDynArray<T, N> {
     #[inline]
     pub fn dedup(&mut self) {
         self.0.dedup()
@@ -424,7 +406,7 @@ impl<T: PartialEq, const N: usize> StaticDynArray<T, N> {
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-impl<T, const N: usize> Deref for StaticDynArray<T, N> {
+impl<T, const N: usize> Deref for SmallDynArray<T, N> {
     type Target = [T];
 
     #[inline]
@@ -433,14 +415,14 @@ impl<T, const N: usize> Deref for StaticDynArray<T, N> {
     }
 }
 
-impl<T, const N: usize> DerefMut for StaticDynArray<T, N> {
+impl<T, const N: usize> DerefMut for SmallDynArray<T, N> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *(self.0)
     }
 }
 
-impl<T: Clone, const N: usize> Clone for StaticDynArray<T, N> {
+impl<T: Clone, const N: usize> Clone for SmallDynArray<T, N> {
     #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone())
@@ -452,14 +434,14 @@ impl<T: Clone, const N: usize> Clone for StaticDynArray<T, N> {
     }
 }
 
-impl<T: Hash, const N: usize> Hash for StaticDynArray<T, N> {
+impl<T: Hash, const N: usize> Hash for SmallDynArray<T, N> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state)
     }
 }
 
-impl<T: Hash, I: SliceIndex<[T]>, const N: usize> Index<I> for StaticDynArray<T, N> {
+impl<T: Hash, I: SliceIndex<[T]>, const N: usize> Index<I> for SmallDynArray<T, N> {
     type Output = I::Output;
 
     #[inline]
@@ -468,21 +450,21 @@ impl<T: Hash, I: SliceIndex<[T]>, const N: usize> Index<I> for StaticDynArray<T,
     }
 }
 
-impl<T: Hash, I: SliceIndex<[T]>, const N: usize> IndexMut<I> for StaticDynArray<T, N> {
+impl<T: Hash, I: SliceIndex<[T]>, const N: usize> IndexMut<I> for SmallDynArray<T, N> {
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         self.0.index_mut(index)
     }
 }
 
-impl<T, const N: usize> FromIterator<T> for StaticDynArray<T, N> {
+impl<T, const N: usize> FromIterator<T> for SmallDynArray<T, N> {
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self(FromIterator::from_iter(iter))
     }
 }
 
-impl<T, const N: usize> IntoIterator for StaticDynArray<T, N> {
+impl<T, const N: usize> IntoIterator for SmallDynArray<T, N> {
     type Item = T;
     type IntoIter = IntoIter<T, N>;
 
@@ -492,7 +474,7 @@ impl<T, const N: usize> IntoIterator for StaticDynArray<T, N> {
     }
 }
 
-impl<'a, T, const N: usize> IntoIterator for &'a mut StaticDynArray<T, N> {
+impl<'a, T, const N: usize> IntoIterator for &'a mut SmallDynArray<T, N> {
     type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;
 
@@ -502,98 +484,98 @@ impl<'a, T, const N: usize> IntoIterator for &'a mut StaticDynArray<T, N> {
     }
 }
 
-impl<T, const N: usize> Extend<T> for StaticDynArray<T, N> {
+impl<T, const N: usize> Extend<T> for SmallDynArray<T, N> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         self.0.extend(iter)
     }
 }
 
-impl<'a, T: Copy + 'a, const N: usize> Extend<&'a T> for StaticDynArray<T, N> {
+impl<'a, T: Copy + 'a, const N: usize> Extend<&'a T> for SmallDynArray<T, N> {
     #[inline]
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.0.extend(iter)
     }
 }
 
-impl<T, const N: usize> Default for StaticDynArray<T, N> {
+impl<T, const N: usize> Default for SmallDynArray<T, N> {
     #[inline]
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<T: fmt::Debug, const N: usize> fmt::Debug for StaticDynArray<T, N> {
+impl<T: fmt::Debug, const N: usize> fmt::Debug for SmallDynArray<T, N> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl<T, const N: usize> AsRef<StaticDynArray<T, N>> for StaticDynArray<T, N> {
+impl<T, const N: usize> AsRef<SmallDynArray<T, N>> for SmallDynArray<T, N> {
     #[inline]
-    fn as_ref(&self) -> &StaticDynArray<T, N> {
+    fn as_ref(&self) -> &SmallDynArray<T, N> {
         self
     }
 }
 
-impl<T, const N: usize> AsMut<StaticDynArray<T, N>> for StaticDynArray<T, N> {
+impl<T, const N: usize> AsMut<SmallDynArray<T, N>> for SmallDynArray<T, N> {
     #[inline]
-    fn as_mut(&mut self) -> &mut StaticDynArray<T, N> {
+    fn as_mut(&mut self) -> &mut SmallDynArray<T, N> {
        self 
     }
 }
 
-impl<T, const N: usize> AsRef<[T]> for StaticDynArray<T, N> {
+impl<T, const N: usize> AsRef<[T]> for SmallDynArray<T, N> {
     #[inline]
     fn as_ref(&self) -> &[T] {
         self
     }
 }
 
-impl<T, const N: usize> AsMut<[T]> for StaticDynArray<T, N> {
+impl<T, const N: usize> AsMut<[T]> for SmallDynArray<T, N> {
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
        self 
     }
 }
 
-impl<T: Clone, const N: usize> From<&[T]> for StaticDynArray<T, N> {
+impl<T: Clone, const N: usize> From<&[T]> for SmallDynArray<T, N> {
     #[inline]
     fn from(s: &[T]) -> Self {
         Self(From::from(s))
     }
 }
 
-impl<T: Clone, const N: usize> From<&mut [T]> for StaticDynArray<T, N> {
+impl<T: Clone, const N: usize> From<&mut [T]> for SmallDynArray<T, N> {
     #[inline]
     fn from(s: &mut [T]) -> Self {
         Self(From::from(s))
     }
 }
 
-impl<T, const N: usize> From<[T; N]> for StaticDynArray<T, N> {
+impl<T, const N: usize> From<[T; N]> for SmallDynArray<T, N> {
     #[inline]
     fn from(s: [T; N]) -> Self {
         Self(From::from(s))
     }
 }
 
-impl<const N: usize> From<&str> for StaticDynArray<u8, N> {
+impl<const N: usize> From<&str> for SmallDynArray<u8, N> {
     #[inline]
     fn from(s: &str) -> Self {
         Self(From::from(s))
     }
 }
 
-impl<T, const N: usize, const M: usize> TryFrom<StaticDynArray<T, N>> for [T; M] {
-    type Error = StaticDynArray<T, N>;
+impl<T, const N: usize, const M: usize> TryFrom<SmallDynArray<T, N>> for [T; M] {
+    type Error = SmallDynArray<T, N>;
 
     #[inline]
-    fn try_from(dynarr: StaticDynArray<T, N>) -> Result<Self, Self::Error> {
+    fn try_from(dynarr: SmallDynArray<T, N>) -> Result<Self, Self::Error> {
         match <[T; M]>::try_from(dynarr.0) {
             Ok(arr) => Ok(arr),
-            Err(dynarr) => Err(StaticDynArray(dynarr))
+            Err(dynarr) => Err(SmallDynArray(dynarr))
         }
     }
 }
@@ -601,31 +583,31 @@ impl<T, const N: usize, const M: usize> TryFrom<StaticDynArray<T, N>> for [T; M]
 //------------------------------------------------------------------------------------------------------------------------------
 
 
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, [U] }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, &[U] }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, &mut [U] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, [U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &[U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &mut [U; M] }
-impl_slice_partial_eq!{ [const M: usize] [T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &[T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &mut [T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] [T; N], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &[T; N], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &mut [T; N], StaticDynArray<U, M> }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, [U] }
+impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, &[U] }
+impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, &mut [U] }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, [U; M] }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &[U; M] }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &mut [U; M] }
+impl_slice_partial_eq!{ [const M: usize] [T], SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const M: usize] &[T], SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const M: usize] &mut [T], SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] [T; N], SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] &[T; N], SmallDynArray<U, M> }
+impl_slice_partial_eq!{ [const N: usize, const M: usize] &mut [T; N], SmallDynArray<U, M> }
 
 
-impl<T: Eq, const N: usize> Eq for StaticDynArray<T, N> {}
+impl<T: Eq, const N: usize> Eq for SmallDynArray<T, N> {}
 
-impl<T: PartialOrd, const N: usize> PartialOrd for StaticDynArray<T, N> {
+impl<T: PartialOrd, const N: usize> PartialOrd for SmallDynArray<T, N> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<T: Ord, const N: usize> Ord for StaticDynArray<T, N> {
+impl<T: Ord, const N: usize> Ord for SmallDynArray<T, N> {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
@@ -634,7 +616,7 @@ impl<T: Ord, const N: usize> Ord for StaticDynArray<T, N> {
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub struct IntoIter<T, const N: usize>(imp::IntoIter<T, StaticBuf<T, N>>);
+pub struct IntoIter<T, const N: usize>(imp::IntoIter<T, SmallBuffer<T, N>>);
 
 impl<T, const N: usize> IntoIter<T, N> {
     #[inline]
@@ -696,7 +678,7 @@ unsafe impl<T: Sync, const N: usize> Sync for IntoIter<T, N> {}
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub struct Drain<'a, T, const N: usize>(imp::Drain<'a, T, StaticBuf<T, N>>);
+pub struct Drain<'a, T, const N: usize>(imp::Drain<'a, T, SmallBuffer<T, N>>);
 
 impl<T, const N: usize> Drain<'_, T, N> {
     #[inline]
@@ -747,7 +729,7 @@ unsafe impl<T: Sync, const N: usize> Sync for Drain<'_, T, N> {}
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub struct Splice<'a, I, const N: usize>(imp::Splice<'a, I, StaticBuf<I::Item, N>>)
+pub struct Splice<'a, I, const N: usize>(imp::Splice<'a, I, SmallBuffer<I::Item, N>>)
 where
     I : Iterator + 'a
 ;
@@ -777,18 +759,18 @@ impl<I: Iterator<Item = T>, T, const N: usize> ExactSizeIterator for Splice<'_, 
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub trait SliceToStaticDynArray<T: Clone> {
-    fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N>;
+pub trait SliceToSmallDynArray<T: Clone> {
+    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N>;
 }
 
-impl<T: Clone> SliceToStaticDynArray<T> for [T] {
-    default fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default))
+impl<T: Clone> SliceToSmallDynArray<T> for [T] {
+    default fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N> {
+        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc))
     }
 }
 
-impl<T: Copy> SliceToStaticDynArray<T> for [T] {
-    fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default))
+impl<T: Copy> SliceToSmallDynArray<T> for [T] {
+    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N> {
+        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc))
     }
 }
