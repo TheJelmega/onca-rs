@@ -189,8 +189,14 @@ pub struct SmallDynArray<T, const N: usize> (imp::DynArray<T, SmallBuffer<T, N>>
 impl<T, const N: usize> SmallDynArray<T, N> {
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
-        Self(imp::DynArray::new(UseAlloc::Default))
+    pub fn new(alloc: UseAlloc) -> Self {
+        Self(imp::DynArray::new(alloc))
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
+        Self(imp::DynArray::with_capacity(capacity, alloc))
     }
 
     #[inline]
