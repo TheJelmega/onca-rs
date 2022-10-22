@@ -42,9 +42,9 @@ pub trait DynArrayBuffer<T> {
 
 // A [`DynArray`] that exlusively stores its data on the stack, i.e. all elements are stored inline.
 pub struct DynArray<T, B: DynArrayBuffer<T>> {
-    len : usize,
-    buf : B,
-    _p  : PhantomData<T>
+    len            : usize,
+    pub(crate) buf : B,
+    _p             : PhantomData<T>
 }
 
 impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {

@@ -2,8 +2,7 @@ use core::{cell::UnsafeCell, ptr::{write_bytes, copy_nonoverlapping}};
 use std::{borrow::BorrowMut, io};
 use crate::{
     alloc::{Allocator, Allocation, Layout, primitives::Mallocator, UseAlloc},
-    sync::Mutex,
-    lock
+    sync::RwLock
 };
 use once_cell::sync::Lazy;
 
@@ -13,76 +12,79 @@ struct State
 {
     malloc : Mallocator,
     allocs : [Option<*mut dyn Allocator>; Layout::MAX_ALLOC_ID as usize],
-    mutex  : Mutex
 }
 
 impl State {
     
-    fn new() -> Self {
-        Self{ malloc: Mallocator, allocs: [None; Layout::MAX_ALLOC_ID as usize], mutex: Mutex::new() }
+    const fn new() -> Self {
+        Self{ 
+            malloc: Mallocator,
+            allocs: [None; Layout::MAX_ALLOC_ID as usize]
+        }
     }
-
 }
 
 /// Memory manager
 // TODO: Extended tags
 pub struct MemoryManager
 {
-    state : Lazy<UnsafeCell<State>>
+    //state : Lazy<UnsafeCell<State>>
+    state : RwLock<State>
 }
 
 impl MemoryManager {
     
     /// Create a new memory manager
     pub const fn new() -> Self {
-        Self { state: Lazy::new(|| {
-            let mut state = UnsafeCell::new(State::new());
-            state.get_mut().mutex = Mutex::new();
-            state
-        }) }
+        Self { state: RwLock::new(State::new()) }
     }
 
     /// Register an allocator to the manager and set its allocator id
     pub fn register_allocator(&self, alloc: *mut dyn Allocator) {
-        let state = unsafe { &mut *self.state.get() };
-        let mut id : usize = 0;
-
-        lock!(state.mutex);
-        for (i, alloc) in state.allocs.into_iter().enumerate() {
-            if let None = alloc {
-                id = i;
-                break;
+        let mut id : u16 = 0;
+        {
+            let state = self.state.read();
+            for (i, alloc) in state.allocs.into_iter().enumerate() {
+                if let None = alloc {
+                    id = i as u16;
+                    break;
+                }
             }
         }
-
-        unsafe { (*alloc).set_alloc_id(id as u16) };
-        state.allocs[id] = Some(alloc);
+        {
+            let mut state = self.state.write();
+            unsafe { (*alloc).set_alloc_id(id) };
+            state.allocs[id as usize] = Some(alloc);
+        }
     }
 
     /// Get an allocator
     pub fn get_allocator(&self, alloc: UseAlloc) -> Option<&mut dyn Allocator> {
-        let state = unsafe { &mut *self.state.get() };
-        match alloc {
-            UseAlloc::Default => Some(&mut state.malloc),
+        let mut state = self.state.read();
+        let alloc_ref : Option<&dyn Allocator> = match alloc {
+            // TODO(jel): default alloc is not always the mallocator
+            UseAlloc::Default => Some(unsafe { &state.malloc }),
+            UseAlloc::Malloc => Some(& state.malloc),
             UseAlloc::Id(id) => {
-                if id >= Layout::MAX_ALLOC_ID {
-                    Some(&mut state.malloc)
+                if id == 0 {
+                    // TODO(jel): default alloc is not always the mallocator
+                    Some(&state.malloc)
+                } else if id >= Layout::MAX_ALLOC_ID {
+                    Some(&state.malloc)
                 } else {
-                    lock!(state.mutex);
                     match state.allocs[id as usize] {
                         None => None,
-                        Some(alloc) => Some(unsafe{ &mut *alloc })
+                        Some(alloc) => Some(unsafe{ &*alloc })
                     }
                 }
             }
-        }
-    }
-
-    /// Get the default allocator
-    pub fn get_default_allocator(&self) -> &mut dyn Allocator {
-        let state = unsafe { &mut *self.state.get() };
-        lock!(state.mutex);
-        &mut state.malloc
+        };
+        
+        alloc_ref.map(|val| unsafe {
+            // SAFETY: Memory manager will never move, so pointer casting will always result in a correct result
+            let mut_ptr = val as *const dyn Allocator as *mut dyn Allocator;
+            &mut *mut_ptr
+        })
     }
 
     /// Allocate a raw allocation with the given allocator and layout

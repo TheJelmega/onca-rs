@@ -38,6 +38,10 @@
 //     - crate::collections::imp::generic_dyn_array: `impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for GenericDynArray<T, B> {`, as `B` needs to be the same, but does not care about the specialization
 
 
+#[macro_use]
+extern crate scopeguard;
+
+
 mod bytes;
 
 pub mod alloc;
@@ -48,5 +52,7 @@ pub mod collections;
 pub mod strings;
 
 pub mod io;
+
+pub mod time;
 
 pub use bytes::*;

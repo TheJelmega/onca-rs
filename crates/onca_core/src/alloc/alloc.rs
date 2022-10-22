@@ -36,6 +36,8 @@ pub trait ComposableAllocator<Args> : Allocator
 pub enum UseAlloc {
     /// Use the default allocator
     Default,
+    /// Use the system allocator
+    Malloc,
     /// Use the allocator associated with the given id
     Id(u16)
 }
@@ -44,6 +46,7 @@ impl UseAlloc {
     pub const fn get_id(&self) -> u16 {
         match self {
             UseAlloc::Default => Layout::MAX_ALLOC_ID,
+            UseAlloc::Malloc => 0,
             UseAlloc::Id(id) => *id,
         }
     }

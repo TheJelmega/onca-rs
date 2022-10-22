@@ -13,6 +13,7 @@ impl Alloc {
     pub fn new(alloc: UseAlloc) -> Self {
         match alloc {
             UseAlloc::Default => Self::with_id(Layout::MAX_ALLOC_ID),
+            UseAlloc::Malloc => Self::with_id(0),
             UseAlloc::Id(id) => Self::with_id(id),
         }
     }

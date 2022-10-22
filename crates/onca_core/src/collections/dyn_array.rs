@@ -10,7 +10,7 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self}, KiB, mem::MEMORY_MANAGER};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self}, KiB, mem::{MEMORY_MANAGER, HeapPtr}};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -421,6 +421,17 @@ impl<T> DynArray<T> {
     #[inline]
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator_id()
+    }
+
+    #[inline]
+    pub fn into_heap_slice(self) -> HeapPtr<[T]> {
+        unsafe {
+            let mut me = ManuallyDrop::new(self);
+            let slice_len = me.capacity();
+            let alloc = &mut me.0.buf.ptr;
+            let ptr = slice::from_raw_parts_mut(alloc.ptr_mut(), slice_len);
+            HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), *alloc.layout())
+        }
     }
 }
 

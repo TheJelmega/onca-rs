@@ -1,6 +1,5 @@
 use crate::mem::MEMORY_MANAGER;
 use crate::{alloc::*, sync::Mutex};
-use crate::lock;
 
 /// Bitmap allocator
 /// 
@@ -12,7 +11,7 @@ pub struct BitmapAllocator
     block_size : usize,
     num_blocks : usize,
     num_manage : usize,
-    mutex      : Mutex,
+    mutex      : Mutex<()>,
     id         : u16
 }
 
@@ -46,7 +45,7 @@ impl BitmapAllocator {
                block_size,
                num_blocks,
                num_manage,
-               mutex: Mutex::new(),
+               mutex: Mutex::new(()),
                id: 0 }
     }
 
@@ -57,13 +56,12 @@ impl BitmapAllocator {
         (num_bytes + block_size - 1) / block_size
     }
 
-    unsafe fn mark_bits(&mut self, first_bit: usize, mut num_bits: usize, set: bool)
+    unsafe fn mark_bits(buffer: *mut u8, first_bit: usize, mut num_bits: usize, set: bool)
     {
         assert!(num_bits != 0, "Can't mark 0 bits");
 
-        let ptr = self.buffer.ptr_mut();
         let first_byte_offset = num_bits / 8;
-        let mut byte_ptr = ptr.wrapping_add(first_byte_offset);
+        let mut byte_ptr = buffer.wrapping_add(first_byte_offset);
 
         let masks = [0x00, 0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE, 0xFF];
 
@@ -93,8 +91,9 @@ impl Allocator for BitmapAllocator {
         let masks = [0x00, 0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE, 0xFF];
 
         let mut first_search_byte = self.buffer.ptr_mut();
+        let mut buffer = self.buffer.ptr_mut();
 
-        lock!(self.mutex);
+        let _guard = self.mutex.lock();
         'outer: for i in 0..self.num_blocks {
             if i & 0x7 == 0 && i > 0
                 { first_search_byte = first_search_byte.add(1); }
@@ -114,7 +113,7 @@ impl Allocator for BitmapAllocator {
             }
 
             // If we get here, we found a space
-            self.mark_bits(i, blocks_needed, true);
+            Self::mark_bits(buffer, i, blocks_needed, true);
 
             let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size); 
             return Some(Allocation::<_>::new(ptr, layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id)));
@@ -130,8 +129,8 @@ impl Allocator for BitmapAllocator {
 
         let num_blocks = (ptr.layout().size() + self.block_size - 1) / self.block_size;
 
-        lock!(self.mutex);
-        unsafe { self.mark_bits(block_idx, num_blocks, false) };
+        let _guard = self.mutex.lock();
+        unsafe { Self::mark_bits(self.buffer.ptr_mut(), block_idx, num_blocks, false) };
     }
 
     fn owns(&self, ptr: &Allocation<u8>) -> bool {

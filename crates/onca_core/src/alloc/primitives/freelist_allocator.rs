@@ -1,7 +1,7 @@
 use core::{mem::size_of, ptr::null_mut};
 
 use crate::mem::MEMORY_MANAGER;
-use crate::{alloc::*, lock};
+use crate::alloc::*;
 use crate::sync::Mutex;
 
 
@@ -20,7 +20,7 @@ struct Header {
 pub struct FreelistAllocator {
     buffer : Allocation<u8>,
     head   : *mut FreeBlock,
-    mutex  : Mutex,
+    mutex  : Mutex<()>,
     id     : u16
 }
 
@@ -33,7 +33,7 @@ impl FreelistAllocator {
             (*head).size = buffer.layout().size();
         }
 
-        Self { buffer, head, mutex: Mutex::new(), id: 0 }
+        Self { buffer, head, mutex: Mutex::new(()), id: 0 }
     }
 
     // Allocate from the first fitting element (not optimal for fragmentation)
@@ -45,6 +45,8 @@ impl FreelistAllocator {
 
         let mut cur_block = self.head;
         let mut prev_block : *mut FreeBlock = null_mut();
+
+        let _guard = self.mutex.lock();
         while cur_block != null_mut() {
             let mut next_block = (*cur_block).next;
 
@@ -129,7 +131,6 @@ impl Allocator for FreelistAllocator {
 
         let mut layout = layout;
         let ptr = {
-            lock!(self.mutex);
             self.alloc_first(&mut layout)
         };
 
@@ -145,7 +146,7 @@ impl Allocator for FreelistAllocator {
 
         let (orig_ptr, front_pad) = Self::get_orig_ptr_and_front_padding(ptr.ptr_mut());
         let mut prev_block = null_mut();
-        lock!(self.mutex);
+        let _guard = self.mutex.lock();
         let mut next_block = self.head;
 
         while next_block != null_mut() && (next_block as *mut u8) < orig_ptr

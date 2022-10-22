@@ -8,9 +8,11 @@ edition = "2021"
 [dependencies]
 once_cell = "1.12.0"
 onca_core_macros = { path = "../onca_core_macros" }
+cfg-if = "1.0.0"
+scopeguard = "1.1.0"
 
 # Until we have our own HashMap that is built from the ground up to use our allocation system
 hashbrown = { version = "0.12.2", features = ["nightly", "ahash"] }
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.37.0", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security"] }
+windows = { version = "0.37.0", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_SystemServices"] }
