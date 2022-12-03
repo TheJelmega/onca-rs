@@ -384,6 +384,11 @@ impl<T, const N: usize> SmallDynArray<T, N> {
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator_id()
     }
+
+    /// Create a `DynArray` from an iterator and an allocator
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
+        Self(imp::DynArray::from_iter(iter, alloc))
+    }
 }
 
 impl<T: Clone, const N: usize> SmallDynArray<T, N> {

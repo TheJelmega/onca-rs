@@ -612,6 +612,11 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         Splice { drain: self.drain(range), replace_with: replace_with.into_iter() }
     }
 
+    /// Create a `DynArray` from an iterator and an allocator
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
+        <Self as SpecFromIter<T, I>>::from_iter(iter, alloc)
+    }
+
     // Leaf method to  which various SpecFrom/SpecExtend implementations delegate when the y have no furter optimizations to apply
     // Ignores remaining elements when array is empty
     fn extend_desugared<I: Iterator<Item = T>>(&mut self, mut iterator: I) {

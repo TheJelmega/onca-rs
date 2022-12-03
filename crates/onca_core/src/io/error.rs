@@ -830,4 +830,4 @@ static_assert!(@usize_eq: Repr::TAG_SIMPLE_MESSAGE, 0);
 static_assert!(@usize_eq: size_of::<Repr>(), 16);
 static_assert!(@usize_eq: size_of::<Option<Repr>>(), 16);
 static_assert!(@usize_eq: size_of::<result::Result<(), Repr>>(), 16);
-static_assert!(@usize_eq: size_of::<result::Result<usize, Repr>>(), 24);
+static_assert!(@usize_eq: size_of::<result::Result<usize, Repr>>(), 16);

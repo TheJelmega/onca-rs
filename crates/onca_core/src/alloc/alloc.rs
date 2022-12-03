@@ -33,6 +33,7 @@ pub trait ComposableAllocator<Args> : Allocator
 }
 
 /// Enum telling what allocator to use for any structure that allocates memory
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UseAlloc {
     /// Use the default allocator
     Default,

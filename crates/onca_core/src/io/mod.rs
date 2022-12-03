@@ -81,11 +81,7 @@ mod readbuf;
 mod buffered;
 mod utils;
 
-
-
 use error::const_io_error;
-
-
 
 const DEFAULT_BUF_SIZE : usize = MB(0);
 

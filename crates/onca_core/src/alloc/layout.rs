@@ -16,7 +16,7 @@ use core::{
 /// MSB                                                                                                                                             LSB
 /// ```
 /// 
-/// where `align` is `log2(alignment) - log2(MIN_ALIGN)`
+/// where `align` is `log2(alignment) - log2(MIN_ALIGN)` 
 #[derive(Clone, Copy)]
 pub struct Layout {
     /// Size, tag and log2 of the alignment (real alignment in 2^value)
@@ -77,7 +77,7 @@ impl Layout {
     /// Create a new layout for an array that can store `count` elements of type `T`
     pub fn array<T>(count: usize) -> Self {
         let size = mem::size_of::<T>() * count;
-        let align = mem::size_of::<T>();
+        let align = mem::align_of::<T>();
         Self::new_size_align(size, align)
     }
 

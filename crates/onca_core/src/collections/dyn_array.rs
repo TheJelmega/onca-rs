@@ -433,6 +433,11 @@ impl<T> DynArray<T> {
             HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), *alloc.layout())
         }
     }
+
+    /// Create a `DynArray` from an iterator and an allocator
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
+        Self(imp::DynArray::from_iter(iter, alloc))
+    }
 }
 
 impl<T: Clone> DynArray<T> {
