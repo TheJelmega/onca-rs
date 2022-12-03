@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <!-- Memory -->
+    <Type Name="onca_core::alloc::layout::Layout">
+        <DisplayString>{{ packed = {packed} }}</DisplayString>
+        <Expand>
+            <Item Name="[pow2align]">packed &amp; 0xF</Item>
+            <Item Name="[align]">2 &lt;&lt; (packed &amp; 0x0F)</Item>
+            <Item Name="[alloc id]">(packed &gt;&gt; 4) &amp; 0x0FFF</Item>
+            <Item Name="[tag]">(packed &gt;&gt; 16) &amp; 0xFF</Item>
+            <Item Name="[size]">packed &gt;&gt; 24</Item>
+        </Expand>
+    </Type>
+    <Type Name="onca_core::alloc::allocation::Allocation&lt;*&gt;">
+        <DisplayString>allocation{{ {ptr.pointer} }}</DisplayString>
+        <Expand>
+            <Item Name="[data]">*ptr.pointer</Item>
+            <Item Name="[layout]">layout</Item>
+        </Expand>
+    </Type>
+
+
+    <!-- Containers-->
+    <Type Name="onca_core::collections::dyn_array::DynArray&lt;*&gt;">
+        <DisplayString>{{ len = {__0.len} }}</DisplayString>
+        <Expand>
+            <Item Name="[len]" ExcludeView="simple">__0.len</Item>
+            <Item Name="[cap]" ExcludeView="simple">__0.buf.cap</Item>
+            <ArrayItems>
+                <Size>__0.len</Size>
+                <ValuePointer>__0.buf.ptr.ptr.pointer</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
+
+    <!-- Strings-->
+    <Type Name="onca_core::strings::string::String">
+        <DisplayString>{arr.__0.buf.ptr.ptr.pointer,s8}</DisplayString>
+        <StringView>arr.__0.buf.ptr.ptr.pointer,s8</StringView>
+        <Expand>
+            <ExpandedItem>arr</ExpandedItem>
+        </Expand>
+    </Type>
+</AutoVisualizer>

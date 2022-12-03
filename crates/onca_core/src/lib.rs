@@ -36,6 +36,9 @@
 // NOTE: as `min_specialization` doesn't work for a minor use-case, we use full specialization here, all code added that needs `specialization` and not just `minspecialization` should be mentioned below:
 //     - crate::collections::imp::generic_dyn_array: `impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for GenericDynArray<T, B> {`, as `B` needs to be the same, but does not care about the specialization
 
+// TODO: put behind feature
+#![feature(debugger_visualizer)]
+#![debugger_visualizer(natvis_file = "libonca_core.natvis")]
 
 #[macro_use]
 extern crate scopeguard;

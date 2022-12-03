@@ -56,7 +56,11 @@ impl String {
     #[inline]
     pub fn from_utf8(arr: DynArray<u8>) -> Result<String, FromUtf8Error> {
         match std::str::from_utf8(&arr) {
-            Ok(..) => Ok(String{ arr }),
+            Ok(..) => {
+                let mut s = String{ arr };
+                s.null_terminate();
+                Ok(s)
+            },
             Err(e) => Err(FromUtf8Error{ bytes: arr, error: e }),
         }
     }
@@ -96,6 +100,7 @@ impl String {
             }
         }
 
+        res.null_terminate();
         res
     }
 
@@ -112,6 +117,7 @@ impl String {
                 return Err(FromUtf16Error(()));
             }
         }
+        ret.null_terminate();
         Ok(ret)
     }
 
@@ -120,8 +126,9 @@ impl String {
     /// [U+FFFD]: core::char::REPLACEMENT_CHARACTER
     #[inline]
     #[must_use]
-    pub fn from_utf16_lossy(v: &[u16]) -> String {
-        decode_utf16(v.iter().cloned()).map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
+    pub fn from_utf16_lossy(v: &[u16], alloc: UseAlloc) -> String {
+        let it = decode_utf16(v.iter().cloned()).map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER));
+        String::from_iter(it, alloc)
     }
 
     /// Convert a `str` into a `String` with a given allocator
@@ -130,6 +137,7 @@ impl String {
     pub fn from_str(s: &str, alloc: UseAlloc) -> Self {
         let mut res = String::new(alloc);
         res.push_str(s);
+        res.null_terminate();
         res
     }
 
@@ -164,7 +172,8 @@ impl String {
     /// Appends a given string slice onto the end of this `String`
     #[inline]
     pub fn push_str(&mut self, string: &str) {
-        self.arr.extend_from_slice(string.as_bytes())
+        self.arr.extend_from_slice(string.as_bytes());
+        self.null_terminate();
     }
 
     /// Copies elements fronm `src` range to the end of the string
@@ -176,7 +185,8 @@ impl String {
         assert!(self.is_char_boundary(start));
         assert!(self.is_char_boundary(end));
 
-        self.arr.extend_from_within(start..end)
+        self.arr.extend_from_within(start..end);
+        self.null_terminate();
     }
 
     /// Return the `String`'s capacity, in bytes
@@ -228,7 +238,10 @@ impl String {
     /// Shrinks the capacity of this `String` to match its length
     #[inline]
     pub fn shrink_to_fit(&mut self) {
-        self.arr.shrink_to_fit()
+        // TODO: See null_terminate()
+        self.arr.push(0);
+        self.arr.shrink_to_fit();
+        self.arr.pop();
     }
 
     /// Shrinks the capacity of this `String` with a lower bound
@@ -238,7 +251,10 @@ impl String {
     /// If the current capacity is less than the lower limit, this is a no-op
     #[inline]
     pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.arr.shrink_to(min_capacity)
+        // TODO: See null_terminate()
+        self.arr.push(0);
+        self.arr.shrink_to(min_capacity);
+        self.arr.pop();
     }
 
     /// Appends the given [`char`] to the end of this `String`.
@@ -248,6 +264,7 @@ impl String {
             1 => self.arr.push(ch as u8),
             _ => self.arr.extend_from_slice(ch.encode_utf8(&mut [0; 4]).as_bytes()),
         }
+        self.null_terminate();
     }
 
     /// Returns a byte slice of this `String`'s contents
@@ -272,7 +289,8 @@ impl String {
     pub fn truncate(&mut self, new_len: usize) {
         if new_len <= self.len() {
             assert!(self.is_char_boundary(new_len));
-            self.arr.truncate(new_len)
+            self.arr.truncate(new_len);
+            self.null_terminate();
         }
     }
 
@@ -284,7 +302,9 @@ impl String {
         let ch = self.chars().rev().next()?;
         let new_len = self.len() - ch.len_utf8();
         unsafe {
-            self.arr.set_len(new_len)
+            // TODO: See null_terminate
+            self.arr[new_len] = 0;
+            self.arr.set_len(new_len);
         }
         Some(ch)
     }
@@ -307,7 +327,10 @@ impl String {
         let len = self.len();
         unsafe {
             ptr::copy(self.arr.as_ptr().add(next), self.arr.as_mut_ptr().add(idx), len - next);
-            self.arr.set_len(len - (next - idx));
+            let new_len = len - (next - idx);
+            // TODO: See null_terminate
+            self.arr[new_len] = 0;
+            self.arr.set_len(new_len);
         }
         ch
     }
@@ -355,6 +378,8 @@ impl String {
         }
 
         unsafe{
+            // TODO: See null_terminate
+            self.arr[len] = 0;
             self.arr.set_len(len)
         }
     }
@@ -407,6 +432,7 @@ impl String {
             }
         }
         drop(guard);
+        self.null_terminate();
     }
 
     /// Insert a character into this `String` at a byte position
@@ -437,6 +463,7 @@ impl String {
             ptr::copy_nonoverlapping(bytes.as_ptr(), self.arr.as_mut_ptr().add(idx), amt);
             self.arr.set_len(len + amt);
         }
+        self.null_terminate();
     }
 
     /// Insert a string slice into this `String` at a byte position
@@ -501,6 +528,7 @@ impl String {
     pub fn split_off(&mut self, at: usize) -> String {
         assert!(self.is_char_boundary(at));
         let other = self.arr.split_off(at);
+        self.null_terminate();
         unsafe { String::from_utf8_unchecked(other) }
     }
 
@@ -576,6 +604,13 @@ impl String {
         // WARNING: Inlining this variable would be unsound (#81138)
         // We assume the bounds reported by `range` remian the same, but an adversarial implementation could change between calls
         unsafe { self.as_mut_dynarr() }.splice((start, end), replace_with.bytes());
+    }
+
+    // TODO: should only be called when debugging, it makes no sense otherwise, as we handle not having null terminators correctly
+    fn null_terminate(&mut self) {
+        self.arr.push(0);
+        // SAFETY: We added a null terminator, so we can always go back 1 character
+        self.arr.pop();
     }
 }
 
@@ -832,6 +867,12 @@ impl String {
 
         out
     }
+
+    pub fn from_iter<I: Iterator<Item = char>>(iter: I, alloc: UseAlloc) -> String {
+        let mut buf = String::new(alloc);
+        buf.extend(iter);
+        buf
+    }
 }
 
 impl FromUtf8Error {
@@ -875,11 +916,14 @@ impl fmt::Display for FromUtf16Error {
 
 impl Clone for String {
     fn clone(&self) -> Self {
-        Self { arr: self.arr.clone() }
+        let mut res = Self { arr: self.arr.clone() };
+        res.null_terminate();
+        res
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.arr.clone_from(&source.arr)
+        self.arr.clone_from(&source.arr);
+        self.null_terminate();
     }
 }
 
@@ -1419,6 +1463,7 @@ impl Drop for Drain<'_> {
             if self.start <= self.end && self.end <= self_arr.len() {
                 self_arr.drain(self.start..self.end);
             }
+            (*self.string).null_terminate();
         }
     }
 }
