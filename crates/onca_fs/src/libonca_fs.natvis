@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <!-- Strings-->
+    <Type Name="onca_fs::path::PathBuf">
+        <DisplayString>{inner}</DisplayString>
+        <StringView>inner.arr.__0.buf.ptr.ptr.pointer,s8</StringView>
+        <Expand>
+            <ExpandedItem>inner</ExpandedItem>
+        </Expand>
+    </Type>
+</AutoVisualizer>
