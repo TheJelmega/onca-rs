@@ -1,6 +1,6 @@
 use core::{ptr::NonNull, cell::UnsafeCell};
 
-use crate::{alloc::{Layout, Allocator, UseAlloc, Allocation, CoreMemTag, MemTag}, mem::MEMORY_MANAGER};
+use crate::{alloc::{Layout, Allocator, UseAlloc, Allocation, CoreMemTag, MemTag}, mem::{MEMORY_MANAGER, AllocInitState}};
 
 extern crate alloc;
 
@@ -35,7 +35,7 @@ unsafe impl alloc::alloc::Allocator for Alloc {
         unsafe {
             let self_layout = &mut *self.layout.get();
             let self_mem_tag = &mut *self.mem_tag.get();
-            let alloc = MEMORY_MANAGER.alloc_raw(UseAlloc::Id(self_layout.alloc_id()), layout, CoreMemTag::StdCollections.to_mem_tag());
+            let alloc = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(self_layout.alloc_id()), layout, CoreMemTag::StdCollections.to_mem_tag());
 
             match alloc {
                 Some(ptr) => {

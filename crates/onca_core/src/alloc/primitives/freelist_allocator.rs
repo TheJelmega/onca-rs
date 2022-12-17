@@ -1,7 +1,7 @@
 use core::{mem::size_of, ptr::null_mut};
 
 use crate::{
-    mem::MEMORY_MANAGER,
+    mem::{MEMORY_MANAGER, AllocInitState},
     sync::Mutex,
     alloc::*,
 };
@@ -182,7 +182,7 @@ impl Allocator for FreelistAllocator {
 
 impl ComposableAllocator<usize> for FreelistAllocator {
     fn new_composable(alloc: UseAlloc, args: usize) -> Self {
-        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(args, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, alloc, Layout::new_size_align(args, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         FreelistAllocator::new(buffer)
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    mem::MEMORY_MANAGER,
+    mem::{MEMORY_MANAGER, AllocInitState},
     sync::Mutex,
     alloc::*, 
 };
@@ -153,7 +153,7 @@ impl Allocator for BitmapAllocator {
 impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
     fn new_composable(alloc: UseAlloc, args: (usize, usize)) -> Self {
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
-        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(buffer_size, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, alloc, Layout::new_size_align(buffer_size, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, args.0, args.1)
     }
 

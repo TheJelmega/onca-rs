@@ -11,6 +11,8 @@ use core::{
 use crate::alloc::{Allocation, Allocator, Layout, UseAlloc, MemTag};
 use crate::mem::MEMORY_MANAGER;
 
+use super::AllocInitState;
+
 struct RcData<T: ?Sized> {
     strong : Cell<usize>,
     weak   : Cell<usize>,
@@ -192,7 +194,7 @@ impl<T> Rc<T> {
 
     /// Try to create a new `Rc` with an uninitialized value, using the default allocator
     pub fn try_new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Option<Rc<MaybeUninit<T>>> {
-        let ptr = MEMORY_MANAGER.alloc::<RcData<MaybeUninit<T>>>(alloc, mem_tag);
+        let ptr = MEMORY_MANAGER.alloc::<RcData<MaybeUninit<T>>>(AllocInitState::Uninitialized, alloc, mem_tag);
         match ptr {
             None => None,
             Some(ptr) => Self::fill_uninit(ptr.cast())

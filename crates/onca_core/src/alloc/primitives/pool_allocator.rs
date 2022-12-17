@@ -9,7 +9,7 @@ use crate::{
         Allocation, Allocator, Layout, ComposableAllocator,
         mem_tag::MemTag, CoreMemTag
     },
-    mem::{MEMORY_MANAGER, self}, prelude::UseAlloc,
+    mem::{MEMORY_MANAGER, self, AllocInitState}, prelude::UseAlloc,
 };
 
 struct Header {
@@ -109,7 +109,7 @@ impl Allocator for PoolAllocator {
 
 impl ComposableAllocator<(usize, usize)> for PoolAllocator {
     fn new_composable(alloc: UseAlloc, args: (usize, usize)) -> Self {
-        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(args.0, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, alloc, Layout::new_size_align(args.0, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         PoolAllocator::new(buffer, args.1)
     }
 

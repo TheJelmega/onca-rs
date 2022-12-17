@@ -4,7 +4,6 @@ use core::{
     fmt
 };
 
-// TODO: Combine tag and alloc ID into 1 value? 8-bit category, 8/4-bit subcategory, 4/8-bit differentiator. All 0s or 1s: malloc
 // TODO: align at min 2? up to 2^16 alignment max
 /// Memory layout
 /// 

@@ -517,7 +517,6 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
 
         let alloc_id = self.buf.allocator_id();
         let mem_tag = self.buf.mem_tag();
-        // TODO: Ensure correct tracking of tag
 
         if at == 0 {
             return mem::replace(

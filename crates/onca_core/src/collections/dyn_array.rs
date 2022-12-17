@@ -10,21 +10,13 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag}, KiB, mem::{MEMORY_MANAGER, HeapPtr}};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
 use imp::DynArrayBuffer;
 
 extern crate alloc as rs_alloc;
-
-// TODO: move into allocators
-enum AllocInit {
-    /// The contents of the new memeory are uninitialized
-    Uninitialized,
-    /// The new memory is guaranteed to be zeroed
-    Zeroed,
-}
 
 // Even if we wanted to, we can't exactly wrap alloc::vec::RawVec as it isn't public
 pub(super) struct DynamicBuffer<T> {
@@ -45,15 +37,12 @@ impl<T> DynamicBuffer<T> {
         1
     };
 
-    fn allocate(capacity: usize, init: AllocInit, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+    fn allocate(capacity: usize, init_state: AllocInitState, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         if mem::size_of::<T>() == 0 || capacity == 0 {
             Self::new(alloc, mem_tag)
         } else {
             let layout = Layout::array::<T>(capacity);
-            let res = match init {
-                AllocInit::Uninitialized => MEMORY_MANAGER.alloc_raw(alloc, layout, mem_tag),
-                AllocInit::Zeroed => MEMORY_MANAGER.alloc_raw_zeroed(alloc, layout, mem_tag),
-            };
+            let res = MEMORY_MANAGER.alloc_raw(init_state, alloc, layout, mem_tag);
             let ptr = match res {
                 Some(ptr) => ptr,
                 None => panic!("Failed to allocate memory")
@@ -106,7 +95,7 @@ impl<T> DynamicBuffer<T> {
 
     pub fn finish_grow(&mut self, new_layout: Layout, new_cap: usize) -> Result<usize, std::collections::TryReserveError> {
         if self.cap == 0 {
-            let res = MEMORY_MANAGER.alloc_raw(UseAlloc::Id(self.allocator_id()), new_layout, self.mem_tag());
+            let res = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(self.allocator_id()), new_layout, self.mem_tag());
             self.ptr = match res {
                 Some(ptr) => ptr.cast(),
                 None => {
@@ -137,11 +126,11 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
     }
 
     fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::allocate(capacity, AllocInit::Uninitialized, alloc, mem_tag)
+        Self::allocate(capacity, AllocInitState::Uninitialized, alloc, mem_tag)
     }
 
     fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::allocate(capacity, AllocInit::Zeroed, alloc, mem_tag)
+        Self::allocate(capacity, AllocInitState::Zeroed, alloc, mem_tag)
     }
 
     fn reserve(&mut self, len: usize, additional: usize) -> usize {

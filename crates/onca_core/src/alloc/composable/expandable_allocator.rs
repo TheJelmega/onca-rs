@@ -5,7 +5,6 @@ use crate::{
 };
 use super::*;
 
-// TODO(jel): Use atomic container and get rid of mutex
 /// Expandable allocator
 pub struct ExpandableArena<A, Args>
     where A    : Allocator + ComposableAllocator<Args>,

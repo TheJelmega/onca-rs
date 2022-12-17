@@ -21,6 +21,8 @@ use crate::{
     mem::MEMORY_MANAGER,
 };
 
+use super::AllocInitState;
+
 #[derive(Debug)]
 pub struct HeapPtr<T: ?Sized> {
     ptr      : Allocation<T>,
@@ -134,7 +136,7 @@ impl<T> HeapPtr<T> {
 
     /// Try to create a new `HeapPtr<T>` with an uninitialized value, using the given allocator
     pub fn try_new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Option<HeapPtr<MaybeUninit<T>>> {
-        let uninit = MEMORY_MANAGER.alloc::<MaybeUninit<T>>(alloc, mem_tag);
+        let uninit = MEMORY_MANAGER.alloc::<MaybeUninit<T>>(AllocInitState::Uninitialized, alloc, mem_tag);
         match uninit {
             None => None,
             Some(ptr) => Some(HeapPtr::<MaybeUninit<T>>{ ptr: ptr.cast(), _phantom: PhantomData })
@@ -150,7 +152,7 @@ impl<T> HeapPtr<T> {
     /// Try to create a new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
     pub fn try_new_uninit_slice(len: usize, alloc: UseAlloc, mem_tag: MemTag) -> Option<HeapPtr<[MaybeUninit<T>]>> {
         let layout = Layout::array::<MaybeUninit<T>>(len);
-        let uninit = MEMORY_MANAGER.alloc_raw(alloc, layout, mem_tag);
+        let uninit = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, alloc, layout, mem_tag);
         unsafe {
             match uninit {
                 None => None,
