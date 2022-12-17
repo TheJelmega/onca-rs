@@ -7,9 +7,9 @@ use core::{
 use crate::{
     alloc::{
         Allocation, Allocator, Layout, ComposableAllocator,
-        mem_tag::MemTag
+        mem_tag::MemTag, CoreMemTag
     },
-    mem::{MEMORY_MANAGER, self},
+    mem::{MEMORY_MANAGER, self}, prelude::UseAlloc,
 };
 
 struct Header {
@@ -108,9 +108,17 @@ impl Allocator for PoolAllocator {
 }
 
 impl ComposableAllocator<(usize, usize)> for PoolAllocator {
-    fn new_composable(alloc: &mut dyn Allocator, args: (usize, usize), mem_tag: MemTag) -> Self {
-        let buffer = unsafe { alloc.alloc(Layout::new_size_align(args.0, 8), mem_tag).expect("Failed to allocate memory for composable allocator") };
+    fn new_composable(alloc: UseAlloc, args: (usize, usize)) -> Self {
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(args.0, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         PoolAllocator::new(buffer, args.1)
+    }
+
+    fn owns_composable(&self, allocation: &Allocation<u8>) -> bool {
+        let addr = allocation.ptr();
+        let start = self.buffer.ptr();
+        let end = unsafe { start.add(self.buffer.layout().size()) };
+
+        addr >= start && addr <= end
     }
 }
 

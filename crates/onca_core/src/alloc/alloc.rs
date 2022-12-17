@@ -29,7 +29,10 @@ pub trait Allocator
 pub trait ComposableAllocator<Args> : Allocator
 {
     /// Create a new allocator
-    fn new_composable(alloc: &mut dyn Allocator, args: Args, mem_tag: MemTag) -> Self;
+    fn new_composable(alloc: UseAlloc, args: Args) -> Self;
+
+    /// Check if the composable sub-allocator owns the allocation
+    fn owns_composable(&self, allocation: &Allocation<u8>) -> bool;
 }
 
 /// Enum telling what allocator to use for any structure that allocates memory

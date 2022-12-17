@@ -151,10 +151,18 @@ impl Allocator for BitmapAllocator {
 }
 
 impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
-    fn new_composable(alloc: &mut dyn Allocator, args: (usize, usize), mem_tag: MemTag) -> Self {
+    fn new_composable(alloc: UseAlloc, args: (usize, usize)) -> Self {
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
-        let buffer = unsafe { alloc.alloc(Layout::new_size_align(buffer_size, 8), mem_tag).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(buffer_size, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, args.0, args.1)
+    }
+
+    fn owns_composable(&self, allocation: &Allocation<u8>) -> bool {
+        let addr = allocation.ptr();
+        let start = self.buffer.ptr();
+        let end = unsafe { start.add(self.buffer.layout().size()) };
+
+        addr >= start && addr <= end
     }
 }
 

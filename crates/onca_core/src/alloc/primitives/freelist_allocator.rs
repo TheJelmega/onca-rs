@@ -181,9 +181,17 @@ impl Allocator for FreelistAllocator {
 }
 
 impl ComposableAllocator<usize> for FreelistAllocator {
-    fn new_composable(alloc: &mut dyn Allocator, args: usize, mem_tag: MemTag) -> Self {
-        let buffer = unsafe { alloc.alloc(Layout::new_size_align(args, 8), mem_tag).expect("Failed to allocate memory for composable allocator") };
+    fn new_composable(alloc: UseAlloc, args: usize) -> Self {
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(alloc, Layout::new_size_align(args, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
         FreelistAllocator::new(buffer)
+    }
+
+    fn owns_composable(&self, allocation: &Allocation<u8>) -> bool {
+        let addr = allocation.ptr();
+        let start = self.buffer.ptr();
+        let end = unsafe { start.add(self.buffer.layout().size()) };
+
+        addr >= start && addr <= end
     }
 }
 

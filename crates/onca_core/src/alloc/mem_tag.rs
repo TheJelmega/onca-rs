@@ -255,6 +255,7 @@ pub enum CoreMemTag {
     Unknown,
     String,
     Sync,
+    Allocators,
 
     StdCollections,
     Test,
