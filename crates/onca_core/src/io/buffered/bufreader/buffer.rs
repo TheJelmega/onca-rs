@@ -6,7 +6,7 @@
 //! Since this module encapsulates the buffer management logiv, we can ensure that the range `pos..filled` is always a valid index into the initialized region of the buffer.
 //! This mean that user code which wants to do reads from a `BufReader` via `buffer` + `consume` can do so without encountering any runtime bounds checks
 use core::{cmp, mem::MaybeUninit};
-use crate::{io::{self, BorrowedBuf, Read}, mem::HeapPtr, alloc::UseAlloc};
+use crate::{io::{self, BorrowedBuf, Read}, mem::HeapPtr, alloc::{UseAlloc, MemTag}};
 
 pub struct Buffer {
     // The buffer.
@@ -19,8 +19,8 @@ pub struct Buffer {
 
 impl Buffer {
     #[inline]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        let buf = HeapPtr::new_uninit_slice(capacity, alloc);
+    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        let buf = HeapPtr::new_uninit_slice(capacity, alloc, mem_tag);
         Self { buf, pos: 0, filled: 0 }
     }
 

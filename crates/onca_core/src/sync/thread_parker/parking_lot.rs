@@ -9,7 +9,7 @@ use std::{hash::Hash, mem::ManuallyDrop};
 use super::{imp::ThreadParker, word_lock::WordLock};
 use crate::{
     collections::{SmallDynArray, DynArray},
-    time::{Duration, Instant}, mem::HeapPtr, alloc::UseAlloc,
+    time::{Duration, Instant}, mem::HeapPtr, alloc::{UseAlloc, CoreMemTag},
 };
 
 // NOTE(jel): parking_lot mentions that time::Instant doesn't work on wasm32-unknown-unknown
@@ -45,7 +45,7 @@ impl HashTable {
         let hash_bits = 0usize.leading_zeros() - new_size.leading_zeros() - 1;
 
         let now = Instant::now();
-        let mut entries = DynArray::with_capacity(new_size, UseAlloc::Malloc);
+        let mut entries = DynArray::with_capacity(new_size, UseAlloc::Malloc, CoreMemTag::Sync.to_mem_tag());
         for i in 0..new_size {
             // We must ensure the seed is not zero
             entries.push(Bucket::new(now, i as u32 + 1));
@@ -55,7 +55,7 @@ impl HashTable {
             entries: entries.into_heap_slice(),
             hash_bits,
             _prev: prev
-        }, UseAlloc::Malloc)
+        }, UseAlloc::Malloc, CoreMemTag::Sync.to_mem_tag())
     }
 }
 
@@ -732,7 +732,7 @@ pub unsafe fn unpark_all(key: usize, unpark_token: UnparkToken) -> usize {
     let mut link = &bucket.queue_head;
     let mut current = bucket.queue_head.get();
     let mut previous = ptr::null();
-    let mut threads = SmallDynArray::<_, 8>::new(UseAlloc::Malloc);
+    let mut threads = SmallDynArray::<_, 8>::new(UseAlloc::Malloc, CoreMemTag::Sync.to_mem_tag());
     while !current.is_null() {
         if (*current).key.load(Ordering::Relaxed) == key {
             // Remove the thread from the queue
@@ -924,7 +924,7 @@ pub unsafe fn unpark_filter(
     let mut link = &bucket.queue_head;
     let mut current = bucket.queue_head.get();
     let mut previous = ptr::null();
-    let mut threads = SmallDynArray::<_, 8>::new(UseAlloc::Malloc);
+    let mut threads = SmallDynArray::<_, 8>::new(UseAlloc::Malloc, CoreMemTag::Sync.to_mem_tag());
     let mut result = UnparkResult::default();
     while !current.is_null() {
         if (*current).key.load(Ordering::Relaxed) == key {

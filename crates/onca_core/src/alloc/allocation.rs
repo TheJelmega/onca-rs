@@ -5,38 +5,20 @@ use crate::mem::MEMORY_MANAGER;
 
 use super::{Layout, Allocator, UseAlloc, layout};
 
+#[cfg(feature = "memory_tracking")]
+use super::mem_tag::MemTag;
+
 /// Representation of allocated memory
 #[derive(Debug)]
 pub struct Allocation<T: ?Sized>
 {
-    /// Pointer to memory
-    ptr    : NonNull<T>,
-    layout : Layout,
+    ptr     : NonNull<T>,
+    layout  : Layout,
+    mem_tag : MemTag,
 }
 
 impl<T: ?Sized> Allocation<T>
 {
-    /// Create a `Allocation<T>` from a raw pointer and a layout
-    /// 
-    /// # Panics
-    /// 
-    /// Panics when the provided pointer is null
-    pub fn new(ptr: *mut T, layout: Layout) -> Self {
-        Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr) }, layout }
-    }
-
-    /// Get the header
-    #[inline]
-    pub fn layout(&self) -> &Layout {
-        &self.layout
-    }
-
-    /// Get the header
-    #[inline]
-    pub fn layout_mut(&mut self) -> &mut Layout {
-        &mut self.layout
-    }
-
     /// Get the contained pointer
     #[inline]
     pub fn ptr(&self) -> *const T {
@@ -49,6 +31,30 @@ impl<T: ?Sized> Allocation<T>
         self.ptr.as_ptr()
     }
 
+    /// Get the layout
+    #[inline]
+    pub fn layout(&self) -> Layout {
+        self.layout
+    }
+
+    /// Get the layout
+    #[inline]
+    pub fn layout_mut(&mut self) -> &mut Layout {
+        &mut self.layout
+    }
+
+    /// Get the memory tag
+    #[inline]
+    pub fn mem_tag(&self) -> MemTag {
+        self.mem_tag
+    }
+    
+    /// Get the memory tag
+    #[inline]
+    pub fn mem_tag_mut(&mut self) -> &mut MemTag {
+        &mut self.mem_tag
+    }
+    
     /// Get a reference to the data pointed at by the `Allocation<T>`
     #[inline]
     pub fn get_ref(&self) -> &T {
@@ -61,36 +67,14 @@ impl<T: ?Sized> Allocation<T>
         unsafe { &mut *self.ptr_mut() }
     }
 
-    /// Cast the `Allocation`  to contain a value of another type
-    pub fn cast<U>(self) -> Allocation<U> {
-        Allocation { ptr: self.ptr.cast(), layout: self.layout }
-    }
-
-    /// Duplicate the `Allocation` 
-    /// 
-    /// # Safety
-    /// 
-    /// Duplicating the allocation is unsafe, as it could cause double deallocations
-    pub unsafe fn duplicate(&self) -> Self {
-        Self::new(self.ptr.as_ptr(), self.layout)
-    }
-
     /// Duplicate the `Allocation`  and cast it
     /// 
     /// # Safety
     /// 
     /// Duplicating the allocation is unsafe, as it could cause double deallocations
+    #[inline]
     pub unsafe fn duplicate_cast<U>(&self) -> Allocation<U> {
         self.duplicate().cast()
-    }
-
-    /// Create an `Allocation` from its raw components
-    /// 
-    /// # Safety
-    /// 
-    /// An allocation should only be created from the values given by [`Self::from_raw`]
-    pub unsafe fn from_raw(ptr: NonNull<T>, layout: Layout) -> Allocation<T> {
-        Self { ptr, layout }
     }
 
     /// Converts an `Allocation` into its raw components
@@ -98,16 +82,64 @@ impl<T: ?Sized> Allocation<T>
     /// # Safety
     /// 
     /// The components given by this value should only be change when absolutely certain
-    pub unsafe fn into_raw(self) -> (NonNull<T>, Layout) {
-        (self.ptr, self.layout)
+    #[inline]
+    pub unsafe fn into_raw(self) -> (NonNull<T>, Layout, MemTag) {
+        (self.ptr, self.layout, self.mem_tag)
     }
+    
+    /// Cast the `Allocation`  to contain a value of another type
+    #[inline]
+    pub fn cast<U>(self) -> Allocation<U> {
+        unsafe { self.with_ptr(self.ptr.as_ptr().cast()) }
+    }
+
+    
+    /// Duplicate the `Allocation` 
+    /// 
+    /// # Safety
+    /// 
+    /// Duplicating the allocation is unsafe, as it could cause double deallocations
+    #[inline]
+    pub unsafe fn duplicate(&self) -> Self {
+        self.with_ptr(self.ptr.as_ptr())
+    }
+
+    /// Create a `Allocation<T>` from a raw pointer and a layout
+    /// 
+    /// # Panics
+    /// 
+    /// Panics when the provided pointer is null
+    #[inline]
+    pub fn new(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
+        Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr) }, layout, mem_tag }
+    }
+
+    /// Create an `Allocation` from its raw components
+    /// 
+    /// # Safety
+    /// 
+    /// An allocation should only be created from the values given by [`Self::from_raw`]
+    #[inline]
+    pub unsafe fn from_raw(ptr: NonNull<T>, layout: Layout, mem_tag: MemTag) -> Allocation<T> {
+        Self { ptr, layout, mem_tag }
+    }
+
+    /// Replace the pointer with the given pointer
+    /// 
+    /// # Safety
+    /// 
+    /// The user has to make sure that the previous allocation has been deallocated correctly and that the memory matches the current layout
+    #[inline]
+    pub unsafe fn with_ptr<U: ?Sized>(&self, ptr: *mut U) -> Allocation<U> {
+        Allocation { ptr: unsafe { NonNull::new_unchecked(ptr) }, layout: self.layout, mem_tag: self.mem_tag }
+    } 
 }
 
 impl<T> Allocation<T>
 {
     /// Get the pointer as an untyped ptr
-    pub fn untyped(this: Self) -> (NonNull<u8>, Layout) {
-        (this.ptr.cast::<u8>(), this.layout)
+    pub fn untyped(this: Self) -> (NonNull<u8>, Layout, MemTag) {
+        (this.ptr.cast::<u8>(), this.layout, this.mem_tag)
     }
 
     /// Create a Allocation from an untyped ptr
@@ -115,19 +147,22 @@ impl<T> Allocation<T>
     /// # Panics
     /// 
     /// Panics if the provided pointer is null
-    pub fn from_untyped(ptr: *mut u8, layout: Layout) -> Self {
-        Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr.cast::<T>()) }, layout }
+    #[inline]
+    pub fn from_untyped(ptr: *mut u8, layout: Layout, mem_tag: MemTag) -> Self {
+        Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr.cast::<T>()) }, layout, mem_tag }
     }
 
     /// Create a null allocation
     /// 
     /// # Safety
     /// 
-    /// This function is meant for internal use, as calling anything using it is UB
+    /// This function is meant for internal use, calling anything using it is UB
+    #[inline]
     pub unsafe fn null() -> Self {
-        Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null() }
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null(), mem_tag: MemTag::default() }
     }
 
+    
     /// Create a null heap pointer that store an allocator id for future use
     pub unsafe fn null_alloc(alloc: UseAlloc) -> Self {
         let mut layout = Layout::null();
@@ -136,23 +171,34 @@ impl<T> Allocation<T>
             UseAlloc::Malloc => layout = layout.with_alloc_id(0),
             UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
         }
-        Self { ptr: NonNull::new_unchecked(null_mut()), layout }
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag: MemTag::default() }
+    }
+
+    /// Create a null heap pointer that store an allocator id and memory tag for future use
+    pub unsafe fn null_alloc_tag(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        let mut layout = Layout::null();
+        match alloc {
+            UseAlloc::Default => layout = layout.with_alloc_id(Layout::MAX_ALLOC_ID),
+            UseAlloc::Malloc => layout = layout.with_alloc_id(0),
+            UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
+        }
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag }
     }
 }
 
 impl<T> Allocation<MaybeUninit<T>> {
+    pub fn write(mut this: Self, value: T) -> Allocation<T> {
+        this.get_mut().write(value);
+        unsafe { this.assume_init() }
+    }
+
     /// Converts to `Allocation<T>`
     /// 
     /// # Safety
     /// 
     /// It's up to the user to guarentee that the value is valid
     pub unsafe fn assume_init(self) -> Allocation<T> {
-        Allocation { ptr: self.ptr.cast(), layout: self.layout }
-    }
-
-    pub fn write(mut this: Self, value: T) -> Allocation<T> {
-        this.get_mut().write(value);
-        unsafe { this.assume_init() }
+        self.with_ptr(self.ptr.as_ptr().cast())
     }
 }
 
@@ -164,7 +210,7 @@ impl<T> Allocation<[MaybeUninit<T>]> {
     /// It's up to the user to guarentee that the value is valid
     pub unsafe fn assume_init(self) -> Allocation<[T]> {
         let ptr = core::ptr::slice_from_raw_parts_mut(self.ptr.as_ptr() as *mut T, self.ptr.len());
-        Allocation { ptr: unsafe{ NonNull::new_unchecked(ptr) }, layout: self.layout }
+        self.with_ptr(ptr)
     }
 }
 
@@ -183,7 +229,7 @@ impl Allocation<dyn Any>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
+        self.cast()
     }
 }
 
@@ -202,7 +248,7 @@ impl Allocation<dyn Any + Send>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
+        self.cast()
     }
 }
 
@@ -221,7 +267,7 @@ impl Allocation<dyn Any + Send + Sync>
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
     pub unsafe fn downcast_unchecked<T: Any>(self) -> Allocation<T> {
         debug_assert!(unsafe { self.ptr.as_ref().is::<T>() });
-        Allocation::<T>{ ptr: self.ptr.cast(), layout: self.layout }
+        self.cast()
     }
 }
 

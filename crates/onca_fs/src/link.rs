@@ -1,9 +1,5 @@
 use onca_core::{io, alloc::UseAlloc};
-
 use crate::{Path, os::os_imp};
-
-
-
 
 /// Create a new hard-link file at `dest` pointing towards file `source`
 /// 
@@ -21,5 +17,3 @@ pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(source: P, dest: Q, temp_all
 pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(source: P, dest: Q, temp_alloc: UseAlloc) -> io::Result<()> {
     os_imp::link::symlink_dir(source.as_ref(), dest.as_ref(), temp_alloc)
 }
-
-

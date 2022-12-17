@@ -1,12 +1,16 @@
-use onca_core::{alloc::UseAlloc, io, collections::SmallDynArray};
-use windows::{
-    Win32::{Storage::FileSystem::{CreateDirectoryW, RemoveDirectoryW},
-    Foundation::{GetLastError, ERROR_ALREADY_EXISTS}},
-    core::PCWSTR
+use onca_core::{
+    alloc::{UseAlloc},
+    collections::SmallDynArray,
+    io,
 };
-
-use crate::Path;
-
+use windows::{
+    Win32::{
+        Storage::FileSystem::{CreateDirectoryW, RemoveDirectoryW},
+        Foundation::{GetLastError, ERROR_ALREADY_EXISTS},
+    },
+    core::PCWSTR,
+};
+use crate::{Path, FsMemTag};
 use super::path_to_null_terminated_utf16;
 
 pub(crate) fn create(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
@@ -18,7 +22,7 @@ pub(crate) fn create(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
 
 pub(crate) fn create_recursive(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
     unsafe {
-        let mut parent_paths = SmallDynArray::<_, 8>::new(temp_alloc);
+        let mut parent_paths = SmallDynArray::<_, 8>::new(temp_alloc, FsMemTag::Temporary.to_mem_tag());
         for component in path.ancestors() {
             parent_paths.push(component);
         }

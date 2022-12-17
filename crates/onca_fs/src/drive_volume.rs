@@ -1,5 +1,4 @@
-use onca_core::{collections::DynArray, alloc::UseAlloc};
-use onca_core::strings::String;
+use onca_core::prelude::*;
 use onca_core_macros::flags;
 
 use crate::{PathBuf, os::os_imp};

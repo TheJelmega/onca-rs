@@ -44,12 +44,9 @@ use core::{
     ops::{Deref},
 };
 use std::collections::TryReserveError;
+use onca_core::{prelude::*, strings::FromUtf16Error};
 
-use onca_core::{
-    alloc::UseAlloc,
-    strings::String, 
-    collections::DynArray, 
-};
+use crate::FsMemTag;
 
 //--------------------------------------------------------------
 
@@ -786,7 +783,7 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn new(alloc: UseAlloc) -> Self {
-        Self { inner: String::new(alloc) }
+        Self { inner: String::new(alloc, FsMemTag::Path.to_mem_tag()) }
     }
 
     /// Creates a new `PathBuf` with a given capacity and allocator, used to created the internal [`String`].
@@ -796,14 +793,14 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { inner: String::with_capacity(capacity, alloc) }
+        Self { inner: String::with_capacity(capacity, alloc, FsMemTag::Path.to_mem_tag()) }
     }
 
     /// Create a `PathBuf` from a [`str`] slice.
     #[must_use]
     #[inline]
     pub fn from_str(s: &str, alloc: UseAlloc) -> Self {
-        Self { inner: String::from_str(s, alloc) }
+        Self { inner: String::from_str(s, alloc, FsMemTag::Path.to_mem_tag()) }
     }
 
     /// Coerces to a [`Path`] slice.
@@ -811,6 +808,22 @@ impl PathBuf {
     #[inline]
     pub fn as_path(&self) -> &Path {
         self
+    }
+
+    
+    /// Decode a UTF-16-enocoded vector `v` into a `string`, returning [`Err`]
+    pub fn from_utf16(v: &[u16], alloc: UseAlloc) -> Result<PathBuf, FromUtf16Error> {
+        Ok(Self{ inner: String::from_utf16(v, alloc, FsMemTag::Path.to_mem_tag())? })
+    }
+
+
+    /// Decode a UTF-16-encoded slice `v` into a `PathBug`, replacing invalid data with [the replacement character (`U+FFFD`)][U+FFFD]
+    /// 
+    /// [U+FFFD]: core::char::REPLACEMENT_CHARACTER
+    #[inline]
+    #[must_use]
+    pub fn from_utf16_lossy(v: &[u16], alloc: UseAlloc) -> PathBuf {
+        Self{ inner: String::from_utf16_lossy(v, alloc, FsMemTag::Path.to_mem_tag()) }
     }
 
     /// Extends `self` with `path`
@@ -863,7 +876,7 @@ impl PathBuf {
                 }
             }
 
-            let mut res = String::new(UseAlloc::Id(self.allocator_id()));
+            let mut res = String::new(UseAlloc::Id(self.allocator_id()), FsMemTag::Path.to_mem_tag());
             let mut need_sep = false;
 
             for c in buf {
@@ -1624,7 +1637,7 @@ impl_cmp!(PathBuf, &'a Path);
 struct PrefixParser<'a, const LEN: usize> {
     path   : &'a str,
     prefix : [u8; LEN],
-}
+} 
 
 impl<'a, const LEN: usize> PrefixParser<'a, LEN> {
     #[inline]

@@ -9,7 +9,7 @@ use core::{
     hash::{Hash, Hasher},
     array,
 };
-use crate::alloc::UseAlloc;
+use crate::alloc::{UseAlloc, MemTag, Layout};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -18,25 +18,25 @@ use imp::DynArrayBuffer;
 use super::dyn_array::DynamicBuffer;
 
 union SmallBufferData<T, const N: usize> {
-    inline  : (ManuallyDrop<MaybeUninit<[T; N]>>, u16),
+    inline  : (ManuallyDrop<MaybeUninit<[T; N]>>, u16, MemTag),
     dynamic : ManuallyDrop<DynamicBuffer<T>>,
 }
 
 impl<T, const N: usize> SmallBufferData<T, N> {
-    fn new_inline(alloc_id: u16) -> Self {
-        Self { inline: (ManuallyDrop::new(MaybeUninit::uninit()), alloc_id) }
+    fn new_inline(alloc_id: u16, mem_tag: MemTag) -> Self {
+        Self { inline: (ManuallyDrop::new(MaybeUninit::uninit()), alloc_id, mem_tag) }
     }
 
-    fn new_dynamic(alloc: UseAlloc) -> Self {
-        Self { dynamic: ManuallyDrop::new(DynamicBuffer::new(alloc)) }
+    fn new_dynamic(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { dynamic: ManuallyDrop::new(DynamicBuffer::new(alloc, mem_tag)) }
     }
 
-    fn new_dynamic_with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { dynamic: ManuallyDrop::new(DynamicBuffer::with_capacity(capacity, alloc)) }
+    fn new_dynamic_with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { dynamic: ManuallyDrop::new(DynamicBuffer::with_capacity(capacity, alloc, mem_tag)) }
     }
 
-    fn new_dynamic_with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { dynamic: ManuallyDrop::new(DynamicBuffer::with_capacity_zeroed(capacity, alloc)) }
+    fn new_dynamic_with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { dynamic: ManuallyDrop::new(DynamicBuffer::with_capacity_zeroed(capacity, alloc, mem_tag)) }
     }
 }
 
@@ -46,25 +46,25 @@ struct SmallBuffer<T, const N: usize> {
 }
 
 impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
-    fn new(alloc: UseAlloc) -> Self {
-        Self { cap: N, data: SmallBufferData::new_inline(alloc.get_id()) }
+    fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { cap: N, data: SmallBufferData::new_inline(alloc.get_id(), mem_tag) }
     }
 
-    fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
+    fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         if capacity <= N {
-            Self::new(alloc)
+            Self::new(alloc, mem_tag)
         } else {
-            Self { cap: capacity, data: SmallBufferData::new_dynamic_with_capacity(capacity, alloc) }
+            Self { cap: capacity, data: SmallBufferData::new_dynamic_with_capacity(capacity, alloc, mem_tag) }
         }
     }
 
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
+    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         if capacity <= N {
-            let mut res = Self::new(alloc);
+            let mut res = Self::new(alloc, mem_tag);
             unsafe { ptr::write_bytes(res.as_mut_ptr(), 0, N) };
             res
         } else {
-            Self { cap: capacity, data: SmallBufferData::new_dynamic_with_capacity_zeroed(capacity, alloc) }
+            Self { cap: capacity, data: SmallBufferData::new_dynamic_with_capacity_zeroed(capacity, alloc, mem_tag) }
         }
     }
 
@@ -76,7 +76,8 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
         if len + additional > self.cap {
             self.cap = if self.cap == N {
                 let alloc = UseAlloc::Id(unsafe { self.data.inline.1 });
-                let mut data = SmallBufferData::new_dynamic(alloc);
+                let mem_tag = unsafe { self.data.inline.2 };
+                let mut data = SmallBufferData::new_dynamic(alloc, mem_tag);
 
                 unsafe {
                     let cap = (*data.dynamic).try_reserve(len, additional)?;
@@ -99,7 +100,8 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
         if len + additional > self.cap {
             self.cap = if self.cap == N {
                 let alloc = UseAlloc::Id(unsafe { self.data.inline.1 });
-                let mut data = SmallBufferData::new_dynamic(alloc);
+                let mem_tag = unsafe { self.data.inline.2 };
+                let mut data = SmallBufferData::new_dynamic(alloc, mem_tag);
 
                 unsafe {
                     let cap = (*data.dynamic).try_reserve_exact(len, additional)?;
@@ -119,7 +121,8 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
             if cap <= N {
                 unsafe {
                     let alloc_id = (*self.data.dynamic).allocator_id();
-                    let mut data = SmallBufferData::new_inline(alloc_id);
+                    let mem_tag = (*self.data.dynamic).mem_tag();
+                    let mut data = SmallBufferData::new_inline(alloc_id, mem_tag);
 
                     let dynbuf = ManuallyDrop::take(&mut self.data.dynamic);
                     ptr::copy_nonoverlapping(dynbuf.as_ptr(), (*data.inline.0).as_ptr() as *mut T, self.cap);
@@ -160,12 +163,32 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
         }
     }
 
+    fn layout(&self) -> Layout {
+        unsafe {
+            if self.cap == N {
+                Layout::new_raw(N * mem::size_of::<T>(), self.data.inline.1, mem::align_of::<T>())
+            } else {
+                (*self.data.dynamic).layout()
+            }
+        }
+    }
+
     fn allocator_id(&self) -> u16 {
         unsafe {
             if self.cap == N {
                 self.data.inline.1
             } else {
                 (*self.data.dynamic).allocator_id()
+            }
+        }
+    }
+
+    fn mem_tag(&self) -> MemTag {
+        unsafe {
+            if self.cap == N {
+                self.data.inline.2
+            } else {
+                (*self.data.dynamic).mem_tag()
             }
         }
     }
@@ -189,14 +212,14 @@ pub struct SmallDynArray<T, const N: usize> (imp::DynArray<T, SmallBuffer<T, N>>
 impl<T, const N: usize> SmallDynArray<T, N> {
     #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::new(alloc))
+    pub fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::new(alloc, mem_tag))
     }
 
     #[inline]
     #[must_use]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::with_capacity(capacity, alloc))
+    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::with_capacity(capacity, alloc, mem_tag))
     }
 
     #[inline]
@@ -386,8 +409,8 @@ impl<T, const N: usize> SmallDynArray<T, N> {
     }
 
     /// Create a `DynArray` from an iterator and an allocator
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::from_iter(iter, alloc))
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::from_iter(iter, alloc, mem_tag))
     }
 }
 
@@ -771,17 +794,17 @@ impl<I: Iterator<Item = T>, T, const N: usize> ExactSizeIterator for Splice<'_, 
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub trait SliceToSmallDynArray<T: Clone> {
-    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N>;
+    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc, mem_tag: MemTag) -> SmallDynArray<T, N>;
 }
 
 impl<T: Clone> SliceToSmallDynArray<T> for [T] {
-    default fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N> {
-        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc))
+    default fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc, mem_tag: MemTag) -> SmallDynArray<T, N> {
+        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc, mem_tag))
     }
 }
 
 impl<T: Copy> SliceToSmallDynArray<T> for [T] {
-    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc) -> SmallDynArray<T, N> {
-        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc))
+    fn to_small_dynarray<const N: usize>(&self, alloc: UseAlloc, mem_tag: MemTag) -> SmallDynArray<T, N> {
+        SmallDynArray(self.to_imp_dynarray::<SmallBuffer<T, N>>(alloc, mem_tag))
     }
 }

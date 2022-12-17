@@ -1,7 +1,7 @@
 use core::{cell::UnsafeCell, ptr::{write_bytes, copy_nonoverlapping}};
 use std::{borrow::BorrowMut, io};
 use crate::{
-    alloc::{Allocator, Allocation, Layout, primitives::Mallocator, UseAlloc},
+    alloc::{Allocator, Allocation, Layout, primitives::Mallocator, UseAlloc, MemTag},
     sync::RwLock
 };
 use once_cell::sync::Lazy;
@@ -28,12 +28,10 @@ impl State {
 // TODO: Extended tags
 pub struct MemoryManager
 {
-    //state : Lazy<UnsafeCell<State>>
     state : RwLock<State>
 }
 
 impl MemoryManager {
-    
     /// Create a new memory manager
     pub const fn new() -> Self {
         Self { state: RwLock::new(State::new()) }
@@ -88,16 +86,16 @@ impl MemoryManager {
     }
 
     /// Allocate a raw allocation with the given allocator and layout
-    pub fn alloc_raw(&self, alloc: UseAlloc, layout: Layout) -> Option<Allocation<u8>> {
+    pub fn alloc_raw(&self, alloc: UseAlloc, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
         let alloc = self.get_allocator(alloc);
         match alloc {
             None => None,
-            Some(alloc) => unsafe{ alloc.alloc(layout) }
+            Some(alloc) => unsafe{ alloc.alloc(layout, mem_tag) }
         }
     }
 
-    pub fn alloc_raw_zeroed(&self, alloc: UseAlloc, layout: Layout) -> Option<Allocation<u8>> {
-        let allocation = self.alloc_raw(alloc, layout);
+    pub fn alloc_raw_zeroed(&self, alloc: UseAlloc, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+        let allocation = self.alloc_raw(alloc, layout, mem_tag);
         match allocation {
             None => None,
             Some(ptr) => unsafe {
@@ -108,16 +106,16 @@ impl MemoryManager {
     }
 
     /// Allocate memory with the given allocator
-    pub fn alloc<T>(&self, alloc: UseAlloc) -> Option<Allocation<T>> {
-        match self.alloc_raw(alloc, Layout::new::<T>()) {
+    pub fn alloc<T>(&self, alloc: UseAlloc, mem_tag: MemTag) -> Option<Allocation<T>> {
+        match self.alloc_raw(alloc, Layout::new::<T>(), mem_tag) {
             None => None,
             Some(ptr) => Some(ptr.cast())
         }
     }
 
     /// Allocate memory with the given allocator and zero it
-    pub fn alloc_zeroed<T>(&self, alloc: UseAlloc) -> Option<Allocation<T>> {
-        match self.alloc_raw_zeroed(alloc, Layout::new::<T>()) {
+    pub fn alloc_zeroed<T>(&self, alloc: UseAlloc, mem_tag: MemTag) -> Option<Allocation<T>> {
+        match self.alloc_raw_zeroed(alloc, Layout::new::<T>(), mem_tag) {
             None => None,
             Some(ptr) => Some(ptr.cast())
         }
@@ -145,14 +143,14 @@ impl MemoryManager {
         assert!(ptr.ptr() != core::ptr::null(), "Cannot grow from null");
 
         if ptr.ptr() == core::ptr::null() {
-            return match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout) {
+            return match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
                 Some(mem) => Ok(mem.cast()),
                 None => Err(ptr)
             };
         }
         
         let copy_count = ptr.layout().size();
-        match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout) {
+        match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
             Some(mem) => unsafe {
                 copy_nonoverlapping(ptr.ptr() as *const u8, mem.ptr_mut(), copy_count);
                 self.dealloc(ptr);
@@ -191,7 +189,7 @@ impl MemoryManager {
         // TODO(jel): should these be asserts or just return an Err
         assert!(new_layout.size() < ptr.layout().size(), "new size needs to be larger that the current size");
 
-        match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout) {
+        match self.alloc_raw(UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
             Some(mem) => unsafe {
                 let count = mem.layout().size();
                 copy_nonoverlapping(ptr.ptr() as *const u8, mem.ptr_mut(), count);

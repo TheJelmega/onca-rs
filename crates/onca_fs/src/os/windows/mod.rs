@@ -1,10 +1,9 @@
 use onca_core::{
-    strings::String, 
     alloc::UseAlloc,
     collections::DynArray,
     io
 };
-use crate::{FileFlags, PathBuf, Path};
+use crate::{FileFlags, PathBuf, Path, FsMemTag};
 use windows::{Win32::{
     Storage::FileSystem::{
         FILE_FLAGS_AND_ATTRIBUTES,
@@ -43,15 +42,15 @@ pub(crate) mod link;
 pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
     unsafe {
         let expected_len = GetCurrentDirectoryW(None) as usize;
-        let mut dynarr = DynArray::with_capacity(expected_len, alloc);
+        let mut dynarr = DynArray::with_capacity(expected_len, alloc, FsMemTag::Temporary.to_mem_tag());
         
         dynarr.set_len(expected_len);
         let len = GetCurrentDirectoryW(Some(&mut *dynarr)) as usize;
         debug_assert_eq!(len, expected_len);
 
-        let res = String::from_utf16(&*dynarr, alloc);
+        let res = PathBuf::from_utf16(&*dynarr, alloc);
         match res {
-            Ok(str) => Ok(str.into()),
+            Ok(path) => Ok(path),
             Err(_) => Err(io::Error::from_raw_os_error(GetLastError().0 as i32)),
         }
     }
@@ -61,7 +60,7 @@ pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
 //------------------------------------------------------------------------------------------------------------------------------
 
 fn path_to_null_terminated_utf16(path: &Path, temp_alloc: UseAlloc) -> (DynArray<u16>, PCWSTR) {
-    let mut buf = DynArray::from_iter(path.as_str().encode_utf16(), temp_alloc);
+    let mut buf = DynArray::from_iter(path.as_str().encode_utf16(), temp_alloc, FsMemTag::Temporary.to_mem_tag());
     buf.push(0);
     let pcwstr = PCWSTR(buf.as_ptr());
     (buf, pcwstr)

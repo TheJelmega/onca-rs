@@ -9,7 +9,7 @@ use core::{
 
 use crate::{
     mem::{HeapPtr, MEMORY_MANAGER}, 
-    alloc::UseAlloc
+    alloc::{UseAlloc, MemTag}
 };
 use super::SpecExtend;
 
@@ -19,13 +19,14 @@ pub struct LinkedList<T> {
     tail     : Option<NonNull<Node<T>>>,
     len      : usize,
     alloc_id : u16,
-    phantom  : PhantomData<HeapPtr<Node<T>>>
+    mem_tag  : MemTag,
+    phantom  : PhantomData<HeapPtr<Node<T>>>,
 }
 
 struct Node<T> {
     next : Option<HeapPtr<Node<T>>>,
     prev : Option<NonNull<Node<T>>>,
-    elem : T
+    elem : T,
 }
 
 #[derive(Clone)]
@@ -33,30 +34,30 @@ pub struct Iter<'a, T: 'a> {
     head    : Option<NonNull<Node<T>>>,
     tail    : Option<NonNull<Node<T>>>,
     len     : usize,
-    phantom : PhantomData<&'a Node<T>>
+    phantom : PhantomData<&'a Node<T>>,
 }
 
 pub struct IterMut<'a, T: 'a> {
     head    : Option<NonNull<Node<T>>>,
     tail    : Option<NonNull<Node<T>>>,
     len     : usize,
-    phantom : PhantomData<&'a mut T>
+    phantom : PhantomData<&'a mut T>,
 }
 
 pub struct IntoIter<T> {
-    list: LinkedList<T>
+    list: LinkedList<T>,
 }
 
 pub struct Cursor<'a, T: 'a> {
     index: usize,
     current: Option<NonNull<Node<T>>>,
-    list: &'a LinkedList<T>
+    list: &'a LinkedList<T>,
 }
 
 pub struct CursorMut<'a, T: 'a> {
     index: usize,
     current: Option<NonNull<Node<T>>>,
-    list: &'a mut LinkedList<T>
+    list: &'a mut LinkedList<T>,
 }
 
 pub struct DrainFilter<'a, T: 'a, F: 'a>
@@ -68,7 +69,6 @@ pub struct DrainFilter<'a, T: 'a, F: 'a>
     idx     : usize,
     old_len : usize,
 }
-
 
 impl<T> Node<T> {
     fn new(element: T) -> Self {
@@ -95,8 +95,8 @@ impl<T> LinkedList<T> {
 
     #[inline]
     #[must_use]
-    pub const fn new(alloc: UseAlloc) -> Self {
-        Self { head: None, tail: None, len: 0, alloc_id: alloc.get_id(), phantom: PhantomData }
+    pub const fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { head: None, tail: None, len: 0, alloc_id: alloc.get_id(), mem_tag, phantom: PhantomData }
     }
 
     pub fn append(&mut self, other: &mut Self) {
@@ -158,7 +158,7 @@ impl<T> LinkedList<T> {
 
     #[inline]
     pub fn clear(&mut self) {
-        *self = Self::new(UseAlloc::Id(self.alloc_id))
+        *self = Self::new(UseAlloc::Id(self.alloc_id), self.mem_tag)
     }
 
     #[inline]
@@ -193,7 +193,7 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&mut self, elt: T) {
-        self.push_front_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id)));
+        self.push_front_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id), self.mem_tag));
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -201,7 +201,7 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_back(&mut self, elt: T) {
-        self.push_back_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id)));
+        self.push_back_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id), self.mem_tag));
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -213,9 +213,9 @@ impl<T> LinkedList<T> {
         assert!(at <= len, "Connot split off at a nonexistent index");
 
         if at == 0 {
-            return mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id)));
+            return mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag));
         } else if at == len {
-            return LinkedList::new(UseAlloc::Id(self.alloc_id));
+            return LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag);
         }
 
         let split_node = if at - 1 <= len - 1 - (at - 1) {
@@ -265,8 +265,8 @@ impl<T> LinkedList<T> {
         DrainFilter { list: self, it: it, pred: filter, idx: 0, old_len }
     }
 
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
-        let mut list = LinkedList::new(alloc);
+    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        let mut list = LinkedList::new(alloc, mem_tag);
         list.extend(iter);
         list
     }
@@ -409,7 +409,7 @@ impl<T> LinkedList<T> {
 
     unsafe fn split_off_before_node(&mut self, split_node: Option<NonNull<Node<T>>>, at: usize) -> Self {
         match split_node {
-            None => mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id))),
+            None => mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag)),
             Some(mut split_node) => {
                 let first_part_tail = unsafe {
                     split_node.as_mut().prev.take()
@@ -433,6 +433,7 @@ impl<T> LinkedList<T> {
                     tail: first_part_tail,
                     len: at,
                     alloc_id: self.alloc_id,
+                    mem_tag: self.mem_tag,
                     phantom: PhantomData
                 }
             }
@@ -441,7 +442,7 @@ impl<T> LinkedList<T> {
 
     unsafe fn split_off_after_node(&mut self, split_node: Option<NonNull<Node<T>>>, at: usize) -> Self {
         match split_node {
-            None => LinkedList::new(UseAlloc::Id(self.alloc_id)),
+            None => LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag),
             Some(mut split_node) => {
                 let mut second_part_head = split_node.as_mut().next.take();
 
@@ -463,6 +464,7 @@ impl<T> LinkedList<T> {
                     tail: second_part_tail,
                     len: self.len - at,
                     alloc_id: self.alloc_id,
+                    mem_tag: self.mem_tag,
                     phantom: PhantomData
                 }
             }
@@ -474,7 +476,7 @@ impl<T> LinkedList<T> {
 
 impl<T> Default for LinkedList<T> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default)
+        Self::new(UseAlloc::Default, MemTag::default())
     }
 }
 
@@ -498,7 +500,7 @@ impl<T> Drop for LinkedList<T> {
 
 impl<T> FromIterator<T> for LinkedList<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter(iter, UseAlloc::Default)
+        Self::from_iter(iter, UseAlloc::Default, MemTag::default())
     }
 }
 
@@ -593,7 +595,7 @@ impl<T: Ord> Ord for LinkedList<T> {
 
 impl<T: Clone> Clone for LinkedList<T> {
     fn clone(&self) -> Self {
-        Self::from_iter(self.iter().cloned(), UseAlloc::Id(self.alloc_id))
+        Self::from_iter(self.iter().cloned(), UseAlloc::Id(self.alloc_id), self.mem_tag)
     }
 
     fn clone_from(&mut self, other: &Self)
@@ -875,7 +877,7 @@ impl<'a, T> CursorMut<'a, T> {
 
      pub fn insert_after(&mut self, item: T) {
         unsafe {
-            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id));
+            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id), self.list.mem_tag);
             let node_next = match self.current {
                 None => as_non_null(&self.list.head),
                 Some(node) => as_non_null(&node.as_ref().next),
@@ -891,7 +893,7 @@ impl<'a, T> CursorMut<'a, T> {
 
     pub fn insert_before(&mut self, item: T) {
         unsafe {
-            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id));
+            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id), self.list.mem_tag);
             let node_prev = match self.current {
                 None => self.list.tail,
                 Some(node) => node.as_ref().prev
@@ -923,6 +925,7 @@ impl<'a, T> CursorMut<'a, T> {
                 tail: Some(unlinked_node_ptr),
                 len: 1,
                 alloc_id: self.list.alloc_id,
+                mem_tag: self.list.mem_tag,
                 phantom: PhantomData
             })
         }

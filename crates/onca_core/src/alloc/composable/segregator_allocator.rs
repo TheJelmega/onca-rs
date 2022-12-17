@@ -24,11 +24,11 @@ impl<A: Allocator, B: Allocator> SegregatorArena<A, B>
 
 impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
 {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
         if layout.size() <= self.boundary {
-            self.le_alloc.alloc(layout)
+            self.le_alloc.alloc(layout, mem_tag)
         } else {
-            self.gt_alloc.alloc(layout)
+            self.gt_alloc.alloc(layout, mem_tag)
         }
     }
 

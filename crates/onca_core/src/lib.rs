@@ -30,6 +30,8 @@
 #![feature(maybe_uninit_slice)]
 #![feature(maybe_uninit_write_slice)]
 
+#![feature(local_key_cell_methods)]
+
 // General
 #![allow(incomplete_features)]
 #![feature(specialization, rustc_attrs)]

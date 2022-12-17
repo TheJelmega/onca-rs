@@ -3,7 +3,12 @@ use core::{
     ptr::null_mut,
     ffi::c_void
 };
-use onca_core::{alloc::UseAlloc, collections::DynArray, strings::String, io};
+use onca_core::{
+    alloc::{UseAlloc},
+    collections::DynArray,
+    strings::String,
+    io,
+};
 use windows::{
     Win32::{
         Foundation::{HANDLE, GetLastError, ERROR_INSUFFICIENT_BUFFER, PSID, LUID},
@@ -27,7 +32,7 @@ use windows::{
     core::{PCWSTR, PWSTR}
 };
 
-use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId};
+use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FsMemTag};
 
 use super::{high_low_to_u64, dword_to_flags, path_to_null_terminated_utf16, MAX_PATH, file};
 
@@ -62,7 +67,7 @@ impl EntrySearchHandle {
                     let mut path = path.to_path_buf(alloc);
                     let filename_len = find_data.cFileName.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
                     let filename_slice = core::slice::from_raw_parts(find_data.cFileName.as_ptr(), filename_len);
-                    path.push(String::from_utf16_lossy(filename_slice, alloc));
+                    path.push(PathBuf::from_utf16_lossy(filename_slice, alloc));
                     Ok((EntrySearchHandle(handle), path))
                 },
                 Err(err) => Err(io::Error::from_raw_os_error(err.code().0)),
@@ -74,7 +79,7 @@ impl EntrySearchHandle {
         let mut find_data = WIN32_FIND_DATAW::default();
         if unsafe { FindNextFileW(self.0, &mut find_data).as_bool() } {
             let mut it = find_data.cFileName.split(|&c| c == 0);
-            let file_name = String::from_utf16_lossy(it.next().unwrap(), temp_alloc);
+            let file_name = String::from_utf16_lossy(it.next().unwrap(), temp_alloc, FsMemTag::Path.to_mem_tag());
             path.set_file_name(file_name);
             Some(path)
         } else {
@@ -204,10 +209,10 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
             return Permission::None;
         }
 
-        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, temp_alloc);
+        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
         sid_buf.set_len(sid_len as usize);
 
-        let mut domain_buf = DynArray::<u16>::with_capacity(domain_len as usize, temp_alloc);
+        let mut domain_buf = DynArray::<u16>::with_capacity(domain_len as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
         domain_buf.set_len(domain_len as usize);
 
         let res = LookupAccountNameW(
@@ -233,7 +238,7 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
             return Permission::None;
         }
         
-        let mut buf = DynArray::<u8>::with_capacity(needed as usize, temp_alloc);
+        let mut buf = DynArray::<u8>::with_capacity(needed as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
         buf.set_len(needed as usize);
         let sec_desc_ptr = PSECURITY_DESCRIPTOR(buf.as_mut_ptr() as *mut c_void);
         let res = GetFileSecurityW(pcwstr, requested_info, sec_desc_ptr, needed, &mut needed);

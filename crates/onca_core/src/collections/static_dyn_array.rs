@@ -9,7 +9,7 @@ use core::{
     hash::{Hash, Hasher},
     array,
 };
-use crate::alloc::UseAlloc;
+use crate::alloc::{UseAlloc, MemTag, Layout};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -19,15 +19,15 @@ struct StaticBuf<T, const N: usize> {
 }
 
 impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
-    fn new(alloc: UseAlloc) -> Self {
+    fn new(_: UseAlloc, _: MemTag) -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
-    fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
+    fn with_capacity(_: usize, _: UseAlloc, _: MemTag) -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
+    fn with_capacity_zeroed(_: usize, _: UseAlloc, _: MemTag) -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
@@ -62,8 +62,16 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
         self.buf.as_mut_ptr() as *mut T
     }
 
+    fn layout(&self) -> crate::alloc::Layout {
+        Layout::default()
+    }
+
     fn allocator_id(&self) -> u16 {
         u16::MAX
+    }
+
+    fn mem_tag(&self) -> MemTag {
+        MemTag::default()
     }
 }
 
@@ -76,7 +84,7 @@ impl<T, const N: usize> StaticDynArray<T, N> {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self(imp::DynArray::new(UseAlloc::Default))
+        Self(imp::DynArray::new(UseAlloc::Default, MemTag::default()))
     }
 
     #[inline]
@@ -616,12 +624,12 @@ pub trait SliceToStaticDynArray<T: Clone> {
 
 impl<T: Clone> SliceToStaticDynArray<T> for [T] {
     default fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default))
+        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default, MemTag::default()))
     }
 }
 
 impl<T: Copy> SliceToStaticDynArray<T> for [T] {
     fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default))
+        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default, MemTag::default()))
     }
 }

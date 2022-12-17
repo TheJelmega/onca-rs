@@ -1,4 +1,4 @@
-use super::{Layout, Allocation};
+use super::{Layout, Allocation, mem_tag::MemTag};
 
 /// Allocator/Arena that can provide access to heap memory for the program
 pub trait Allocator
@@ -6,7 +6,7 @@ pub trait Allocator
     /// Allocate memory from an allocator/arena
     /// 
     /// If no memory could be allocated, a null `Allocation<u8>` should be returned
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>>;
+    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>>;
 
     /// Deallocate an allocation
     /// 
@@ -29,7 +29,7 @@ pub trait Allocator
 pub trait ComposableAllocator<Args> : Allocator
 {
     /// Create a new allocator
-    fn new_composable(alloc: &mut dyn Allocator, args: Args) -> Self;
+    fn new_composable(alloc: &mut dyn Allocator, args: Args, mem_tag: MemTag) -> Self;
 }
 
 /// Enum telling what allocator to use for any structure that allocates memory

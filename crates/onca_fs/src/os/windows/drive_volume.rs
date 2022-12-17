@@ -1,9 +1,9 @@
 use core::mem;
-use onca_core::{collections::DynArray, alloc::UseAlloc, strings::String};
-
-use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags};
-use super::{MAX_PATH, path_to_null_terminated_utf16};
-
+use onca_core::{
+    collections::DynArray,
+    alloc::{UseAlloc},
+    strings::String,
+};
 use windows::{
     Win32::{Storage::FileSystem::{
         GetDiskFreeSpaceW, GetDiskFreeSpaceExW,
@@ -16,6 +16,8 @@ use windows::{
     core::PCWSTR,
     Win32::Foundation::{ERROR_MORE_DATA},
 };
+use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, FsMemTag};
+use super::{MAX_PATH, path_to_null_terminated_utf16};
 
 pub fn get_drive_info(path: PathBuf, temp_alloc: UseAlloc) -> Option<DriveInfo> {
     let (buf, _) = path_to_null_terminated_utf16(&path, temp_alloc);
@@ -25,7 +27,6 @@ pub fn get_drive_info(path: PathBuf, temp_alloc: UseAlloc) -> Option<DriveInfo> 
 pub fn get_drive_type(path: PathBuf, temp_alloc: UseAlloc) -> DriveType {
     unsafe {
         let (_buf, pcwstr) = path_to_null_terminated_utf16(&path, temp_alloc); 
-
         let drive_type = GetDriveTypeW(pcwstr);
         mem::transmute_copy(&drive_type)
     }
@@ -34,7 +35,7 @@ pub fn get_drive_type(path: PathBuf, temp_alloc: UseAlloc) -> DriveType {
 pub fn get_all_drive_info(alloc: UseAlloc) -> DynArray<DriveInfo> {
     unsafe {
         let needed = GetLogicalDriveStringsW(None) as usize;
-        let mut names = DynArray::with_capacity(needed, alloc);
+        let mut names = DynArray::with_capacity(needed, alloc, FsMemTag::Temporary.to_mem_tag());
         names.set_len(needed);
         
         let written = GetLogicalDriveStringsW(Some(&mut *names)) as usize;
@@ -42,9 +43,9 @@ pub fn get_all_drive_info(alloc: UseAlloc) -> DynArray<DriveInfo> {
         names.set_len(written);
         debug_assert_eq!(written, needed - 1);
 
-        let mut infos = DynArray::new(alloc);
+        let mut infos = DynArray::new(alloc, FsMemTag::General.to_mem_tag());
         for utf16 in names.split_inclusive(|&c| c == 0) {
-            let path : PathBuf = String::from_utf16_lossy(utf16, alloc).into();
+            let path = PathBuf::from_utf16_lossy(utf16, alloc);
             let drv_info = get_drive_info_utf16(path, utf16);
             if let Some(drv_info) = drv_info {
                 infos.push(drv_info);
@@ -109,10 +110,10 @@ pub fn get_all_volume_info(alloc: UseAlloc) -> DynArray<VolumeInfo> {
         let handle = FindFirstVolumeW(&mut guid_buf);
         let handle = match handle {
             Ok(handle) => handle,
-            Err(_) => return DynArray::new(alloc),
+            Err(_) => return DynArray::new(alloc, FsMemTag::General.to_mem_tag()),
         };
 
-        let mut infos = DynArray::new(alloc);
+        let mut infos = DynArray::new(alloc, FsMemTag::General.to_mem_tag());
         loop {
 
             let mut roots = get_drive_names_for_volume(&guid_buf, alloc);
@@ -191,28 +192,28 @@ unsafe fn get_drive_names_for_volume(guid: &[u16], alloc: UseAlloc) -> DynArray<
     let mut needed = 0;
     let res = GetVolumePathNamesForVolumeNameW(pcwstr, None, &mut needed).as_bool();
     if !res && GetLastError() != ERROR_MORE_DATA {
-        return DynArray::new(alloc);
+        return DynArray::new(alloc, FsMemTag::General.to_mem_tag());
     }
 
     let needed = needed as usize;
-    let mut utf16_paths = DynArray::with_capacity(needed, alloc);
+    let mut utf16_paths = DynArray::with_capacity(needed, alloc, FsMemTag::General.to_mem_tag());
     utf16_paths.set_len(needed);
 
     let mut written = 0;
     if !GetVolumePathNamesForVolumeNameW(pcwstr, Some(&mut *utf16_paths), &mut written).as_bool() {
-        return DynArray::new(alloc);
+        return DynArray::new(alloc, FsMemTag::General.to_mem_tag());
     }
     let written = written as usize;
     debug_assert_eq!(needed, written);
     utf16_paths.set_len(written - 1);
 
-    let mut paths = DynArray::with_capacity(needed, alloc);
+    let mut paths = DynArray::with_capacity(needed, alloc, FsMemTag::General.to_mem_tag());
     for utf16 in utf16_paths.split(|&c| c == 0) {
         if utf16.is_empty() {
             continue;
         }
 
-        let root : PathBuf = String::from_utf16_lossy(utf16, alloc).into();
+        let root = PathBuf::from_utf16_lossy(utf16, alloc);
         paths.push(root);
     }
     paths
@@ -250,16 +251,16 @@ fn get_volume_info_utf16(path: PathBuf, utf16: &[u16], alloc: UseAlloc) -> Optio
         let fs_flags = get_volume_fs_flags(win32_fs_flags);
 
         // TODO: dynarr!(path, ...) macro
-        let mut roots = DynArray::with_capacity(1, alloc);
+        let mut roots = DynArray::with_capacity(1, alloc, FsMemTag::General.to_mem_tag());
         roots.push(path);
 
         Some(VolumeInfo {
             roots,
-            name: String::from_utf16_lossy(volume_name_buffer, alloc),
+            name: String::from_utf16_lossy(volume_name_buffer, alloc, FsMemTag::General.to_mem_tag()),
             serial,
             max_comp_len,
             fs_flags,
-            fs_name: String::from_utf16_lossy(volume_fs_name_buffer, alloc),
+            fs_name: String::from_utf16_lossy(volume_fs_name_buffer, alloc, FsMemTag::General.to_mem_tag()),
         })
     }
 }

@@ -1,4 +1,4 @@
-use crate::alloc::{Allocator, Layout, Allocation};
+use crate::alloc::{Allocator, Layout, Allocation, MemTag};
 
 extern crate alloc;
 
@@ -10,13 +10,13 @@ extern crate alloc;
 pub struct Mallocator;
 
 impl Allocator for Mallocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
         let rs_layout = core::alloc::Layout::from_size_align_unchecked(layout.size(), layout.align());
         let ptr = unsafe { alloc::alloc::alloc(rs_layout) };
         if ptr == core::ptr::null_mut() {
             None
         } else {
-            Some(Allocation::<u8>::new(ptr, layout.with_alloc_id(Layout::MAX_ALLOC_ID)))
+            Some(Allocation::<u8>::new(ptr, layout.with_alloc_id(Layout::MAX_ALLOC_ID), mem_tag))
         }
     }
 
@@ -50,7 +50,7 @@ mod test {
         let mut alloc = Mallocator;
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>(), MemTag::default()).unwrap();
             alloc.dealloc(ptr);
         }
     }

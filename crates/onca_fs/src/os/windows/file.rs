@@ -6,21 +6,29 @@ use core::{
 use std::mem::size_of;
 use onca_core::{
     io,
-    alloc::UseAlloc,
-    strings::String
+    alloc::{UseAlloc},
 };
-use windows::{Win32::{
-    Storage::FileSystem::{
-        GetCompressedFileSizeW, 
-        CreateFileW, 
-        FILE_APPEND_DATA, FILE_ACCESS_FLAGS, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE, 
-        OPEN_ALWAYS, OPEN_EXISTING, CREATE_NEW, CREATE_ALWAYS, TRUNCATE_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAGS_AND_ATTRIBUTES, DeleteFileW, ReadFile, SetFilePointerEx, FILE_BEGIN, FILE_CURRENT, FILE_END, FlushFileBuffers, WriteFile, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_OPEN_REPARSE_POINT, SET_FILE_POINTER_MOVE_METHOD, SetEndOfFile, FILE_END_OF_FILE_INFO, SetFileInformationByHandle, FileEndOfFileInfo, SetFileTime, FILE_BASIC_INFO, GetFileInformationByHandleEx, FileBasicInfo, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, GetTempFileNameW
+use windows::{
+    Win32::{
+        Storage::FileSystem::{
+            GetCompressedFileSizeW, 
+            CreateFileW, 
+            FILE_APPEND_DATA, FILE_ACCESS_FLAGS, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE,
+            OPEN_ALWAYS, OPEN_EXISTING, CREATE_NEW, CREATE_ALWAYS, TRUNCATE_EXISTING,
+            DeleteFileW, 
+            ReadFile,  WriteFile, FlushFileBuffers,
+            SetFilePointerEx, SET_FILE_POINTER_MOVE_METHOD, FILE_BEGIN, FILE_CURRENT, FILE_END,
+            FILE_FLAGS_AND_ATTRIBUTES, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_FLAG_BACKUP_SEMANTICS,
+            SetFileInformationByHandle, GetFileInformationByHandleEx, FileBasicInfo,  FILE_BASIC_INFO, FileEndOfFileInfo, FILE_END_OF_FILE_INFO,
+            SetFileTime,  GetTempFileNameW
+        }, 
+        Foundation::{GetLastError, NO_ERROR, HANDLE, CloseHandle, FILETIME}, 
+        System::SystemServices::{GENERIC_READ, GENERIC_EXECUTE, GENERIC_WRITE}
     }, 
-    Foundation::{GetLastError, NO_ERROR, HANDLE, CloseHandle, FILETIME}, 
-    System::SystemServices::{GENERIC_READ, GENERIC_EXECUTE, GENERIC_WRITE}
-}, core::PCWSTR};
+    core::PCWSTR,
+};
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, file};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH};
 
 use super::{path_to_null_terminated_utf16, INVALID_FILE_SIZE, high_low_to_u64};
 
@@ -75,7 +83,7 @@ impl FileHandle {
                 let temp_end = file_name.iter().position(|&c| c == 0).unwrap_or_default();
                 if temp_end > 0 {
                     buf.extend_from_slice(&file_name[..temp_end]);
-                    path_buf.push(String::from_utf16_lossy(&file_name[..temp_end], alloc))
+                    path_buf.push(PathBuf::from_utf16_lossy(&file_name[..temp_end], alloc))
                 }
             }
             

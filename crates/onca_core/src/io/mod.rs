@@ -43,7 +43,7 @@
 //! For this functionality, see `onca_??::??`
 
 use crate::{
-    alloc::UseAlloc,
+    alloc::{UseAlloc, MemTag},
     collections::DynArray, 
     mem::HeapPtr,
     strings::String, 
@@ -470,8 +470,8 @@ pub trait Read {
 /// This function forces you to handle erros because the output (the `String`) is wrapped in a [`Result`]. 
 /// See [`Read::read_to_string`] for the erros that can occur.
 /// If any error occurs, you will get an [`Err`], so you don't have to worry about your buffer bing empty or partially full.
-pub fn read_to_string<R: Read>(mut reader: R, alloc: UseAlloc) -> Result<String> {
-    let mut buf = String::new(alloc);
+pub fn read_to_string<R: Read>(mut reader: R, alloc: UseAlloc, mem_tag: MemTag) -> Result<String> {
+    let mut buf = String::new(alloc, mem_tag);
     reader.read_to_string(&mut buf)?;
     Ok(buf)
 }
@@ -479,8 +479,8 @@ pub fn read_to_string<R: Read>(mut reader: R, alloc: UseAlloc) -> Result<String>
 /// Read all bytes from a [reader][Read] into a new [`String`] with a pre-allocated capacity.
 /// 
 /// Please see the documentation of [`read_to_string`] for more details
-pub fn read_to_string_with_capacity<R: Read>(mut reader: R, capacity: usize, alloc: UseAlloc) -> Result<String> {
-    let mut buf = String::with_capacity(capacity, alloc);
+pub fn read_to_string_with_capacity<R: Read>(mut reader: R, capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Result<String> {
+    let mut buf = String::with_capacity(capacity, alloc, mem_tag);
     reader.read_to_string(&mut buf)?;
     Ok(buf)
 }
@@ -844,11 +844,11 @@ pub trait BufRead : Read {
     /// 
     /// [io::Result]: self::Result "io::result"
     /// [`read_until`]: BufRead::read_until
-    fn split(self, byte: u8, alloc: UseAlloc) -> Split<Self>
+    fn split(self, byte: u8, alloc: UseAlloc, mem_tag: MemTag) -> Split<Self>
     where
         Self : Sized
     {
-        Split { buf: self, delim: byte, alloc_id: alloc.get_id() }
+        Split { buf: self, delim: byte, alloc_id: alloc.get_id(), mem_tag }
     }
 
     /// returns an iterator over the lines of this reader.
@@ -857,11 +857,11 @@ pub trait BufRead : Read {
     /// Each string returned will *not* have a newline byte (the `0x0A` byte) or `CRLF` (`0x0D`, `0x0A` bytes) at the end.
     /// 
     /// [io::Result]: self::Result "io::Result"
-    fn lines(self, alloc: UseAlloc) -> Lines<Self>
+    fn lines(self, alloc: UseAlloc, mem_tag: MemTag) -> Lines<Self>
     where
         Self : Sized
     {
-        Lines { buf: self, alloc_id: alloc.get_id() }
+        Lines { buf: self, alloc_id: alloc.get_id(), mem_tag }
     }
 }
 
@@ -1385,13 +1385,14 @@ pub struct Split<B> {
     buf      : B,
     delim    : u8,
     alloc_id : u16,
+    mem_tag  : MemTag
 }
 
 impl<B: BufRead> Iterator for Split<B> {
     type Item = Result<DynArray<u8>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut buf = DynArray::new(UseAlloc::Id(self.alloc_id));
+        let mut buf = DynArray::new(UseAlloc::Id(self.alloc_id), self.mem_tag);
         match self.buf.read_until(self.delim, &mut buf) {
             Ok(0) => None,
             Ok(_) => {
@@ -1415,13 +1416,14 @@ impl<B: BufRead> Iterator for Split<B> {
 pub struct Lines<B> {
     buf      : B,
     alloc_id : u16,
+    mem_tag  : MemTag,
 }
 
 impl<B: BufRead> Iterator for Lines<B> {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut buf = String::new(UseAlloc::Id(self.alloc_id));
+        let mut buf = String::new(UseAlloc::Id(self.alloc_id), self.mem_tag);
         match self.buf.read_line(&mut buf) {
             Ok(0) => None,
             Ok(_) => {

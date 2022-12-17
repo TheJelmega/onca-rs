@@ -8,7 +8,7 @@ use core::{
     ops::{Deref, CoerceUnsized},
     ptr::{drop_in_place, read, null}
 };
-use crate::alloc::{Allocation, Allocator, Layout, UseAlloc};
+use crate::alloc::{Allocation, Allocator, Layout, UseAlloc, MemTag};
 use crate::mem::MEMORY_MANAGER;
 
 struct RcData<T: ?Sized> {
@@ -27,58 +27,77 @@ pub struct AWeak<T: ?Sized> {
 }
 
 impl<T: ?Sized> RcData<T> {
-
+    #[inline]
     fn inc_strong(&self) {
         self.strong.fetch_add(1, Ordering::AcqRel);
     }
 
+    #[inline]
     fn dec_strong(&self) {
         self.strong.fetch_sub(1, Ordering::AcqRel);
     }
 
+    #[inline]
     fn strong_count(&self) -> usize {
         self.strong.load(Ordering::Acquire)
     }
 
+    #[inline]
     fn inc_weak(&self) {
         self.weak.fetch_add(1, Ordering::AcqRel);
     }
 
+    #[inline]
     fn dec_weak(&self) {
         self.weak.fetch_sub(1, Ordering::AcqRel);
     }
 
+    #[inline]
     fn weak_count(&self) -> usize {
         self.weak.load(Ordering::Acquire)
     }
-
 }
 
 impl<T: ?Sized> Arc<T> {
-    
     pub fn downgrade(this: &Self) -> AWeak<T> {
         this.inner().inc_weak();
         AWeak { ptr: unsafe { this.ptr.duplicate() } }
     }
 
     /// Get the strong count for the `Arc`
+    #[inline]
     pub fn strong_count(this: &Self) -> usize {
         this.inner().strong_count()
     }
 
     /// Get the weak count for the `Arc`
+    #[inline]
     pub fn weak_count(this: &Self) -> usize {
         this.inner().weak_count()
     }
 
-    /// Get the allocator id of the allocation
+    /// Get the layout
+    #[inline]
+    pub fn layout(this: &Self) -> Layout {
+        this.ptr.layout()
+    }
+
+    /// Get the allocator id
+    #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
         this.ptr.layout().alloc_id()
     }
 
+    /// Get the allocator
     pub fn allocator(this: &Self) -> &mut dyn Allocator {
         let id = Self::allocator_id(this);
         unsafe { &mut *MEMORY_MANAGER.get_allocator(UseAlloc::Id(id)).unwrap() }
+    }
+
+    /// Get the memory tag
+    #[inline]
+    pub fn mem_tag(this: &Self) -> MemTag {
+        this.ptr.mem_tag()
     }
 
     /// Get a mutable reference to the value, when the `Arc` is unique (only 1 strong and no weak)
@@ -91,6 +110,7 @@ impl<T: ?Sized> Arc<T> {
     }
 
     /// Get a mutable reference to the value, works when `Arc` isn't unique
+    #[inline]
     pub unsafe fn get_mut_unchecked(this: &mut Self) -> &mut T {
         &mut this.ptr.get_mut().value
     }
@@ -102,7 +122,7 @@ impl<T: ?Sized> Arc<T> {
         where T: Clone
     {
         if !Self::is_unique(this) {
-            let mut new = Self::new_uninit(UseAlloc::Id(Self::allocator_id(this)));
+            let mut new = Self::new_uninit(UseAlloc::Id(Self::allocator_id(this)), Self::mem_tag(this));
             unsafe {
                 let data = Arc::get_mut_unchecked(this);
                 Arc::get_mut_unchecked(&mut new).as_mut_ptr().write(data.clone());
@@ -114,29 +134,32 @@ impl<T: ?Sized> Arc<T> {
     }
 
     /// Check if 2 `Arc`s contain the same pointer
+    #[inline]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
         this.ptr.ptr() == other.ptr.ptr()
     }
 
+    #[inline]
     fn is_unique(this: &Self) -> bool {
         Self::strong_count(this) == 1 && Self::weak_count(this) == 0
     }
 
+    #[inline]
     fn inner(&self) -> &RcData<T> {
         self.ptr.get_ref()
     }
 }
 
 impl<T> Arc<T> {
-
     /// Create a new `Arc` using the given allocator
-    pub fn new(x: T, alloc: UseAlloc) -> Self {
-        Self::try_new(x, alloc).expect("Failed to allocate memory")
+    #[inline]
+    pub fn new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self::try_new(x, alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Create a new `Arc` using the value produced by the given closure, which itself has access to a weak pointer to the data
-    pub fn new_cyclic<F: FnOnce(AWeak<T>) -> T>(fun: F, alloc: UseAlloc) -> Option<Self> {
-        let mut uninit = Self::try_new_uninit(alloc).expect("Failed to allocate memory");
+    pub fn new_cyclic<F: FnOnce(AWeak<T>) -> T>(fun: F, alloc: UseAlloc, mem_tag: MemTag) -> Option<Self> {
+        let mut uninit = Self::try_new_uninit(alloc, mem_tag).expect("Failed to allocate memory");
         uninit.inner().dec_strong();
         uninit.inner().inc_weak();
 
@@ -149,8 +172,8 @@ impl<T> Arc<T> {
     }
 
     /// Try to create a new `Arc` using the default allocator
-    pub fn try_new(x: T, alloc: UseAlloc) -> Option<Self> {
-        let mut uninit = Self::try_new_uninit(alloc);
+    pub fn try_new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Option<Self> {
+        let mut uninit = Self::try_new_uninit(alloc, mem_tag);
         match uninit {
             None => None,
             Some(mut uninit) => {
@@ -161,12 +184,13 @@ impl<T> Arc<T> {
     }
 
     /// Creates new `Arc` with an uninitialized value, using the default allocator
-    pub fn new_uninit(alloc: UseAlloc) -> Arc<MaybeUninit<T>> {
-        Self::try_new_uninit(alloc).expect("Failed to allocate memory")
+    #[inline]
+    pub fn new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Arc<MaybeUninit<T>> {
+        Self::try_new_uninit(alloc, mem_tag).expect("Failed to allocate memory")
     }
     /// Try to create a new `Arc` with an uninitialized value, using the default allocator
-    pub fn try_new_uninit(alloc: UseAlloc) -> Option<Arc<MaybeUninit<T>>> {
-        let ptr = MEMORY_MANAGER.alloc::<RcData<MaybeUninit<T>>>(alloc);
+    pub fn try_new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Option<Arc<MaybeUninit<T>>> {
+        let ptr = MEMORY_MANAGER.alloc::<RcData<MaybeUninit<T>>>(alloc, mem_tag);
         match ptr {
             None => None,
             Some(ptr) => Self::fill_uninit(ptr.cast())
@@ -415,14 +439,14 @@ unsafe impl<T: ?Sized> Sync for AWeak<T> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::alloc::UseAlloc;
+    use crate::alloc::{UseAlloc, MemTag};
 
     use super::{Arc, AWeak};
 
 
     #[test]
     fn new() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
 
         assert_eq!(Arc::strong_count(&rc), 1);
         assert_eq!(Arc::weak_count(&rc), 0);
@@ -431,7 +455,7 @@ mod tests {
 
     #[test]
     fn clone_drop() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
 
         {
             let rc2 = rc.clone();
@@ -446,7 +470,7 @@ mod tests {
 
     #[test]
     fn downgrade() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
 
         {
             let weak = Arc::downgrade(&rc);
@@ -471,7 +495,7 @@ mod tests {
 
     #[test]
     fn upgrade() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
         let weak = Arc::downgrade(&rc);
 
         let upgraded = weak.upgrade();
@@ -488,7 +512,7 @@ mod tests {
     fn cyclic() {
         let mut weak = AWeak::<u64>::new();
 
-        let rc = Arc::<u64>::new_cyclic(|wrc| { weak = wrc; 123 }, UseAlloc::Default).unwrap();
+        let rc = Arc::<u64>::new_cyclic(|wrc| { weak = wrc; 123 }, UseAlloc::Default, MemTag::default()).unwrap();
 
         assert_eq!(Arc::strong_count(&rc), 1);
         assert_eq!(Arc::weak_count(&rc), 1);
@@ -500,7 +524,7 @@ mod tests {
 
     #[test]
     fn unique_unwrap() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
 
         match Arc::try_unwrap(rc) {
             Ok(_) => {},
@@ -510,7 +534,7 @@ mod tests {
 
     #[test]
     fn non_unique_unwrap() {
-        let rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
         let rc2 = rc.clone();
 
         match Arc::try_unwrap(rc) {
@@ -521,7 +545,7 @@ mod tests {
 
     #[test]
     fn unique_get_mut() {
-        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
 
         match Arc::get_mut(&mut rc) {
             None => panic!(),
@@ -531,7 +555,7 @@ mod tests {
 
     #[test]
     fn non_unique_get_mut() {
-        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
         let rc2 = rc.clone();
 
         match Arc::get_mut(&mut rc) {
@@ -542,7 +566,7 @@ mod tests {
 
     #[test]
     fn non_unique_make_mut() {
-        let mut rc = Arc::<u64>::new(123, UseAlloc::Default);
+        let mut rc = Arc::<u64>::new(123, UseAlloc::Default, MemTag::default());
         let rc2 = rc.clone();
 
         Arc::make_mut(&mut rc);

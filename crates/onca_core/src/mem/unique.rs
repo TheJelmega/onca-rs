@@ -12,7 +12,7 @@ use core::{
     ptr::drop_in_place,
 };
 use std::{ops::CoerceUnsized, marker::Unsize, f32::consts::E};
-use crate::alloc::{Allocator, Allocation, Layout, UseAlloc};
+use crate::alloc::{Allocator, Allocation, Layout, UseAlloc, MemTag};
 use super::{MEMORY_MANAGER, HeapPtr};
 
 
@@ -21,37 +21,51 @@ pub struct Unique<T: ?Sized> {
 }
 
 impl<T: ?Sized> Unique<T> {
-
     /// Create a `Unique<T>` from an allocation
     /// 
     /// #Safety
     /// 
     /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
+    #[inline]
     pub unsafe fn from_raw(ptr: Allocation<T>) -> Self {
-        Unique { ptr: HeapPtr::<_>::from_raw(ptr) }
+        Unique { ptr: HeapPtr::from_raw(ptr) }
     }
     
     /// Pin the `Unique<T>`, if T does not implement 'Unpin', then x will be pinned in memory and unable to move
     // TODO(jel): if allocators would be able to defragment, this needs to notify it
+    #[inline]
     pub fn pin(this: Self) -> Pin<Unique<T>> {
-        unsafe { Pin::<_>::new_unchecked(this) }
+        unsafe { Pin::new_unchecked(this) }
     }
 
     /// Leak the underlying allocation
+    #[inline]
     pub fn leak(this: Self) -> Allocation<T> {
-        HeapPtr::<_>::leak(this.ptr)
+        HeapPtr::leak(this.ptr)
+    }
+
+    /// Get the layout
+    #[inline]
+    pub fn layout(this: &Self) -> Layout {
+        HeapPtr::layout(&this.ptr)
     }
 
     /// Get the allocator id
     #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
-        HeapPtr::<_>::allocator_id(&this.ptr)
+        HeapPtr::allocator_id(&this.ptr)
     }
 
-    // Get the allocator
+    /// Get the allocator
     #[inline]
     pub fn allocator(this: &Self) -> &mut dyn Allocator {
-        HeapPtr::<_>::allocator(&this.ptr)
+        HeapPtr::allocator(&this.ptr)
+    }
+
+    /// Get the memory tag
+    #[inline]
+    pub fn mem_tag(this: &Self) -> MemTag {
+        HeapPtr::mem_tag(&this.ptr)
     }
 }
 
@@ -59,14 +73,13 @@ impl<T> Unique<T> {
     
     /// Create a new `Unique<T>` using the given allocator
     #[inline]
-    pub fn new(x: T, alloc: UseAlloc) -> Self {
-        Self::try_new(x, alloc).expect("Failed to allocate memory")
+    pub fn new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self::try_new(x, alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `Unique<T>` using the given allocator
-    #[inline]
-    pub fn try_new(x: T, alloc: UseAlloc) -> Option<Self> {
-        let heap = HeapPtr::<T>::try_new(x, alloc);
+    pub fn try_new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Option<Self> {
+        let heap = HeapPtr::<T>::try_new(x, alloc, mem_tag);
         match heap {
             None => None,
             Some(ptr) => Some(Self{ ptr })
@@ -75,13 +88,13 @@ impl<T> Unique<T> {
 
     /// Creates new `Unique<T>` with an uninitialized value, using the given allocator
     #[inline]
-    pub fn new_uninit(alloc: UseAlloc) -> Unique<MaybeUninit<T>> {
-        Self::try_new_uninit(alloc).expect("Failed to allocate memory")
+    pub fn new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Unique<MaybeUninit<T>> {
+        Self::try_new_uninit(alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `Unique<T>` with an uninitialized value, using the given allocator
-    pub fn try_new_uninit(alloc: UseAlloc) -> Option<Unique<MaybeUninit<T>>> {
-        let ptr = HeapPtr::<T>::try_new_uninit(alloc);
+    pub fn try_new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Option<Unique<MaybeUninit<T>>> {
+        let ptr = HeapPtr::<T>::try_new_uninit(alloc, mem_tag);
         match ptr {
             None => None,
             Some(ptr) => {

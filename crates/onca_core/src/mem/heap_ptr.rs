@@ -11,9 +11,15 @@ use core::{
     pin::*,
     ptr::{drop_in_place, null},
 };
-use std::{ops::{CoerceUnsized}, marker::Unsize, ptr::NonNull};
-use crate::alloc::{Allocator, Allocation, Layout, UseAlloc};
-use super::MEMORY_MANAGER;
+use std::{
+    ops::{CoerceUnsized},
+    marker::Unsize,
+    ptr::NonNull
+};
+use crate::{
+    alloc::{Allocator, Allocation, Layout, UseAlloc, MemTag},
+    mem::MEMORY_MANAGER,
+};
 
 #[derive(Debug)]
 pub struct HeapPtr<T: ?Sized> {
@@ -39,8 +45,8 @@ impl<T: ?Sized> HeapPtr<T> {
     /// 
     /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
     #[inline]
-    pub unsafe fn from_raw_components(ptr: NonNull<T>, layout: Layout) -> Self {
-        HeapPtr { ptr: Allocation::from_raw(ptr, layout), _phantom: PhantomData }
+    pub unsafe fn from_raw_components(ptr: NonNull<T>, layout: Layout, mem_tag: MemTag) -> Self {
+        HeapPtr { ptr: Allocation::from_raw(ptr, layout, mem_tag), _phantom: PhantomData }
     }
 
     /// Cast a `HeapPtr` to another `HeapPtr` that holds a different type
@@ -77,6 +83,12 @@ impl<T: ?Sized> HeapPtr<T> {
         self.ptr.ptr_mut()
     }
 
+    /// Get the layout
+    #[inline]
+    pub fn layout(this: &Self) -> Layout {
+        this.ptr.layout()
+    }
+
     /// Get the allocator id
     #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
@@ -89,19 +101,25 @@ impl<T: ?Sized> HeapPtr<T> {
         let id = Self::allocator_id(this);
         unsafe { &mut *MEMORY_MANAGER.get_allocator(UseAlloc::Id(id)).unwrap() }
     }
+    
+    /// Get the memory tag
+    #[inline]
+    pub fn mem_tag(this: &Self) -> MemTag {
+        this.ptr.mem_tag()
+    }
 }
 
 impl<T> HeapPtr<T> {
     
     /// Create a new `HeapPtr<T>` using the given allocator
     #[inline]
-    pub fn new(x: T, alloc: UseAlloc) -> Self {
-        Self::try_new(x, alloc).expect("Failed to allocate memory")
+    pub fn new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self::try_new(x, alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `HeapPtr<T>` using the given allocator
-    pub fn try_new(x: T, alloc: UseAlloc) -> Option<Self> {
-        let uninit = Self::try_new_uninit(alloc);
+    pub fn try_new(x: T, alloc: UseAlloc, mem_tag: MemTag) -> Option<Self> {
+        let uninit = Self::try_new_uninit(alloc, mem_tag);
         match uninit {
             None => None,
             Some(uninit) => Some(HeapPtr::<MaybeUninit<T>>::write(uninit, x))
@@ -110,13 +128,13 @@ impl<T> HeapPtr<T> {
 
     /// Creates new `HeapPtr<T>` with an uninitialized value, using the given allocator
     #[inline]
-    pub fn new_uninit(alloc: UseAlloc) -> HeapPtr<MaybeUninit<T>> {
-        Self::try_new_uninit(alloc).expect("Failed to allocate memory")
+    pub fn new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> HeapPtr<MaybeUninit<T>> {
+        Self::try_new_uninit(alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `HeapPtr<T>` with an uninitialized value, using the given allocator
-    pub fn try_new_uninit(alloc: UseAlloc) -> Option<HeapPtr<MaybeUninit<T>>> {
-        let uninit = MEMORY_MANAGER.alloc::<MaybeUninit<T>>(alloc);
+    pub fn try_new_uninit(alloc: UseAlloc, mem_tag: MemTag) -> Option<HeapPtr<MaybeUninit<T>>> {
+        let uninit = MEMORY_MANAGER.alloc::<MaybeUninit<T>>(alloc, mem_tag);
         match uninit {
             None => None,
             Some(ptr) => Some(HeapPtr::<MaybeUninit<T>>{ ptr: ptr.cast(), _phantom: PhantomData })
@@ -125,20 +143,20 @@ impl<T> HeapPtr<T> {
 
     /// Creates new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
     #[inline]
-    pub fn new_uninit_slice(len: usize, alloc: UseAlloc) -> HeapPtr<[MaybeUninit<T>]> {
-        Self::try_new_uninit_slice(len, alloc).expect("Failed to allocate memory")
+    pub fn new_uninit_slice(len: usize, alloc: UseAlloc, mem_tag: MemTag) -> HeapPtr<[MaybeUninit<T>]> {
+        Self::try_new_uninit_slice(len, alloc, mem_tag).expect("Failed to allocate memory")
     }
 
     /// Try to create a new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
-    pub fn try_new_uninit_slice(len: usize, alloc: UseAlloc) -> Option<HeapPtr<[MaybeUninit<T>]>> {
+    pub fn try_new_uninit_slice(len: usize, alloc: UseAlloc, mem_tag: MemTag) -> Option<HeapPtr<[MaybeUninit<T>]>> {
         let layout = Layout::array::<MaybeUninit<T>>(len);
-        let uninit = MEMORY_MANAGER.alloc_raw(alloc, layout);
+        let uninit = MEMORY_MANAGER.alloc_raw(alloc, layout, mem_tag);
         unsafe {
             match uninit {
                 None => None,
                 Some(ptr) => {
                     let mem = core::slice::from_raw_parts_mut(ptr.ptr_mut() as *mut MaybeUninit<T>, len);
-                    Some(HeapPtr::<[MaybeUninit<T>]>{ ptr: Allocation::from_raw(NonNull::new_unchecked(mem), *ptr.layout()), _phantom: PhantomData })
+                    Some(HeapPtr::<[MaybeUninit<T>]>{ ptr: ptr.with_ptr(mem), _phantom: PhantomData })
                 }
             }
         }
@@ -312,7 +330,7 @@ impl<T: ?Sized> Drop for HeapPtr<T> {
 
 impl<T: Clone> Clone for HeapPtr<T> {
     fn clone(&self) -> Self {
-        let new = Self::new_uninit(UseAlloc::Id(HeapPtr::<_>::allocator_id(self)));
+        let new = Self::new_uninit(UseAlloc::Id(Self::allocator_id(self)), Self::mem_tag(self));
         HeapPtr::<_>::write(new, self.as_ref().clone())
     }
 

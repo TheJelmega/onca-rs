@@ -10,7 +10,7 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self}, KiB, mem::{MEMORY_MANAGER, HeapPtr}};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag}, KiB, mem::{MEMORY_MANAGER, HeapPtr}};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -45,14 +45,14 @@ impl<T> DynamicBuffer<T> {
         1
     };
 
-    fn allocate(capacity: usize, init: AllocInit, alloc: UseAlloc) -> Self {
+    fn allocate(capacity: usize, init: AllocInit, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         if mem::size_of::<T>() == 0 || capacity == 0 {
-            Self::new(alloc)
+            Self::new(alloc, mem_tag)
         } else {
             let layout = Layout::array::<T>(capacity);
             let res = match init {
-                AllocInit::Uninitialized => MEMORY_MANAGER.alloc_raw(alloc, layout),
-                AllocInit::Zeroed => MEMORY_MANAGER.alloc_raw_zeroed(alloc, layout),
+                AllocInit::Uninitialized => MEMORY_MANAGER.alloc_raw(alloc, layout, mem_tag),
+                AllocInit::Zeroed => MEMORY_MANAGER.alloc_raw_zeroed(alloc, layout, mem_tag),
             };
             let ptr = match res {
                 Some(ptr) => ptr,
@@ -106,7 +106,7 @@ impl<T> DynamicBuffer<T> {
 
     pub fn finish_grow(&mut self, new_layout: Layout, new_cap: usize) -> Result<usize, std::collections::TryReserveError> {
         if self.cap == 0 {
-            let res = MEMORY_MANAGER.alloc_raw(UseAlloc::Id(self.ptr.layout().alloc_id()), new_layout);
+            let res = MEMORY_MANAGER.alloc_raw(UseAlloc::Id(self.allocator_id()), new_layout, self.mem_tag());
             self.ptr = match res {
                 Some(ptr) => ptr.cast(),
                 None => {
@@ -132,16 +132,16 @@ impl<T> DynamicBuffer<T> {
 }
 
 impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
-    fn new(alloc: UseAlloc) -> Self {
-        Self { ptr: unsafe { Allocation::null_alloc(alloc) }, cap: 0 }
+    fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self { ptr: unsafe { Allocation::null_alloc_tag(alloc, mem_tag) }, cap: 0 }
     }
 
-    fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self::allocate(capacity, AllocInit::Uninitialized, alloc)
+    fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self::allocate(capacity, AllocInit::Uninitialized, alloc, mem_tag)
     }
 
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc) -> Self {
-        Self::allocate(capacity, AllocInit::Zeroed, alloc)
+    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self::allocate(capacity, AllocInit::Zeroed, alloc, mem_tag)
     }
 
     fn reserve(&mut self, len: usize, additional: usize) -> usize {
@@ -207,8 +207,16 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
         self.ptr.ptr_mut()
     }
 
+    fn layout(&self) -> Layout {
+        self.ptr.layout()
+    }
+
     fn allocator_id(&self) -> u16 {
         self.ptr.layout().alloc_id()
+    }
+
+    fn mem_tag(&self) -> MemTag {
+        self.ptr.mem_tag()
     }
 }
 
@@ -228,14 +236,14 @@ pub struct DynArray<T> (imp::DynArray<T, DynamicBuffer<T>>);
 impl<T> DynArray<T> {
     #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::new(alloc))
+    pub fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::new(alloc, mem_tag))
     }
 
     #[inline]
     #[must_use]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::with_capacity(capacity, alloc))
+    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::with_capacity(capacity, alloc, mem_tag))
     }
 
     #[inline]
@@ -419,8 +427,21 @@ impl<T> DynArray<T> {
     }
 
     #[inline]
+    #[must_use]
+    pub fn layout(&self) -> Layout {
+        self.0.layout()
+    }
+
+    #[inline]
+    #[must_use]
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator_id()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn mem_tag(&self) -> MemTag {
+        self.0.mem_tag()
     }
 
     #[inline]
@@ -430,13 +451,13 @@ impl<T> DynArray<T> {
             let slice_len = me.capacity();
             let alloc = &mut me.0.buf.ptr;
             let ptr = slice::from_raw_parts_mut(alloc.ptr_mut(), slice_len);
-            HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), *alloc.layout())
+            HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), alloc.layout(), alloc.mem_tag())
         }
     }
 
     /// Create a `DynArray` from an iterator and an allocator
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
-        Self(imp::DynArray::from_iter(iter, alloc))
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        Self(imp::DynArray::from_iter(iter, alloc, mem_tag))
     }
 }
 
@@ -825,12 +846,12 @@ pub trait SliceToDynArray<T: Clone> {
 
 impl<T: Clone> SliceToDynArray<T> for [T] {
     default fn to_static_dynarray(&self) -> DynArray<T> {
-        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default))
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default, MemTag::default()))
     }
 }
 
 impl<T: Copy> SliceToDynArray<T> for [T] {
     fn to_static_dynarray(&self) -> DynArray<T> {
-        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default))
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default, MemTag::default()))
     }
 }

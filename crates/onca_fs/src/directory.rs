@@ -4,7 +4,7 @@ use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
 
 /// Returns the if the given path is valid and points to a directory
 pub fn exists<P: AsRef<Path>>(path: P, temp_alloc: UseAlloc) -> bool {
-    let entry = Entry::new(path.as_ref().to_path_buf(temp_alloc));
+    let entry = Entry::new(path.as_ref().to_path_buf(temp_alloc), temp_alloc);
     match entry {
         Some(entry) => entry.file_type(temp_alloc) == FileType::Directory,
         None => false

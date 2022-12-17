@@ -1,5 +1,8 @@
-use crate::mem::MEMORY_MANAGER;
-use crate::{alloc::*, sync::Mutex};
+use crate::{
+    mem::MEMORY_MANAGER,
+    sync::Mutex,
+    alloc::*, 
+};
 
 /// Bitmap allocator
 /// 
@@ -81,7 +84,7 @@ impl BitmapAllocator {
 }
 
 impl Allocator for BitmapAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
 
         let blocks_needed = (layout.size() + self.block_size - 1) / self.block_size;
         if blocks_needed >= self.num_blocks {
@@ -115,8 +118,9 @@ impl Allocator for BitmapAllocator {
             // If we get here, we found a space
             Self::mark_bits(buffer, i, blocks_needed, true);
 
-            let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size); 
-            return Some(Allocation::<_>::new(ptr, layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id)));
+            let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size);
+            let layout = layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id);
+            return Some(Allocation::<_>::new(ptr, layout, mem_tag));
         }
         None
     }
@@ -147,17 +151,16 @@ impl Allocator for BitmapAllocator {
 }
 
 impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
-    fn new_composable(alloc: &mut dyn Allocator, args: (usize, usize)) -> Self {
+    fn new_composable(alloc: &mut dyn Allocator, args: (usize, usize), mem_tag: MemTag) -> Self {
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
-        let buffer = unsafe { alloc.alloc(Layout::new_size_align(buffer_size, 8)).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { alloc.alloc(Layout::new_size_align(buffer_size, 8), mem_tag).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, args.0, args.1)
     }
 }
 
 impl Drop for BitmapAllocator {
     fn drop(&mut self) {
-        let dealloc_ptr = Allocation::<u8>::new(self.buffer.ptr_mut(), *self.buffer.layout());
-        MEMORY_MANAGER.dealloc(dealloc_ptr);
+        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::null() }));
     }
 }
 
@@ -165,7 +168,7 @@ unsafe impl Sync for BitmapAllocator {}
 
 #[cfg(test)]
 mod tests {
-    use crate::alloc::{*, primitives::*};
+    use crate::alloc::{*, primitives::*, mem_tag::MemTag};
 
     #[test]
     fn alloc_dealloc() {
@@ -175,11 +178,11 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
             alloc.dealloc(ptr);
         }
     }
@@ -192,13 +195,13 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::Test.to_mem_tag()).unwrap();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);
@@ -214,20 +217,20 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
 
             let raw0 = ptr0.ptr();
 
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::Test.to_mem_tag()).unwrap();
 
             alloc.dealloc(ptr0);
 
-            let new_ptr = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let new_ptr = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
             assert_eq!(raw0, new_ptr.ptr());
         }
     }
@@ -240,11 +243,11 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new_size_align(buffer_size, 8));
+            let ptr = alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag());
             match ptr {
                 None => {},
                 Some(_) => panic!()
@@ -260,23 +263,23 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         struct Large { a: u64, b: u64 }
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<Large>()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<Large>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
 
             let raw_ptr0 = ptr0.ptr();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);
 
-            let ptr4 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr5 = alloc.alloc(Layout::new::<Large>()).unwrap();
+            let ptr4 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr5 = alloc.alloc(Layout::new::<Large>(), CoreMemTag::Test.to_mem_tag()).unwrap();
 
             assert!(ptr4.ptr() == raw_ptr0);
             assert!(ptr5.ptr() == raw_ptr0.add(8));

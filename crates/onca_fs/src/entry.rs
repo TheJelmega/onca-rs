@@ -12,9 +12,13 @@ pub struct Entry {
 
 impl Entry {
     /// Create new entry if the given path points towards a valid location.
-    pub fn new(path: PathBuf) -> Option<Entry> {
-        // TODO: validate path
-        Some(Entry { path }) 
+    pub fn new(path: PathBuf, temp_alloc: UseAlloc) -> Option<Entry> {
+        let entry = Entry { path };
+        if entry.file_type(temp_alloc) == FileType::Unknown {
+            None
+        } else {
+            Some(entry)
+        }
     }
 
     /// Create a new entry without validating that it points towards a valid location.
@@ -47,7 +51,7 @@ impl Entry {
 pub struct EntryIter {
     path       : PathBuf,
     handle     : EntrySearchHandle,
-    temp_alloc : UseAlloc
+    temp_alloc : UseAlloc,
 }
 
 impl EntryIter {

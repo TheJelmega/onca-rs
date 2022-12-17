@@ -1,5 +1,5 @@
 use core::fmt;
-use crate::{io::{self, buffered::linewritershim, BufWriter, IntoInnerError, IoSlice, Write}, alloc::UseAlloc};
+use crate::{io::{self, buffered::linewritershim, BufWriter, IntoInnerError, IoSlice, Write}, alloc::{UseAlloc, MemTag}};
 
 use super::linewritershim::LineWriterShim;
 
@@ -20,14 +20,14 @@ pub struct LineWriter<W: Write> {
 impl<W: Write> LineWriter<W> {
     
     /// Creates a new `LineWriter`
-    pub fn new(inner: W, alloc: UseAlloc) -> Self {
+    pub fn new(inner: W, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         // Lines typically aren't that long, don't use a giant buffer
-        Self::with_capacity(inner, 1024, alloc)
+        Self::with_capacity(inner, 1024, alloc, mem_tag)
     }
 
     /// Creates a new `LineWriter` with at least the specified capacity for the internal buffer.
-    pub fn with_capacity(inner: W, capacity: usize, alloc: UseAlloc) -> Self {
-        LineWriter { inner: BufWriter::with_capacity(inner, capacity, alloc) }
+    pub fn with_capacity(inner: W, capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+        LineWriter { inner: BufWriter::with_capacity(inner, capacity, alloc, mem_tag) }
     }
 
     /// Get a reference to the underlying writer

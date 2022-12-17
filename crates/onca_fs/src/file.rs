@@ -3,7 +3,6 @@ use onca_core_macros::flags;
 
 use crate::{Path, os::os_imp, Permission, PathBuf};
 
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum OpenMode {
     /// Create a file if one does not exists, otherwise just open it
@@ -155,7 +154,7 @@ impl io::Seek for File {
         self.handle.seek(pos)
     }
 }
-
+ 
 /// Deletes a file.
 /// 
 /// Note: the file will keep existing until the last handle to it has been closed
