@@ -42,15 +42,25 @@ pub enum UseAlloc {
     Default,
     /// Use the system allocator
     Malloc,
+    /// Use a thead local temporary allocator (1MiB per thread, maximum alignment of 16-bytes).
+    /// 
+    /// Note: Uses a stack allocator, so allocations need to be deallocated in the reverse order of allocation.
+    TlsTemp,
     /// Use the allocator associated with the given id
     Id(u16)
 }
+
+/// Reserved allocs IDs
+/// - 0: Malloc
+/// - 1: Tls Temporary
+pub const NUM_RESERVED_ALLOC_IDS : u16 = 2;
 
 impl UseAlloc {
     pub const fn get_id(&self) -> u16 {
         match self {
             UseAlloc::Default => Layout::MAX_ALLOC_ID,
             UseAlloc::Malloc => 0,
+            Self::TlsTemp => 1,
             UseAlloc::Id(id) => *id,
         }
     }

@@ -78,7 +78,7 @@ impl Layout {
 
     /// Get a 0-size layout
     #[inline]
-    pub fn null() -> Self
+    pub const fn null() -> Self
     {
         Self { packed: 0 }
     }

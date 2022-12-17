@@ -1,4 +1,7 @@
-use core::mem::size_of;
+use core::{
+    mem::size_of,
+    ptr::{null, null_mut},
+};
 use crate::{alloc::{Allocation, Allocator, Layout, MemTag}, mem::MEMORY_MANAGER};
 
 /// Linear/Bump allocator
@@ -14,6 +17,11 @@ pub struct StackAllocator {
 }
 
 impl StackAllocator {
+    /// Create a uninitialized stack allocator
+    pub const fn new_uninit(max_align: u16) -> Self {
+        Self { max_align, buffer: unsafe { Allocation::null() }, head: null_mut(), end: null_mut(), id: 0 }
+    }
+
     /// Create a new stack allocator from a buffer and a maximum alignment for allocations
     pub fn new(mut buffer: Allocation<u8>, max_align: u16) -> Self
     {
@@ -24,14 +32,31 @@ impl StackAllocator {
 
         Self { max_align, buffer, head, end, id: 0 }
     }
+
+    /// Initialized an unitialized stack allocator
+    pub fn init(&mut self, buffer: Allocation<u8>) {
+        self.buffer = buffer;
+        self.head = self.buffer.ptr_mut();
+        self.end = unsafe {
+            self.buffer.ptr_mut().add(Allocation::<u8>::layout(&self.buffer).size())
+        };
+    }
+
     /// Reset the linear allocator to its empty state
     pub fn reset(&mut self) {
         self.head = Allocation::<u8>::ptr_mut(&mut self.buffer);
+    }
+
+    /// Check if the allocator is initialized
+    pub fn is_initialized(&self) -> bool {
+        self.buffer.ptr() != null()
     }
 }
 
 impl Allocator for StackAllocator {
     unsafe fn alloc(&mut self, mut layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+        assert!(self.is_initialized(), "Trying to allocate memory using an uninitialized stack allocator");
+
         if layout.align() > self.max_align as usize {
             // Layout exceeds allocator's maximum alignment
             return None;

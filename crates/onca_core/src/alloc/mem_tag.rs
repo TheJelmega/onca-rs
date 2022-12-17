@@ -100,7 +100,7 @@ impl MemTag {
     pub const USER_CATEGORY_BIT : u8 = 0x80;
 
     /// Create a new memory tag
-    pub fn new(plugin_id: u16, category: u8, sub_category: u8, utid: u32) -> Self {
+    pub const fn new(plugin_id: u16, category: u8, sub_category: u8, utid: u32) -> Self {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {
                 Self { packed: 
@@ -219,11 +219,15 @@ impl MemTag {
     pub fn is_user_category(&self) -> bool {
         self.category() & Self::USER_CATEGORY_BIT == Self::USER_CATEGORY_BIT
     }
+
+    pub const fn unknown(plugin_id: u16) -> Self {
+        Self::new(plugin_id & Self::MAX_PLUGIN_ID, 0, 0, 0)
+    }
 }
 
 impl Default for MemTag {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0)
+        Self::unknown(0)
     }
 }
 
@@ -256,6 +260,7 @@ pub enum CoreMemTag {
     String,
     Sync,
     Allocators,
+    TlsTempAlloc,
 
     StdCollections,
     Test,

@@ -158,30 +158,20 @@ impl<T> Allocation<T>
     /// 
     /// This function is meant for internal use, calling anything using it is UB
     #[inline]
-    pub unsafe fn null() -> Self {
-        Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null(), mem_tag: MemTag::default() }
+    pub const unsafe fn null() -> Self {
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null(), mem_tag: MemTag::unknown(0) }
     }
 
     
     /// Create a null heap pointer that store an allocator id for future use
     pub unsafe fn null_alloc(alloc: UseAlloc) -> Self {
-        let mut layout = Layout::null();
-        match alloc {
-            UseAlloc::Default => layout = layout.with_alloc_id(Layout::MAX_ALLOC_ID),
-            UseAlloc::Malloc => layout = layout.with_alloc_id(0),
-            UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
-        }
+        let layout = Layout::null().with_alloc_id(alloc.get_id());
         Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag: MemTag::default() }
     }
 
     /// Create a null heap pointer that store an allocator id and memory tag for future use
     pub unsafe fn null_alloc_tag(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        let mut layout = Layout::null();
-        match alloc {
-            UseAlloc::Default => layout = layout.with_alloc_id(Layout::MAX_ALLOC_ID),
-            UseAlloc::Malloc => layout = layout.with_alloc_id(0),
-            UseAlloc::Id(id) => layout = layout.with_alloc_id(id)
-        }
+        let layout = Layout::null().with_alloc_id(alloc.get_id());
         Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag }
     }
 }

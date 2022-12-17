@@ -1,10 +1,20 @@
-use core::{cell::UnsafeCell, ptr::{write_bytes, copy_nonoverlapping}};
-use std::{borrow::BorrowMut, io};
+use core::{
+    cell::{UnsafeCell, Cell},
+    ptr::{write_bytes, copy_nonoverlapping},
+    borrow::BorrowMut
+};
 use crate::{
-    alloc::{Allocator, Allocation, Layout, primitives::Mallocator, UseAlloc, MemTag},
-    sync::RwLock
+    alloc::{
+        Allocator, Allocation, Layout, UseAlloc, MemTag,
+        primitives::{Mallocator, StackAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS,
+    },
+    sync::RwLock, MiB
 };
 use once_cell::sync::Lazy;
+
+thread_local! {
+    pub static TLS_TEMP_STACK_ALLOC : UnsafeCell<StackAllocator> = UnsafeCell::new(StackAllocator::new_uninit(16));
+}
 
 pub static MEMORY_MANAGER : MemoryManager = MemoryManager::new();
 
@@ -20,35 +30,36 @@ pub enum AllocInitState {
 struct State
 {
     malloc : Mallocator,
-    allocs : [Option<*mut dyn Allocator>; Layout::MAX_ALLOC_ID as usize],
+    allocs : [Option<*mut dyn Allocator>; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize],
 }
 
 impl State {
-    
     const fn new() -> Self {
         Self{ 
             malloc: Mallocator,
-            allocs: [None; Layout::MAX_ALLOC_ID as usize]
+            allocs: [None; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize]
         }
     }
 }
 
 /// Memory manager
-// TODO: Extended tags
 pub struct MemoryManager
 {
     state : RwLock<State>
 }
 
 impl MemoryManager {
+    /// Maximum number of registerable allocators
+    pub const MAX_REGISTERABLE_ALLOCS : u16 = Layout::MAX_ALLOC_ID - NUM_RESERVED_ALLOC_IDS - 1; // - 1 for default alloc ID
+
     /// Create a new memory manager
     pub const fn new() -> Self {
         Self { state: RwLock::new(State::new()) }
     }
 
     /// Register an allocator to the manager and set its allocator id
-    pub fn register_allocator(&self, alloc: *mut dyn Allocator) {
-        let mut id : u16 = 0;
+    pub fn register_allocator(&self, alloc: *mut dyn Allocator) -> u16 {
+        let mut id : u16 = NUM_RESERVED_ALLOC_IDS;
         {
             let state = self.state.read();
             for (i, alloc) in state.allocs.into_iter().enumerate() {
@@ -63,6 +74,7 @@ impl MemoryManager {
             unsafe { (*alloc).set_alloc_id(id) };
             state.allocs[id as usize] = Some(alloc);
         }
+        id + NUM_RESERVED_ALLOC_IDS
     }
 
     /// Get an allocator
@@ -72,6 +84,19 @@ impl MemoryManager {
             // TODO(jel): default alloc is not always the mallocator
             UseAlloc::Default => Some(unsafe { &state.malloc }),
             UseAlloc::Malloc => Some(& state.malloc),
+            UseAlloc::TlsTemp => unsafe {
+                let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
+                if !is_init {
+                    let layout = Layout::new_raw(MiB(1), UseAlloc::Malloc.get_id(), 8);
+                    let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Malloc, layout, CoreMemTag::TlsTempAlloc.to_mem_tag());
+                    let buffer = match buffer {
+                        None => return None,
+                        Some(buf) => buf
+                    };
+                    TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).init(buffer));
+                }
+                Some(&mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()))
+            },
             UseAlloc::Id(id) => {
                 if id == 0 {
                     // TODO(jel): default alloc is not always the mallocator
@@ -79,7 +104,7 @@ impl MemoryManager {
                 } else if id >= Layout::MAX_ALLOC_ID {
                     Some(&state.malloc)
                 } else {
-                    match state.allocs[id as usize] {
+                    match state.allocs[(id - NUM_RESERVED_ALLOC_IDS) as usize] {
                         None => None,
                         Some(alloc) => Some(unsafe{ &*alloc })
                     }
@@ -187,7 +212,7 @@ impl MemoryManager {
         }
 
         // TODO(jel): should these be asserts or just return an Err
-        assert!(new_layout.size() < ptr.layout().size(), "new size needs to be larger that the current size");
+        assert!(new_layout.size() < ptr.layout().size(), "new size needs to be smaller that the current size");
 
         match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
             Some(mem) => unsafe {
