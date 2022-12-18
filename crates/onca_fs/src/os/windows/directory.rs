@@ -13,22 +13,22 @@ use windows::{
 use crate::{Path, FsMemTag};
 use super::path_to_null_terminated_utf16;
 
-pub(crate) fn create(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
+pub(crate) fn create(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
         create_dir(pcwstr)
     }
 }
 
-pub(crate) fn create_recursive(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
+pub(crate) fn create_recursive(path: &Path) -> io::Result<()> {
     unsafe {
-        let mut parent_paths = SmallDynArray::<_, 8>::new(temp_alloc, FsMemTag::Temporary.to_mem_tag());
+        let mut parent_paths = SmallDynArray::<_, 8>::new(UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         for component in path.ancestors() {
             parent_paths.push(component);
         }
 
         for cur_dir in parent_paths.into_iter().rev() {
-            let (_buf, pcwstr) = path_to_null_terminated_utf16(cur_dir, temp_alloc);
+            let (_buf, pcwstr) = path_to_null_terminated_utf16(cur_dir);
             create_dir(pcwstr)?;
         }
         Ok(())
@@ -49,9 +49,9 @@ unsafe fn create_dir(pcwstr: PCWSTR) -> io::Result<()> {
     }
 }
 
-pub(crate) fn remove(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
+pub(crate) fn remove(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_but, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_but, pcwstr) = path_to_null_terminated_utf16(path);
         let res = RemoveDirectoryW(pcwstr).as_bool();
         if res {
             Ok(())

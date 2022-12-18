@@ -12,9 +12,9 @@ pub struct Entry {
 
 impl Entry {
     /// Create new entry if the given path points towards a valid location.
-    pub fn new(path: PathBuf, temp_alloc: UseAlloc) -> Option<Entry> {
+    pub fn new(path: PathBuf) -> Option<Entry> {
         let entry = Entry { path };
-        if entry.file_type(temp_alloc) == FileType::Unknown {
+        if entry.file_type() == FileType::Unknown {
             None
         } else {
             Some(entry)
@@ -32,13 +32,13 @@ impl Entry {
     }
 
     /// Retrieves the metadata associated with the entry
-    pub fn metadata(&self, temp_alloc: UseAlloc) -> Metadata {
-        os_imp::entry::get_entry_meta(&self.path, temp_alloc).unwrap_or_default()
+    pub fn metadata(&self) -> Metadata {
+        os_imp::entry::get_entry_meta(&self.path).unwrap_or_default()
     }
 
     /// Retieves the file type of the entry
-    pub fn file_type(&self, temp_alloc: UseAlloc) -> FileType {
-        os_imp::entry::get_entry_file_type(&self.path, temp_alloc)
+    pub fn file_type(&self) -> FileType {
+        os_imp::entry::get_entry_file_type(&self.path)
     }
 
     /// Returns the file name of the entry
@@ -51,7 +51,6 @@ impl Entry {
 pub struct EntryIter {
     path       : PathBuf,
     handle     : EntrySearchHandle,
-    temp_alloc : UseAlloc,
 }
 
 impl EntryIter {
@@ -64,7 +63,7 @@ impl EntryIter {
     fn _new(path: &Path, alloc: UseAlloc) -> Option<EntryIter> {
         let handle = EntrySearchHandle::new(path, alloc);
         match handle {
-            Ok((handle, path)) => Some(EntryIter { path, handle, temp_alloc: alloc }),
+            Ok((handle, path)) => Some(EntryIter { path, handle }),
             Err(_) => None,
         }
     }
@@ -80,7 +79,7 @@ impl Iterator for EntryIter {
 
         let path = core::mem::take(&mut self.path);
         let entry = unsafe { Entry::new_unchecked(path.clone()) };
-        let next = self.handle.next(path, self.temp_alloc);
+        let next = self.handle.next(path);
         if let Some(next_path) = next {
             self.path = next_path;
         }

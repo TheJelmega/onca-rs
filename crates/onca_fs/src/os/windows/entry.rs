@@ -42,7 +42,7 @@ pub(crate) struct EntrySearchHandle(FindFileHandle);
 impl EntrySearchHandle {
     pub(crate) fn new(path: &Path, alloc: UseAlloc) -> io::Result<(EntrySearchHandle, PathBuf)> {
         unsafe{
-            let (mut buf, _pcwstr) = path_to_null_terminated_utf16(path, alloc);
+            let (mut buf, _pcwstr) = path_to_null_terminated_utf16(path);
             buf.pop();
             buf.push('/' as u16);
             buf.push('*' as u16);
@@ -75,11 +75,11 @@ impl EntrySearchHandle {
         }        
     }
 
-    pub(crate) fn next(&self, mut path: PathBuf, temp_alloc: UseAlloc) -> Option<PathBuf> {
+    pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
         let mut find_data = WIN32_FIND_DATAW::default();
         if unsafe { FindNextFileW(self.0, &mut find_data).as_bool() } {
             let mut it = find_data.cFileName.split(|&c| c == 0);
-            let file_name = String::from_utf16_lossy(it.next().unwrap(), temp_alloc, FsMemTag::Path.to_mem_tag());
+            let file_name = String::from_utf16_lossy(it.next().unwrap(), UseAlloc::TlsTemp, FsMemTag::Path.to_mem_tag());
             path.set_file_name(file_name);
             Some(path)
         } else {
@@ -97,9 +97,9 @@ impl Drop for EntrySearchHandle {
     }
 }
 
-pub(crate) fn get_entry_meta(path: &Path, temp_alloc: UseAlloc) -> io::Result<Metadata> {
+pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
         let res = GetFileAttributesExW(pcwstr, GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
@@ -126,7 +126,7 @@ pub(crate) fn get_entry_meta(path: &Path, temp_alloc: UseAlloc) -> io::Result<Me
                 FileType::File
             };
 
-        let permissions = get_permissions_pcwstr(pcwstr, temp_alloc);
+        let permissions = get_permissions_pcwstr(pcwstr);
 
         // Open file to get remaining data
         let handle = CreateFileW(
@@ -172,7 +172,7 @@ pub(crate) fn get_entry_meta(path: &Path, temp_alloc: UseAlloc) -> io::Result<Me
             last_write_time: high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime),
             file_size: high_low_to_u64(win32_attribs.nFileSizeHigh, win32_attribs.nFileSizeLow),
             alloc_size,
-            compressed_size: file::get_compressed_size(path, temp_alloc).unwrap_or_default(),
+            compressed_size: file::get_compressed_size(path).unwrap_or_default(),
             num_links,
             min_align,
             volume_file_id,
@@ -180,7 +180,7 @@ pub(crate) fn get_entry_meta(path: &Path, temp_alloc: UseAlloc) -> io::Result<Me
     }
 }
 
-fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
+fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
     unsafe {
         // Get the SID of the current user, we will use this later to get the correct file permissions for the user
 
@@ -209,10 +209,10 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
             return Permission::None;
         }
 
-        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
+        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         sid_buf.set_len(sid_len as usize);
 
-        let mut domain_buf = DynArray::<u16>::with_capacity(domain_len as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
+        let mut domain_buf = DynArray::<u16>::with_capacity(domain_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         domain_buf.set_len(domain_len as usize);
 
         let res = LookupAccountNameW(
@@ -238,7 +238,7 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
             return Permission::None;
         }
         
-        let mut buf = DynArray::<u8>::with_capacity(needed as usize, temp_alloc, FsMemTag::Temporary.to_mem_tag());
+        let mut buf = DynArray::<u8>::with_capacity(needed as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         buf.set_len(needed as usize);
         let sec_desc_ptr = PSECURITY_DESCRIPTOR(buf.as_mut_ptr() as *mut c_void);
         let res = GetFileSecurityW(pcwstr, requested_info, sec_desc_ptr, needed, &mut needed);
@@ -312,9 +312,9 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR, temp_alloc: UseAlloc) -> Permission {
 
 }
 
-pub(crate) fn get_entry_file_type(path: &Path, temp_alloc: UseAlloc) -> FileType {
+pub(crate) fn get_entry_file_type(path: &Path) -> FileType {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
         let res = GetFileAttributesExW(pcwstr, GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
@@ -337,9 +337,3 @@ pub(crate) fn get_entry_file_type(path: &Path, temp_alloc: UseAlloc) -> FileType
         }
     }
 }
-
-/*
-pub(crate) fn get_file_type_from_handle(handle: EntrySearchHandle) {
-
-}
-*/

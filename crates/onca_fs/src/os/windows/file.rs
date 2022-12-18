@@ -32,9 +32,9 @@ use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::M
 
 use super::{path_to_null_terminated_utf16, INVALID_FILE_SIZE, high_low_to_u64};
 
-pub(crate) fn get_compressed_size(path: &Path, temp_alloc: UseAlloc) -> io::Result<u64> {
+pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
 
         let mut high = 0;
         let low = GetCompressedFileSizeW(pcwstr, Some(&mut high));
@@ -51,9 +51,9 @@ pub(crate) fn get_compressed_size(path: &Path, temp_alloc: UseAlloc) -> io::Resu
     }
 } 
 
-pub(crate) fn delete(path: &Path, temp_alloc: UseAlloc) -> io::Result<()> {
+pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path, temp_alloc);
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
         let res = DeleteFileW(pcwstr).as_bool();
         if res {
             Ok(())
@@ -68,7 +68,7 @@ pub struct FileHandle(HANDLE);
 impl FileHandle {
     pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc, open_link: bool, temporary: bool) -> io::Result<(FileHandle, PathBuf)> {
         unsafe {
-            let (mut buf, pcwstr) = path_to_null_terminated_utf16(path, alloc);
+            let (mut buf, pcwstr) = path_to_null_terminated_utf16(path);
             let mut path_buf = path.to_path_buf(alloc);
 
             if temporary {

@@ -99,12 +99,12 @@ pub struct VolumeInfo {
 /// Retrieve the drive info for the given root
 /// 
 /// Returns `None` if the path is not a valid drive root, returns the drive's info otherwise
-pub fn get_drive_info(path: PathBuf, temp_alloc: UseAlloc) -> Option<DriveInfo> {
-    os_imp::drive_volume::get_drive_info(path, temp_alloc)
+pub fn get_drive_info(path: PathBuf) -> Option<DriveInfo> {
+    os_imp::drive_volume::get_drive_info(path)
 }
 
-pub fn get_drive_type(path: PathBuf, temp_alloc: UseAlloc) -> DriveType {
-    os_imp::drive_volume::get_drive_type(path, temp_alloc)
+pub fn get_drive_type(path: PathBuf) -> DriveType {
+    os_imp::drive_volume::get_drive_type(path)
 }
 
 /// Retrieve the drive info for all available drives

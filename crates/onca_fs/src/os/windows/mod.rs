@@ -59,8 +59,8 @@ pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-fn path_to_null_terminated_utf16(path: &Path, temp_alloc: UseAlloc) -> (DynArray<u16>, PCWSTR) {
-    let mut buf = DynArray::from_iter(path.as_str().encode_utf16(), temp_alloc, FsMemTag::Temporary.to_mem_tag());
+fn path_to_null_terminated_utf16(path: &Path) -> (DynArray<u16>, PCWSTR) {
+    let mut buf = DynArray::from_iter(path.as_str().encode_utf16(), UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
     buf.push(0);
     let pcwstr = PCWSTR(buf.as_ptr());
     (buf, pcwstr)

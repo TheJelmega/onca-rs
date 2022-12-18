@@ -19,14 +19,14 @@ use windows::{
 use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, FsMemTag};
 use super::{MAX_PATH, path_to_null_terminated_utf16};
 
-pub fn get_drive_info(path: PathBuf, temp_alloc: UseAlloc) -> Option<DriveInfo> {
-    let (buf, _) = path_to_null_terminated_utf16(&path, temp_alloc);
+pub fn get_drive_info(path: PathBuf) -> Option<DriveInfo> {
+    let (buf, _) = path_to_null_terminated_utf16(&path);
     get_drive_info_utf16(path, &*buf)
 }
 
-pub fn get_drive_type(path: PathBuf, temp_alloc: UseAlloc) -> DriveType {
+pub fn get_drive_type(path: PathBuf) -> DriveType {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(&path, temp_alloc); 
+        let (_buf, pcwstr) = path_to_null_terminated_utf16(&path); 
         let drive_type = GetDriveTypeW(pcwstr);
         mem::transmute_copy(&drive_type)
     }
@@ -100,7 +100,7 @@ fn get_drive_info_utf16(path: PathBuf, utf16: &[u16]) -> Option<DriveInfo> {
 }
 
 pub fn get_volume_info(path: PathBuf, alloc: UseAlloc) -> Option<VolumeInfo> {
-    let (buf, _) = path_to_null_terminated_utf16(&path, alloc);
+    let (buf, _) = path_to_null_terminated_utf16(&path);
     get_volume_info_utf16(path, &*buf, alloc)
 }
 
@@ -122,7 +122,7 @@ pub fn get_all_volume_info(alloc: UseAlloc) -> DynArray<VolumeInfo> {
 
                 // SAFETY: we only get here when there is at least 1 root and we are draining the entire roots array, so we don't need to check for the first one
                 let first_path = drain.next().unwrap_unchecked();
-                let (utf16, _) = path_to_null_terminated_utf16(&first_path, alloc);
+                let (utf16, _) = path_to_null_terminated_utf16(&first_path);
                 let info = get_volume_info_utf16(first_path, &*utf16, alloc);
                 if let Some(mut info) = info {
                     info.roots.extend(drain);

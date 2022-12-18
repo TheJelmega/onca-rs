@@ -60,24 +60,18 @@ pub struct File {
 
 impl File {
     /// Create/open a file.
-    /// 
-    /// The `temp_alloc` provided will also be used during any file operation that is used.
     pub fn create<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
         os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, false, false)
             .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a link.
-    /// 
-    /// The `temp_alloc` provided will also be used during any file operation that is used.
     pub fn create_link<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
         os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, true, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a temporary file, in the folder given by `path`.
-    /// 
-    /// The `temp_alloc` provided will also be used during any file operation that is used.
     pub fn create_temp<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
         os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, false, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
@@ -159,8 +153,8 @@ impl io::Seek for File {
 /// 
 /// Note: the file will keep existing until the last handle to it has been closed
 // TODO: File cannot be deleted if it's readonly, make sure this is checked here
-pub fn delete<P: AsRef<Path>>(path: P, temp_alloc: UseAlloc) -> io::Result<()> {
-    os_imp::file::delete(path.as_ref(), temp_alloc)
+pub fn delete<P: AsRef<Path>>(path: P) -> io::Result<()> {
+    os_imp::file::delete(path.as_ref())
 }
 
 
