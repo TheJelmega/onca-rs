@@ -58,7 +58,7 @@ pub(crate) fn delete(path: &Path) -> io::Result<()> {
         if res {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -157,7 +157,7 @@ impl FileHandle {
                 if res.as_bool() {
                     Ok(bytes_read as usize)
                 } else {
-                    Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                    Err(io::Error::last_os_error())
                 }
             }
 
@@ -194,7 +194,7 @@ impl FileHandle {
                 if res.as_bool() {
                     Ok(bytes_written as usize)
                 } else {
-                    Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                    Err(io::Error::last_os_error())
                 }
             }
 
@@ -228,7 +228,7 @@ impl FileHandle {
             if res.as_bool() {    
                 Ok(())
             } else {
-                Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -251,7 +251,7 @@ impl FileHandle {
         if res.as_bool() {
             Ok(cursor_pos as u64)
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 
@@ -269,7 +269,7 @@ impl FileHandle {
             if res.as_bool() {
                 Ok(())
             } else {
-                Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -284,7 +284,7 @@ impl FileHandle {
             if res.as_bool() {
                 Ok(())
             } else {
-                Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -299,7 +299,7 @@ impl FileHandle {
             if res.as_bool() {
                 Ok(())
             } else {
-                Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                Err(io::Error::last_os_error())
             }
         }
     }
@@ -322,7 +322,7 @@ impl FileHandle {
             let mut file_info = FILE_BASIC_INFO::default();
             let res = GetFileInformationByHandleEx(self.0, FileBasicInfo, &mut file_info as *mut _ as *mut c_void, size_of::<FILE_BASIC_INFO>() as u32);
             if !res.as_bool() {
-                return Err(io::Error::from_raw_os_error(GetLastError().0 as i32));
+                return Err(io::Error::last_os_error());
             }
 
             if set {
@@ -335,7 +335,7 @@ impl FileHandle {
             if res.as_bool() {
                 Ok(())
             } else {
-                Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+                Err(io::Error::last_os_error())
             }
         }
     }

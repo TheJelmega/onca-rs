@@ -60,7 +60,7 @@ impl EntrySearchHandle {
                     {
                         let res = FindNextFileW(handle, &mut find_data).as_bool();
                         if !res {
-                            return Err(io::Error::from_raw_os_error(GetLastError().0 as i32));
+                            return Err(io::Error::last_os_error());
                         }
                     }
 
@@ -104,7 +104,7 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
         let res = GetFileAttributesExW(pcwstr, GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
         if !res.as_bool() {
-            return Err(io::Error::from_raw_os_error(GetLastError().0 as i32));
+            return Err(io::Error::last_os_error());
         }
  
         let mut flags = dword_to_flags(win32_attribs.dwFileAttributes);

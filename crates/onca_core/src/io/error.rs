@@ -357,6 +357,18 @@ impl Error {
         Self { repr: Repr::new_simple_message(msg) }
     }
 
+    /// Returns an error representing the last OS error which occurred.
+    /// 
+    /// This function read the value of `errno` for the target platform and will return a corresponding instance of [`Error`] for the error code.
+    /// 
+    /// This should be called immediately after a call to a platform function, otherwise the state of the error value is indeterminate.
+    /// In particular, other library functions may call paltform function that may (or may not) reset the value even if the succeed.
+    #[must_use]
+    #[inline]
+    pub fn last_os_error() -> Error {
+        Error::from_raw_os_error(crate::os::errno() as i32)
+    }
+
     /// Create a new instance of an [`Error`] from a particular OS error code.
     #[must_use]
     #[inline]

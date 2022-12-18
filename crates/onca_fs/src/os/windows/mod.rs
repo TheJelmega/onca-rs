@@ -26,7 +26,6 @@ use windows::{Win32::{
         FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS,
     },
     System::Environment::GetCurrentDirectoryW,
-    Foundation::GetLastError,
 }, core::PCWSTR};
 
 // Can't find these constants in windows headers, so create it here
@@ -51,7 +50,7 @@ pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
         let res = PathBuf::from_utf16(&*dynarr, alloc);
         match res {
             Ok(path) => Ok(path),
-            Err(_) => Err(io::Error::from_raw_os_error(GetLastError().0 as i32)),
+            Err(_) => Err(io::Error::last_os_error()),
         }
     }
 }

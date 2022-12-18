@@ -1,5 +1,5 @@
 use onca_core::io;
-use windows::Win32::{Storage::FileSystem::{CreateHardLinkW, CreateSymbolicLinkW, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_DIRECTORY}, Foundation::GetLastError};
+use windows::Win32::{Storage::FileSystem::{CreateHardLinkW, CreateSymbolicLinkW, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_DIRECTORY}};
 
 use crate::Path;
 
@@ -14,7 +14,7 @@ pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
         if res {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -28,7 +28,7 @@ pub fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
         if res {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -42,7 +42,7 @@ pub fn symlink_dir(source: &Path, dest: &Path) -> io::Result<()> {
         if res {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 }

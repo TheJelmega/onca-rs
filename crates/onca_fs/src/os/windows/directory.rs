@@ -44,7 +44,7 @@ unsafe fn create_dir(pcwstr: PCWSTR) -> io::Result<()> {
         if err == ERROR_ALREADY_EXISTS {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::from_raw_os_error(err.0 as i32))
         }
     }
 }
@@ -56,7 +56,7 @@ pub(crate) fn remove(path: &Path) -> io::Result<()> {
         if res {
             Ok(())
         } else {
-            Err(io::Error::from_raw_os_error(GetLastError().0 as i32))
+            Err(io::Error::last_os_error())
         }
     }
 }
