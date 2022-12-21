@@ -63,7 +63,7 @@ pub(crate) fn delete(path: &Path) -> io::Result<()> {
     }
 }
 
-pub struct FileHandle(HANDLE);
+pub struct FileHandle(pub(crate) HANDLE);
 
 impl FileHandle {
     pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc, open_link: bool, temporary: bool) -> io::Result<(FileHandle, PathBuf)> {

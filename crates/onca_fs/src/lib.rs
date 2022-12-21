@@ -32,6 +32,7 @@ pub enum FsMemTag {
     General,
     Temporary,
     Path,
+    Async,
 }
 
 impl FsMemTag {

@@ -1,4 +1,6 @@
-use onca_core::{io, alloc::UseAlloc};
+use core::future::Future;
+
+use onca_core::{io, alloc::UseAlloc, prelude::DynArray};
 use onca_core_macros::flags;
 
 use crate::{Path, os::os_imp, Permission, PathBuf};
@@ -94,6 +96,15 @@ impl File {
         self.handle.sync_all()
     }
 
+    /// Cancel all async I/O for this file, which were called from the current thread
+    pub fn cancel_all_thread_async_io(&mut self) -> io::Result<()> {
+        self.handle.cancel_all_thread_async_io()
+    }
+
+    /// Cancel all async I/O for this file
+    pub fn cancel_all_async_io(&mut self) -> io::Result<()> {
+        self.handle.cancel_all_async_io()
+    }
 
     /// Set the length of the file
     /// 
@@ -148,6 +159,22 @@ impl io::Seek for File {
         self.handle.seek(pos)
     }
 }
+
+impl io::AsyncRead for File {
+    type AsyncResult = AsyncReadResult;
+
+    fn read_async(&mut self, bytes_to_read: u64, alloc: UseAlloc) -> io::Result<Self::AsyncResult> {
+        self.handle.read_async(bytes_to_read, alloc).map(|inner| AsyncReadResult(inner))
+    }
+}
+
+impl io::AsyncWrite for File {
+    type AsyncResult = AsyncWriteResult;
+
+    fn write_async(&mut self, buf: DynArray<u8>, alloc: UseAlloc) -> io::Result<Self::AsyncResult> {
+        self.handle.write_async(buf, alloc).map(|inner| AsyncWriteResult(inner))
+    }
+}
  
 /// Deletes a file.
 /// 
@@ -157,4 +184,44 @@ pub fn delete<P: AsRef<Path>>(path: P) -> io::Result<()> {
     os_imp::file::delete(path.as_ref())
 }
 
+/// Asynchronous read result
+pub struct AsyncReadResult(os_imp::file_async::AsyncReadResult);
 
+impl Future for AsyncReadResult {
+    type Output = io::Result<DynArray<u8>>;
+ 
+    fn poll(mut self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
+        self.0.poll(cx)
+    }
+}
+
+impl io::AsyncReadResult for AsyncReadResult {
+    fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<DynArray<u8>>> {
+        self.0.wait(timeout)
+    }
+
+    fn cancel(&mut self) -> io::Result<()> {
+        self.0.cancel()
+    }
+}
+
+/// Asynchronous write resutl
+pub struct AsyncWriteResult(os_imp::file_async::AsyncWriteResult);
+
+impl Future for AsyncWriteResult {
+    type Output = io::Result<u64>;
+
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        self.0.poll(cx)
+    }
+}
+
+impl io::AsyncWriteResult for AsyncWriteResult {
+    fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<u64>> {
+        self.0.wait(timeout)
+    }
+
+    fn cancel(&mut self) -> io::Result<()> {
+        self.0.cancel()
+    }
+}

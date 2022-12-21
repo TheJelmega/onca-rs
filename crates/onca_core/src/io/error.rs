@@ -59,26 +59,27 @@ enum ErrorData<C> {
 // If we add more variants or ErrorData, this can be increased to 8.
 #[repr(align(4))]
 #[derive(Debug)]
-pub(crate) struct SimpleMessage {
+pub struct SimpleMessage {
     kind    : ErrorKind,
     message : &'static str,
 }
 
 impl SimpleMessage {
-    pub(crate) const fn new(kind: ErrorKind, message: &'static str) -> Self {
+    pub const fn new(kind: ErrorKind, message: &'static str) -> Self {
         Self { kind, message }
     }
 }
 
+#[macro_export]
 macro_rules! const_io_error {
     ($kind:expr, $message:expr) => {
-        $crate::io::error::Error::from_static_message({
-            const MESSAGE_DATA: $crate::io::error::SimpleMessage = $crate::io::error::SimpleMessage::new($kind, $message);
+        $crate::io::Error::from_static_message({
+            const MESSAGE_DATA: $crate::io::SimpleMessage = $crate::io::SimpleMessage::new($kind, $message);
             &MESSAGE_DATA
         })
     };
 }
-pub(crate) use const_io_error;
+pub use const_io_error;
 
 // As with 'SimpleMessage`: `$[repr(align(4))]` here is just because repr_bitpacked's encoding requires it.
 // In practice it almost certainly will already be this high or higher
@@ -353,7 +354,7 @@ impl Error {
     /// This function does not allocate.
     /// 
     /// You should not use this directly, and instead use the `const_io_error!` macro: `io::const_io_error!(ErrorKind::Something, "some_message").
-    pub(crate) const fn from_static_message(msg: &'static SimpleMessage) -> Error {
+    pub const fn from_static_message(msg: &'static SimpleMessage) -> Error {
         Self { repr: Repr::new_simple_message(msg) }
     }
 

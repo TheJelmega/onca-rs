@@ -47,7 +47,7 @@ use crate::{
     collections::DynArray, 
     mem::HeapPtr,
     strings::String, 
-    MB, 
+    KiB, 
 };
 
 use core::{
@@ -57,7 +57,7 @@ use core::{
     slice,
     str,
     ops::{Deref, DerefMut},
-    slice::memchr
+    slice::memchr,
 };
 use std::convert::TryInto;
 
@@ -65,9 +65,10 @@ pub use self::{
     buffered::{BufReader, BufWriter, IntoInnerError},
     copy::copy,
     cursor::Cursor,
-    error::{Error, ErrorKind, Result},
+    error::{Error, ErrorKind, Result, SimpleMessage},
     readbuf::{BorrowedBuf, BorrowedCursor},
     utils::{emtpy, repeat, sink, Empty, Repeat, Sink},
+    async_io::{AsyncReadResult, AsyncRead, AsyncWriteResult, AsyncWrite},
 };
 
 pub mod prelude;
@@ -80,10 +81,11 @@ mod impls;
 mod readbuf;
 mod buffered;
 mod utils;
+mod async_io;
 
-use error::const_io_error;
+pub use error::const_io_error;
 
-const DEFAULT_BUF_SIZE : usize = MB(0);
+const DEFAULT_BUF_SIZE : usize = KiB(8);
 
 struct Guard<'a> {
     buf : &'a mut DynArray<u8>,
@@ -250,7 +252,7 @@ where
 /// 
 /// Implementors of the `Read` trait are called 'readers'.
 /// 
-/// Readers are defined by one require methof [`read()`].
+/// Readers are defined by one required method [`read()`].
 /// Each call to [`read())`] will attempt to pull bytes from this source into a provided buffer.
 /// A number of other methods are implemented in terms of [`read()`], giving implementors a number of ways to read bytes while only needing to implement a single method.
 /// 
@@ -266,19 +268,20 @@ pub trait Read {
     /// This function does not provide any guarantees about whether it block waiting for data, but if any object needs to block for a read and cannot, it will typically signal this via an [`Err`] return value.
     /// 
     /// If the return value of this method is [`Ok(n)`], then implementations must guarantee that `0 <= n <= buf.len()`.
-    /// A nonzero `n` value indicates that the buffer `bug` has been filled in with `n` bytes of data from this source.
-    /// If `n` is `0`, then it can iddicate one of two senarios:
+    /// A nonzero `n` value indicates that the buffer `buf` has been filled in with `n` bytes of data from this source.
+    /// If `n` is `0`, then it can indicate one of two senarios:
     /// 
-    /// 1. The reader has reached its "end of file" and will likely no longer be able to produce bytes. Note that this does not mean that the reader wiil *always* no longer be able to produce bytes.
-    ///    As an example, for a file, ti is possible to reach the end of file and get a zero as result, but if more data is appended to the file, future calls to `read` will return more data.
+    /// 1. The reader has reached its "end of file" and will likely no longer be able to produce bytes. 
+    ///    Note that this does not mean that the reader wiil *always* no longer be able to produce bytes.
+    ///    As an example, for a file, it is possible to reach the end of file and get a zero as result, but if more data is appended to the file, future calls to `read` will return more data.
     /// 2. The buffer specified was 0 bytes in length.
     /// 
-    /// It is not an error if the reutnred value `n` is smaller than the buffer size, even when the reader is not at the end of the stream yet.
-    /// This may happen for example because fewer bytes are actually available right now (e.g. buing close to end-of-file) or because read() was interrupted by a signal.
+    /// It is not an error if the returned value `n` is smaller than the buffer size, even when the reader is not at the end of the stream yet.
+    /// This may happen for example because fewer bytes are actually available right now (e.g. being close to end-of-file) or because read() was interrupted by a signal.
     /// 
-    /// As this trait is safe to implement, caller s cannot rely on `n <= buf.len()` for safety.
+    /// As this trait is safe to implement, callers cannot rely on `n <= buf.len()` for safety.
     /// Extra care needs to be taken when `unsafe` functions are used to access the read bytes.
-    /// Callers hare to ensure that no unchecked out-of-bounfs accesses are possible even if `n > buf.len()`.
+    /// Callers here to ensure that no unchecked out-of-bounds accesses are possible even if `n > buf.len()`.
     /// 
     /// No guarantees are provided about the contents of `buf` when this function is called, implementations cannot rely on any property of the contents of `buf` being true.
     /// It is recommended that *implementations* only write data to `buf` instead of reading its contents.
@@ -502,10 +505,10 @@ pub fn read_to_string_with_capacity<R: Read>(mut reader: R, capacity: usize, all
 pub trait Write {
     /// Write a buffer into this writer, returning how many bytes were written.
     /// 
-    /// This function will attempt to write the entire contents of `buf`, but the entire write might not succeed, or the write may laso generate an error.
+    /// This function will attempt to write the entire contents of `buf`, but the entire write might not succeed, or the write may also generate an error.
     /// A call to `write` represents *at most one* attempt to write to any wrapped object.
     /// 
-    /// Calls to `write` are not guaranteed to block waiting tfor data to be written, and a write which would othersize block can be indicated through an [`Err`] variant.
+    /// Calls to `write` are not guaranteed to block waiting for data to be written, and a write which would otherwise block can be indicated through an [`Err`] variant.
     /// 
     /// If the return value is [`Ok(n)`], then it must be guaranteed that `n <= buf.len()`.
     /// A return value of `0` typically means that the underlying object is no longer able to accept bytes and will likely not be able to in the future as well, or that the buffer provided is empty.

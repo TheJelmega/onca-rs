@@ -35,6 +35,7 @@ const INVALID_FILE_SIZE : u32 = 0xFFFF_FFFF;
 pub(crate) mod entry;
 pub(crate) mod drive_volume;
 pub(crate) mod file;
+pub(crate) mod file_async;
 pub(crate) mod directory;
 pub(crate) mod link;
 
