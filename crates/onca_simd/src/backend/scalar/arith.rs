@@ -418,7 +418,7 @@ macro_rules! impl_bit_arith {
                     unsafe {
                         let mut res = MaybeUninit::<Self>::uninit();
                         for i in 0..LANES {
-                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { self[i].unchecked_shl(other[i]) } else { 0 });
+                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { self[i].unchecked_shl(other[i] as u32) } else { 0 });
                         }
                         res.assume_init()
                     }
@@ -428,7 +428,7 @@ macro_rules! impl_bit_arith {
                     unsafe {
                         let mut res = MaybeUninit::<Self>::uninit();
                         for i in 0..LANES {
-                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { (self[i] as u64).unchecked_shr(other[i] as u64) as $ty } else { 0 });
+                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { (self[i] as u64).unchecked_shr(other[i] as u32) as $ty } else { 0 });
                         }
                         res.assume_init()
                     }
@@ -438,7 +438,7 @@ macro_rules! impl_bit_arith {
                     unsafe {
                         let mut res = MaybeUninit::<Self>::uninit();
                         for i in 0..LANES {
-                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { (self[i] as i64).unchecked_shr(other[i] as i64) as $ty } else { 0 });
+                            ptr::write(&mut (*res.as_mut_ptr())[i], if other[i] < <$ty>::BITS as $ty { (self[i] as i64).unchecked_shr(other[i] as u32) as $ty } else { 0 });
                         }
                         res.assume_init()
                     }
@@ -451,7 +451,7 @@ macro_rules! impl_bit_arith {
                         if shift < <$ty>::BITS as u8 {
                             let mut res = MaybeUninit::<Self>::uninit();
                             for i in 0..LANES {
-                                ptr::write(&mut (*res.as_mut_ptr())[i], self[i].unchecked_shl(shift as $ty));
+                                ptr::write(&mut (*res.as_mut_ptr())[i], self[i].unchecked_shl(shift as u32));
                             }
                             res.assume_init()
                         } else {
@@ -467,7 +467,7 @@ macro_rules! impl_bit_arith {
                         if shift < <$ty>::BITS as u8 {
                             let mut res = MaybeUninit::<Self>::uninit();
                             for i in 0..LANES {
-                                ptr::write(&mut (*res.as_mut_ptr())[i], (self[i] as u64).unchecked_shr(shift as u64) as $ty);
+                                ptr::write(&mut (*res.as_mut_ptr())[i], (self[i] as u64).unchecked_shr(shift as u32) as $ty);
                             }
                             res.assume_init()
                         } else {
@@ -483,7 +483,7 @@ macro_rules! impl_bit_arith {
                         if shift < <$ty>::BITS as u8 {
                             let mut res = MaybeUninit::<Self>::uninit();
                             for i in 0..LANES {
-                                ptr::write(&mut (*res.as_mut_ptr())[i], (self[i] as i64).unchecked_shr(shift as i64) as $ty);
+                                ptr::write(&mut (*res.as_mut_ptr())[i], (self[i] as i64).unchecked_shr(shift as u32) as $ty);
                             }
                             res.assume_init()
                         } else {

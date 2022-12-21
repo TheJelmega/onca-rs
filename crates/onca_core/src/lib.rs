@@ -8,7 +8,6 @@
 #![feature(unsize)]
 // Used by layout.rs
 #![feature(int_roundings)]
-#![feature(int_log)]
 // Used by collections/*.rs
 #![feature(allocator_api)]
 #![feature(btreemap_alloc)]

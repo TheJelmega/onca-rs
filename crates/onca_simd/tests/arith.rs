@@ -394,51 +394,51 @@ fn u8_bitor() {
 
 #[test]
 fn u8_shl() {
-    impl_op!(@16 u8, u8x16, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@32 u8, u8x32, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@64 u8, u8x64, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@16 u8, u8x16, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@32 u8, u8x32, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@64 u8, u8x64, <<, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u8_shr_op() {
-    impl_op!(@16 u8, u8x16, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@32 u8, u8x32, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@64 u8, u8x64, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@16 u8, u8x16, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@32 u8, u8x32, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@64 u8, u8x64, >>, (|a: u8, b: u8| if (b as u32) < u8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u8_shrl() {
-    impl_fn! (@16 u8, u8x16, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@32 u8, u8x32, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@64 u8, u8x64, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn! (@16 u8, u8x16, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@32 u8, u8x32, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@64 u8, u8x64, shrl, (|a:u8, shift:u8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn u8_shra() {
-    impl_fn! (@16 u8, u8x16, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as u8 } else { 0 }));
-    impl_fn! (@32 u8, u8x32, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as u8 } else { 0 }));
-    impl_fn! (@64 u8, u8x64, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as u8 } else { 0 }));
+    impl_fn! (@16 u8, u8x16, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as u8 } else { 0 }));
+    impl_fn! (@32 u8, u8x32, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as u8 } else { 0 }));
+    impl_fn! (@64 u8, u8x64, shra, (|a:u8, shift:u8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as u8 } else { 0 }));
 }
 
 #[test]
 fn u8_shl_scalar() {
-    impl_sh_scalar!(@16 u8, u8x16, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@32 u8, u8x32, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@64 u8, u8x64, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@16 u8, u8x16, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@32 u8, u8x32, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@64 u8, u8x64, shl_scalar, (|a:u8, shift:u8| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn u8_shrl_scalar() {
-    impl_sh_scalar!(@16 u8, u8x16, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@32 u8, u8x32, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@64 u8, u8x64, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@16 u8, u8x16, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@32 u8, u8x32, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@64 u8, u8x64, shrl_scalar, (|a:u8, shift:u8| a.unchecked_shr(shift as u32)));
 }
 
 #[test]
 fn u8_shra_scalar() {
-    impl_sh_scalar!(@16 u8, u8x16, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as i8) as u8));
-    impl_sh_scalar!(@32 u8, u8x32, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as i8) as u8));
-    impl_sh_scalar!(@64 u8, u8x64, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as i8) as u8));
+    impl_sh_scalar!(@16 u8, u8x16, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as u32) as u8));
+    impl_sh_scalar!(@32 u8, u8x32, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as u32) as u8));
+    impl_sh_scalar!(@64 u8, u8x64, shra_scalar, (|a:u8, shift:u8| (a as i8).unchecked_shr(shift as u32) as u8));
 }
 
 #[test]
@@ -529,51 +529,51 @@ fn u16_bitor() {
 
 #[test]
 fn u16_shl() {
-    impl_op!(@8  u16, u16x8 , <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@16 u16, u16x16, <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@32 u16, u16x32, <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@8  u16, u16x8 , <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@16 u16, u16x16, <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@32 u16, u16x32, <<, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u16_shr_op() {
-    impl_op!(@8  u16, u16x8 , >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@16 u16, u16x16, >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@32 u16, u16x32, >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@8  u16, u16x8 , >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@16 u16, u16x16, >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@32 u16, u16x32, >>, (|a: u16, b: u16| if (b as u32) < u16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u16_shrl() {
-    impl_fn!(@8  u16, u16x8 , shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn!(@16 u16, u16x16, shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn!(@32 u16, u16x32, shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn!(@8  u16, u16x8 , shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn!(@16 u16, u16x16, shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn!(@32 u16, u16x32, shrl, (|a:u16, shift:u16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn u16_shra() {
-    impl_fn!(@8  u16, u16x8 , shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as i16) as u16 } else { 0 }));
-    impl_fn!(@16 u16, u16x16, shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as i16) as u16 } else { 0 }));
-    impl_fn!(@32 u16, u16x32, shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as i16) as u16 } else { 0 }));
+    impl_fn!(@8  u16, u16x8 , shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as u32) as u16 } else { 0 }));
+    impl_fn!(@16 u16, u16x16, shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as u32) as u16 } else { 0 }));
+    impl_fn!(@32 u16, u16x32, shra, (|a:u16, shift:u16| if shift < 8 { (a as i16).unchecked_shr(shift as u32) as u16 } else { 0 }));
 }
 
 #[test]
 fn u16_shl_scalar() {
-    impl_sh_scalar!(@8  u16, u16x8 , shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@16 u16, u16x16, shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@32 u16, u16x32, shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@8  u16, u16x8 , shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@16 u16, u16x16, shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@32 u16, u16x32, shl_scalar, (|a:u16, shift:u16| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn u16_shrl_scalar() {
-    impl_sh_scalar!(@8  u16, u16x8 , shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@16 u16, u16x16, shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@32 u16, u16x32, shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@8  u16, u16x8 , shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@16 u16, u16x16, shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@32 u16, u16x32, shrl_scalar, (|a:u16, shift:u16| a.unchecked_shr(shift as u32)));
 }
 
 #[test]
 fn u16_shra_scalar() {
-    impl_sh_scalar!(@8  u16, u16x8 , shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as i16) as u16));
-    impl_sh_scalar!(@16 u16, u16x16, shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as i16) as u16));
-    impl_sh_scalar!(@32 u16, u16x32, shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as i16) as u16));
+    impl_sh_scalar!(@8  u16, u16x8 , shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as u32) as u16));
+    impl_sh_scalar!(@16 u16, u16x16, shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as u32) as u16));
+    impl_sh_scalar!(@32 u16, u16x32, shra_scalar, (|a:u16, shift:u16| (a as i16).unchecked_shr(shift as u32) as u16));
 }
 
 //==================================================================================================================================
@@ -664,9 +664,9 @@ fn u32_shrl() {
 
 #[test]
 fn u32_shra() {
-    impl_fn!(@4  u32, u32x4 , shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as i32) as u32 } else { 0 }));
-    impl_fn!(@8  u32, u32x8 , shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as i32) as u32 } else { 0 }));
-    impl_fn!(@16 u32, u32x16, shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as i32) as u32 } else { 0 }));
+    impl_fn!(@4  u32, u32x4 , shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as u32) as u32 } else { 0 }));
+    impl_fn!(@8  u32, u32x8 , shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as u32) as u32 } else { 0 }));
+    impl_fn!(@16 u32, u32x16, shra, (|a:u32, shift:u32| if shift < 8 { (a as i32).unchecked_shr(shift as u32) as u32 } else { 0 }));
 }
 
 #[test]
@@ -685,9 +685,9 @@ fn u32_shrl_scalar() {
 
 #[test]
 fn u32_shra_scalar() {
-    impl_sh_scalar!(@4  u32, u32x4 , shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as i32) as u32));
-    impl_sh_scalar!(@8  u32, u32x8 , shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as i32) as u32));
-    impl_sh_scalar!(@16 u32, u32x16, shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as i32) as u32));
+    impl_sh_scalar!(@4  u32, u32x4 , shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as u32) as u32));
+    impl_sh_scalar!(@8  u32, u32x8 , shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as u32) as u32));
+    impl_sh_scalar!(@16 u32, u32x16, shra_scalar, (|a:u32, shift:u32| (a as i32).unchecked_shr(shift as u32) as u32));
 }
 
 //==================================================================================================================================
@@ -757,51 +757,51 @@ fn u64_bitor() {
 
 #[test]
 fn u64_shl() {
-    impl_op! (@2  u64, u64x2 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op! (@4  u64, u64x4 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op! (@8  u64, u64x8 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op! (@2  u64, u64x2 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op! (@4  u64, u64x4 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op! (@8  u64, u64x8 , <<, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u64_shr_op() {
-    impl_op!(@2  u64, u64x2 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@4  u64, u64x4 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@8  u64, u64x8 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@2  u64, u64x2 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@4  u64, u64x4 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@8  u64, u64x8 , >>, (|a: u64, b: u64| if (b as u32) < u64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn u64_shrl() {
-    impl_fn!(@2  u64, u64x2 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn!(@4  u64, u64x4 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn!(@8  u64, u64x8 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn!(@2  u64, u64x2 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn!(@4  u64, u64x4 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn!(@8  u64, u64x8 , shrl, (|a:u64, shift:u64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn u64_shra() {
-    impl_fn!(@2  u64, u64x2 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as i64) as u64 } else { 0 }));
-    impl_fn!(@4  u64, u64x4 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as i64) as u64 } else { 0 }));
-    impl_fn!(@8  u64, u64x8 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as i64) as u64 } else { 0 }));
+    impl_fn!(@2  u64, u64x2 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as u32) as u64 } else { 0 }));
+    impl_fn!(@4  u64, u64x4 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as u32) as u64 } else { 0 }));
+    impl_fn!(@8  u64, u64x8 , shra, (|a:u64, shift:u64| if shift < 8 { (a as i64).unchecked_shr(shift as u32) as u64 } else { 0 }));
 }
 
 #[test]
 fn u64_shl_scalar() {
-    impl_sh_scalar!(@2  u64, u64x2 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@4  u64, u64x4 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@8  u64, u64x8 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@2  u64, u64x2 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@4  u64, u64x4 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@8  u64, u64x8 , shl_scalar, (|a:u64, shift:u64| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn u64_shrl_scalar() {
-    impl_sh_scalar!(@2  u64, u64x2 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@4  u64, u64x4 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@8  u64, u64x8 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@2  u64, u64x2 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@4  u64, u64x4 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@8  u64, u64x8 , shrl_scalar, (|a:u64, shift:u64| a.unchecked_shr(shift as u32)));
 }
 
 #[test]
 fn u64_shra_scalar() {
-    impl_sh_scalar!(@2  u64, u64x2 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as i64) as u64));
-    impl_sh_scalar!(@4  u64, u64x4 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as i64) as u64));
-    impl_sh_scalar!(@8  u64, u64x8 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as i64) as u64));
+    impl_sh_scalar!(@2  u64, u64x2 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as u32 ) as u64));
+    impl_sh_scalar!(@4  u64, u64x4 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as u32 ) as u64));
+    impl_sh_scalar!(@8  u64, u64x8 , shra_scalar, (|a:u64, shift:u64| (a as i64).unchecked_shr(shift as u32 ) as u64));
 }
 
 //==================================================================================================================================
@@ -878,52 +878,52 @@ fn i8_bitor() {
 
 #[test]
 fn i8_shl() {
-    impl_op!(@16 i8, i8x16, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@32 i8, i8x32, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@64 i8, i8x64, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@16 i8, i8x16, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@32 i8, i8x32, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@64 i8, i8x64, <<, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i8_shr_op() {
-    impl_op!(@16 i8, i8x16, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@32 i8, i8x32, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@64 i8, i8x64, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@16 i8, i8x16, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@32 i8, i8x32, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@64 i8, i8x64, >>, (|a: i8, b: i8| if (b as u32) < i8::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i8_shrl() {
-    impl_fn! (@16 i8, i8x16, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as i8 } else { 0 }));
-    impl_fn! (@32 i8, i8x32, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as i8 } else { 0 }));
-    impl_fn! (@64 i8, i8x64, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as i8) as i8 } else { 0 }));
+    impl_fn! (@16 i8, i8x16, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as i8 } else { 0 }));
+    impl_fn! (@32 i8, i8x32, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as i8 } else { 0 }));
+    impl_fn! (@64 i8, i8x64, shra, (|a:i8, shift:i8| if shift < 8 { (a as i8).unchecked_shr(shift as u32) as i8 } else { 0 }));
 }
 
 #[test]
 fn i8_shra() {
-    impl_fn! (@16 i8, i8x16, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@32 i8, i8x32, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@64 i8, i8x64, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn! (@16 i8, i8x16, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@32 i8, i8x32, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@64 i8, i8x64, shrl, (|a:i8, shift:i8| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn i8_shl_scalar() {
-    impl_sh_scalar!(@16 i8, i8x16, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@32 i8, i8x32, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@64 i8, i8x64, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@16 i8, i8x16, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@32 i8, i8x32, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@64 i8, i8x64, shl_scalar, (|a:i8, shift:i8| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn i8_shrl_scalar() {
-    impl_sh_scalar!(@16 i8, i8x16, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as i8) as i8));
-    impl_sh_scalar!(@32 i8, i8x32, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as i8) as i8));
-    impl_sh_scalar!(@64 i8, i8x64, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as i8) as i8));
+    impl_sh_scalar!(@16 i8, i8x16, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as u32) as i8));
+    impl_sh_scalar!(@32 i8, i8x32, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as u32) as i8));
+    impl_sh_scalar!(@64 i8, i8x64, shra_scalar, (|a:i8, shift:i8| (a as i8).unchecked_shr(shift as u32) as i8));
     
 }
 
 #[test]
 fn i8_shra_scalar() {
-    impl_sh_scalar!(@16 i8, i8x16, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@32 i8, i8x32, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@64 i8, i8x64, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@16 i8, i8x16, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@32 i8, i8x32, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@64 i8, i8x64, shrl_scalar, (|a:i8, shift:i8| a.unchecked_shr(shift as u32)));
 }
 
 //==================================================================================================================================
@@ -1000,51 +1000,51 @@ fn i16_bitor() {
 
 #[test]
 fn i16_shl() {
-    impl_op!(@8  i16, i16x8 , <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@16 i16, i16x16, <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@32 i16, i16x32, <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@8  i16, i16x8 , <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@16 i16, i16x16, <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@32 i16, i16x32, <<, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i16_shr_op() {
-    impl_op!(@8  i16, i16x8 , >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@16 i16, i16x16, >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@32 i16, i16x32, >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@8  i16, i16x8 , >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@16 i16, i16x16, >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@32 i16, i16x32, >>, (|a: i16, b: i16| if (b as u32) < i16::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i16_shrl() {
-    impl_fn! (@8  i16, i16x8 , shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u16) as i16 } else { 0 }));
-    impl_fn! (@16 i16, i16x16, shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u16) as i16 } else { 0 }));
-    impl_fn! (@32 i16, i16x32, shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u16) as i16 } else { 0 }));
+    impl_fn! (@8  i16, i16x8 , shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u32) as i16 } else { 0 }));
+    impl_fn! (@16 i16, i16x16, shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u32) as i16 } else { 0 }));
+    impl_fn! (@32 i16, i16x32, shra, (|a:i16, shift:i16| if shift < 8 { (a as u16).unchecked_shr(shift as u32) as i16 } else { 0 }));
 }
 
 #[test]
 fn i16_shra() {
-    impl_fn! (@8  i16, i16x8 , shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@16 i16, i16x16, shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@32 i16, i16x32, shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn! (@8  i16, i16x8 , shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@16 i16, i16x16, shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@32 i16, i16x32, shrl, (|a:i16, shift:i16| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn i16_shl_scalar() {
-    impl_sh_scalar!(@8  i16, i16x8 , shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@16 i16, i16x16, shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@32 i16, i16x32, shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@8  i16, i16x8 , shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@16 i16, i16x16, shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@32 i16, i16x32, shl_scalar, (|a:i16, shift:i16| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn i16_shrl_scalar() {
-    impl_sh_scalar!(@8  i16, i16x8 , shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u16) as i16));
-    impl_sh_scalar!(@16 i16, i16x16, shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u16) as i16));
-    impl_sh_scalar!(@32 i16, i16x32, shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u16) as i16));
+    impl_sh_scalar!(@8  i16, i16x8 , shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u32) as i16));
+    impl_sh_scalar!(@16 i16, i16x16, shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u32) as i16));
+    impl_sh_scalar!(@32 i16, i16x32, shra_scalar, (|a:i16, shift:i16| (a as u16).unchecked_shr(shift as u32) as i16));
 }
 
 #[test]
 fn i16_shra_scalar() {
-    impl_sh_scalar!(@8  i16, i16x8 , shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@16 i16, i16x16, shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@32 i16, i16x32, shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@8  i16, i16x8 , shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@16 i16, i16x16, shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@32 i16, i16x32, shrl_scalar, (|a:i16, shift:i16| a.unchecked_shr(shift as u32)));
 }
 
 //==================================================================================================================================
@@ -1121,16 +1121,16 @@ fn i32_bitor() {
 
 #[test]
 fn i32_shl() {
-    impl_op!(@4  i32, i32x4 , <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@8  i32, i32x8 , <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@16 i32, i32x16, <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@4  i32, i32x4 , <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@8  i32, i32x8 , <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@16 i32, i32x16, <<, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i32_shr_op() {
-    impl_op!(@4  i32, i32x4 , >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@8  i32, i32x8 , >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@16 i32, i32x16, >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@4  i32, i32x4 , >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@8  i32, i32x8 , >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@16 i32, i32x16, >>, (|a: i32, b: i32| if (b as u32) < i32::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
@@ -1142,16 +1142,16 @@ fn i32_shrl() {
 
 #[test]
 fn i32_shra() {
-    impl_fn! (@4  i32, i32x4 , shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@8  i32, i32x8 , shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@16 i32, i32x16, shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn! (@4  i32, i32x4 , shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@8  i32, i32x8 , shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@16 i32, i32x16, shrl, (|a:i32, shift:i32| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn i32_shl_scalar() {
-    impl_sh_scalar!(@4  i32, i32x4 , shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@8  i32, i32x8 , shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@16 i32, i32x16, shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@4  i32, i32x4 , shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@8  i32, i32x8 , shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@16 i32, i32x16, shl_scalar, (|a:i32, shift:i32| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
@@ -1164,9 +1164,9 @@ fn i32_shrl_scalar() {
 
 #[test]
 fn i32_shra_scalar() {
-    impl_sh_scalar!(@4  i32, i32x4 , shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@8  i32, i32x8 , shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@16 i32, i32x16, shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@4  i32, i32x4 , shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@8  i32, i32x8 , shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@16 i32, i32x16, shrl_scalar, (|a:i32, shift:i32| a.unchecked_shr(shift as u32)));
 }
 
 //==================================================================================================================================
@@ -1244,51 +1244,51 @@ fn i64_bitor() {
 
 #[test]
 fn i64_shl() {
-    impl_op!(@2  i64, i64x2 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@4  i64, i64x4 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
-    impl_op!(@8  i64, i64x8 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b) } } else { 0 }));
+    impl_op!(@2  i64, i64x2 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@4  i64, i64x4 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
+    impl_op!(@8  i64, i64x8 , <<, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shl(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i64_shr_op() {
-    impl_op!(@2  i64, i64x2 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@4  i64, i64x4 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
-    impl_op!(@8  i64, i64x8 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b) } } else { 0 }));
+    impl_op!(@2  i64, i64x2 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@4  i64, i64x4 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
+    impl_op!(@8  i64, i64x8 , >>, (|a: i64, b: i64| if (b as u32) < i64::BITS { unsafe{ a.unchecked_shr(b as u32) } } else { 0 }));
 }
 
 #[test]
 fn i64_shrl() {
-    impl_fn! (@2  i64, i64x2 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u64) as i64 } else { 0 }));
-    impl_fn! (@4  i64, i64x4 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u64) as i64 } else { 0 }));
-    impl_fn! (@8  i64, i64x8 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u64) as i64 } else { 0 }));
+    impl_fn! (@2  i64, i64x2 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u32) as i64 } else { 0 }));
+    impl_fn! (@4  i64, i64x4 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u32) as i64 } else { 0 }));
+    impl_fn! (@8  i64, i64x8 , shra, (|a:i64, shift:i64| if shift < 8 { (a as u64).unchecked_shr(shift as u32) as i64 } else { 0 }));
 }
 
 #[test]
 fn i64_shra() {
-    impl_fn! (@2  i64, i64x2 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@4  i64, i64x4 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
-    impl_fn! (@8  i64, i64x8 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift) } else { 0 }));
+    impl_fn! (@2  i64, i64x2 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@4  i64, i64x4 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
+    impl_fn! (@8  i64, i64x8 , shrl, (|a:i64, shift:i64| if shift < 8 { a.unchecked_shr(shift as u32) } else { 0 }));
 }
 
 #[test]
 fn i64_shl_scalar() {
-    impl_sh_scalar!(@2  i64, i64x2 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@4  i64, i64x4 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift)));
-    impl_sh_scalar!(@8  i64, i64x8 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift)));
+    impl_sh_scalar!(@2  i64, i64x2 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@4  i64, i64x4 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift as u32)));
+    impl_sh_scalar!(@8  i64, i64x8 , shl_scalar, (|a:i64, shift:i64| a.unchecked_shl(shift as u32)));
 }
 
 #[test]
 fn i64_shrl_scalar() {
-    impl_sh_scalar!(@2  i64, i64x2 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u64) as i64));
-    impl_sh_scalar!(@4  i64, i64x4 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u64) as i64));
-    impl_sh_scalar!(@8  i64, i64x8 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u64) as i64));
+    impl_sh_scalar!(@2  i64, i64x2 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u32) as i64));
+    impl_sh_scalar!(@4  i64, i64x4 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u32) as i64));
+    impl_sh_scalar!(@8  i64, i64x8 , shra_scalar, (|a:i64, shift:i64| (a as u64).unchecked_shr(shift as u32) as i64));
 }
 
 #[test]
 fn i64_shra_scalar() {
-    impl_sh_scalar!(@2  i64, i64x2 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@4  i64, i64x4 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift)));
-    impl_sh_scalar!(@8  i64, i64x8 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift)));
+    impl_sh_scalar!(@2  i64, i64x2 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@4  i64, i64x4 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift as u32)));
+    impl_sh_scalar!(@8  i64, i64x8 , shrl_scalar, (|a:i64, shift:i64| a.unchecked_shr(shift as u32)));
 }
 
 //==================================================================================================================================
