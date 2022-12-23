@@ -448,6 +448,17 @@ impl<T> DynArray<T> {
     pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         Self(imp::DynArray::from_iter(iter, alloc, mem_tag))
     }
+
+    /// Interpret the contents of the buffer as raw bytes
+    /// 
+    /// # Safety
+    /// 
+    /// It is unsafe to interpret the `DynArray` as raw bytes, as all type info is lost
+    pub unsafe fn as_raw_bytes(&self) -> &[u8] {
+        let byte_len = self.len() * mem::size_of::<T>();
+        let ptr = self.as_ptr() as *const u8;
+        slice::from_raw_parts(ptr, byte_len)
+    }
 }
 
 impl<T: Clone> DynArray<T> {

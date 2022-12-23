@@ -262,6 +262,10 @@ pub enum CoreMemTag {
     Allocators,
     TlsTempAlloc,
 
+    /// External predefined tags
+    Terminal,
+
+    /// Uncommon
     StdCollections,
     Test,
 }
