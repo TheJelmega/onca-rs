@@ -46,7 +46,7 @@ impl Allocator for LinearAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
         // No-op
     }
 

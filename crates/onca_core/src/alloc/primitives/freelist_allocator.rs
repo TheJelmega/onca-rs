@@ -29,7 +29,7 @@ pub struct FreelistAllocator {
 }
 
 impl FreelistAllocator {
-    /// Create a stack allocator with the given memory as its arena
+    /// Create a free-list allocator with the given memory as its arena
     pub fn new(buffer: Allocation<u8>) -> Self {
         let head = buffer.ptr_mut().cast::<FreeBlock>();
         unsafe {
@@ -40,9 +40,37 @@ impl FreelistAllocator {
         Self { buffer, head, mutex: Mutex::new(()), id: 0 }
     }
 
+    /// Create an uninitialized freelist allocator
+    pub const fn new_uninit() -> Self {
+        Self { buffer: unsafe { Allocation::null() }, head: null_mut(), mutex: Mutex::new(()), id: 0 }
+    }
+
+    /// Initialize an unitilialized freelist allocator
+    pub fn init(&mut self, buffer: Allocation<u8>) {
+        let _guard = self.mutex.lock();
+        if self.buffer.ptr() != null_mut() {
+            return;
+        }
+
+        self.buffer = buffer;
+        self.head = self.buffer.ptr_mut().cast::<FreeBlock>();
+        unsafe {
+            (*self.head).next = null_mut();
+            (*self.head).size = self.buffer.layout().size();
+        }
+    }
+
+    /// Check if the allocator is initialized
+    pub fn is_initialized(&self) -> bool {
+        let _guard = self.mutex.lock();
+        self.buffer.ptr() != null_mut()
+    }
+
     // Allocate from the first fitting element (not optimal for fragmentation)
     unsafe fn alloc_first(&mut self, layout: &mut Layout) -> *mut u8
     {
+        assert!(self.is_initialized(), "Trying to allocate memory using an uninitialized free-list allocator");
+
         let size = layout.size();
         let align = layout.align();
         let alloc_block_size = size_of::<Header>();
@@ -146,7 +174,7 @@ impl Allocator for FreelistAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
 
         let (orig_ptr, front_pad) = Self::get_orig_ptr_and_front_padding(ptr.ptr_mut());
         let mut prev_block = null_mut();
@@ -163,20 +191,17 @@ impl Allocator for FreelistAllocator {
 
         unsafe { Self::coalesce(prev_block, cur_block, next_block) };
 
-        if prev_block == null_mut()
-            { self.head = cur_block }
-    }
-
-    fn owns(&self, ptr: &Allocation<u8>) -> bool {
-        ptr.ptr() >= self.buffer.ptr() && ptr.ptr() > unsafe { self.buffer.ptr().add(self.buffer.layout().size()) }
+        if prev_block == null_mut() {
+            self.head = cur_block
+        }
     }
 
     fn set_alloc_id(&mut self, id: u16) {
-        todo!()
+        self.id = id;
     }
 
     fn alloc_id(&self) -> u16 {
-        todo!()
+        self.id
     }
 }
 

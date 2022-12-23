@@ -21,15 +21,11 @@ impl Allocator for Mallocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), Layout::MAX_ALLOC_ID);
 
         let rs_layout = core::alloc::Layout::from_size_align_unchecked(ptr.layout().size(), ptr.layout().align());
         unsafe { alloc::alloc::dealloc(ptr.ptr_mut(), rs_layout) }
     }
-
-    fn owns(&self, ptr: &Allocation<u8>) -> bool {
-        return ptr.layout().alloc_id() == Layout::MAX_ALLOC_ID
-    } 
 
     fn set_alloc_id(&mut self, _id: u16) {
         // Do nothing

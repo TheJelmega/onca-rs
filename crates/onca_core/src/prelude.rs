@@ -5,4 +5,4 @@ pub use crate::bytes::*;
 pub use crate::alloc::UseAlloc;
 
 pub use crate::collections::DynArray;
-pub use crate::strings::{String, ToString};
+pub use crate::strings::*;

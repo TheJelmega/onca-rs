@@ -106,8 +106,8 @@ impl Layout {
 
     pub fn with_size_multiple_of(&self, factor: u64) -> Self {
         let raw = self.packed;
-        let size = (self.size() as u64).next_multiple_of(factor);
-        Self{ packed: (raw & (Self::SIZE_MASK as u64)) | size << Self::SIZE_SHIFT }
+        let size = (self.size() as u64).next_multiple_of(factor) as usize;
+        Self::new_raw(size, self.alloc_id(), self.align())
     }
 
     /// Get a copy of the layout that is at minimum aligned with the given alignment

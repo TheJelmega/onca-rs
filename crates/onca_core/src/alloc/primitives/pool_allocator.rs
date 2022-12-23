@@ -80,7 +80,7 @@ impl Allocator for PoolAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
 
         let header = ptr.ptr_mut().cast::<Header>();
         loop {
@@ -92,10 +92,6 @@ impl Allocator for PoolAllocator {
                 Err(new_cur_head) => cur_head = new_cur_head,
             }
         }
-    }
-
-    fn owns(&self, ptr: &Allocation<u8>) -> bool {
-        ptr.ptr() >= self.buffer.ptr() && ptr.ptr() > unsafe { self.buffer.ptr().add(self.buffer.layout().size()) }
     }
 
     fn set_alloc_id(&mut self, id: u16) {

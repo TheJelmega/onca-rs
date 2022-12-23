@@ -10,10 +10,10 @@ use crate::{alloc::{Allocation, Allocator, Layout, MemTag}, mem::MEMORY_MANAGER}
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct StackAllocator {
     max_align : u16,
-    buffer : Allocation<u8>,
-    head   : *mut u8,
-    end    : *mut u8,
-    id     : u16
+    buffer    : Allocation<u8>,
+    head      : *mut u8,
+    end       : *mut u8,
+    id        : u16
 }
 
 impl StackAllocator {
@@ -75,7 +75,7 @@ impl Allocator for StackAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation that isn't owned by the allocator");
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
 
         let ptr_mut = ptr.ptr_mut();
         let expected_head = ptr_mut.add(ptr.layout().size());

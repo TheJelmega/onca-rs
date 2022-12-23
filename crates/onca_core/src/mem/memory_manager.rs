@@ -6,14 +6,14 @@ use core::{
 use crate::{
     alloc::{
         Allocator, Allocation, Layout, UseAlloc, MemTag,
-        primitives::{Mallocator, StackAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS,
+        primitives::{Mallocator, FreelistAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS,
     },
     sync::RwLock, MiB
 };
 use once_cell::sync::Lazy;
 
 thread_local! {
-    pub static TLS_TEMP_STACK_ALLOC : UnsafeCell<StackAllocator> = UnsafeCell::new(StackAllocator::new_uninit(16));
+    pub static TLS_TEMP_STACK_ALLOC : UnsafeCell<FreelistAllocator> = UnsafeCell::new(FreelistAllocator::new_uninit());
 }
 
 pub static MEMORY_MANAGER : MemoryManager = MemoryManager::new();
@@ -93,7 +93,10 @@ impl MemoryManager {
                         None => return None,
                         Some(buf) => buf
                     };
-                    TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).init(buffer));
+                    TLS_TEMP_STACK_ALLOC.with(|tls| {
+                        (*tls.get()).init(buffer);
+                        (*tls.get()).set_alloc_id(1)
+                    });
                 }
                 Some(&mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()))
             },
@@ -101,9 +104,11 @@ impl MemoryManager {
                 if id == 0 {
                     // TODO(jel): default alloc is not always the mallocator
                     Some(&state.malloc)
-                } else if id >= Layout::MAX_ALLOC_ID {
+                } else if id == 1 {
+                    Some(unsafe { &mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()) })
+                }  else if id >= Layout::MAX_ALLOC_ID {
                     Some(&state.malloc)
-                } else {
+                }else {
                     match state.allocs[(id - NUM_RESERVED_ALLOC_IDS) as usize] {
                         None => None,
                         Some(alloc) => Some(unsafe{ &*alloc })
@@ -165,7 +170,6 @@ impl MemoryManager {
     pub fn grow<T>(&self, ptr: Allocation<T>, new_layout: Layout) -> Result<Allocation<T>, Allocation<T>> {
         // TODO(jel): should these be asserts or just return an Err
         assert!(new_layout.size() > ptr.layout().size(), "new size needs to be larger that the current size");
-        assert!(ptr.ptr() != core::ptr::null(), "Cannot grow from null");
 
         if ptr.ptr() == core::ptr::null() {
             return match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
