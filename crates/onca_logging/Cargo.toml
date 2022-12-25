@@ -1,0 +1,13 @@
+[package]
+name = "onca_logging"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+onca_core = { path = "../onca_core" }
+onca_core_macros = { path = "../onca_core_macros" }
+
+# Should eventually be removed, maybe when we have an stdout that's io::Write
+onca_terminal = { path = "../onca_terminal" }

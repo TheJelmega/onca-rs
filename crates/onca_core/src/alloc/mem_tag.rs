@@ -264,6 +264,7 @@ pub enum CoreMemTag {
 
     /// External predefined tags
     Terminal,
+    Logging,
 
     /// Uncommon
     StdCollections,
