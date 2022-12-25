@@ -18,6 +18,12 @@ struct StaticBuf<T, const N: usize> {
     buf: MaybeUninit<[T; N]>
 }
 
+impl<T, const N: usize> StaticBuf<T, N> {
+    const fn new() -> Self {
+        Self { buf: MaybeUninit::uninit() }
+    }
+}
+
 impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
     fn new(_: UseAlloc, _: MemTag) -> Self {
         Self { buf: MaybeUninit::uninit() }
@@ -83,8 +89,8 @@ pub struct StaticDynArray<T, const N: usize> (imp::DynArray<T, StaticBuf<T, N>>)
 impl<T, const N: usize> StaticDynArray<T, N> {
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
-        Self(imp::DynArray::new(UseAlloc::Default, MemTag::default()))
+    pub const fn new() -> Self {
+        Self(imp::DynArray::const_new(StaticBuf::new()))
     }
 
     #[inline]

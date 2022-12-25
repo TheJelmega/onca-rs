@@ -80,32 +80,18 @@ impl MemoryManager {
     /// Get an allocator
     pub fn get_allocator(&self, alloc: UseAlloc) -> Option<&mut dyn Allocator> {
         let mut state = self.state.read();
+        
         let alloc_ref : Option<&dyn Allocator> = match alloc {
             // TODO(jel): default alloc is not always the mallocator
             UseAlloc::Default => Some(unsafe { &state.malloc }),
-            UseAlloc::Malloc => Some(& state.malloc),
-            UseAlloc::TlsTemp => unsafe {
-                let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
-                if !is_init {
-                    let layout = Layout::new_raw(MiB(1), UseAlloc::Malloc.get_id(), 8);
-                    let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Malloc, layout, CoreMemTag::TlsTempAlloc.to_mem_tag());
-                    let buffer = match buffer {
-                        None => return None,
-                        Some(buf) => buf
-                    };
-                    TLS_TEMP_STACK_ALLOC.with(|tls| {
-                        (*tls.get()).init(buffer);
-                        (*tls.get()).set_alloc_id(1)
-                    });
-                }
-                Some(&mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()))
-            },
+            UseAlloc::Malloc => Some(&state.malloc),
+            UseAlloc::TlsTemp => Self::get_tls_alloc(),
             UseAlloc::Id(id) => {
                 if id == 0 {
                     // TODO(jel): default alloc is not always the mallocator
                     Some(&state.malloc)
                 } else if id == 1 {
-                    Some(unsafe { &mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()) })
+                    Self::get_tls_alloc()
                 }  else if id >= Layout::MAX_ALLOC_ID {
                     Some(&state.malloc)
                 }else {
@@ -168,8 +154,10 @@ impl MemoryManager {
     /// 
     /// If new memory was unable to be allocated, the result will contain an `Err(...)` with the original allocator
     pub fn grow<T>(&self, ptr: Allocation<T>, new_layout: Layout) -> Result<Allocation<T>, Allocation<T>> {
-        // TODO(jel): should these be asserts or just return an Err
-        assert!(new_layout.size() > ptr.layout().size(), "new size needs to be larger that the current size");
+        /// Old layout could be larger, as allocators are free to allocate more memory that needed, and do report it in the returned layout
+        if new_layout.size() <= ptr.layout().size() {
+            return Ok(ptr);
+        }
 
         if ptr.ptr() == core::ptr::null() {
             return match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
@@ -226,6 +214,25 @@ impl MemoryManager {
                 Ok(mem.cast())
             },
             None => Err(ptr)
+        }
+    }
+
+    fn get_tls_alloc() -> Option<&'static dyn Allocator> {
+        unsafe {
+            let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
+            if !is_init {
+                let layout = Layout::new_raw(MiB(1), UseAlloc::Malloc.get_id(), 8);
+                let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Malloc, layout, CoreMemTag::TlsTempAlloc.to_mem_tag());
+                let buffer = match buffer {
+                    None => return None,
+                    Some(buf) => buf
+                };
+                TLS_TEMP_STACK_ALLOC.with(|tls| {
+                    (*tls.get()).init(buffer);
+                    (*tls.get()).set_alloc_id(1)
+                });
+            }
+            Some(&mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()))
         }
     }
 }

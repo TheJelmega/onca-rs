@@ -58,6 +58,11 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
     }
 
     #[inline]
+    pub const fn const_new(buf: B) -> Self {
+        Self {len: 0, buf, _p: PhantomData }
+    }
+
+    #[inline]
     pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
         Self { len: 0, buf: B::with_capacity(capacity, alloc, mem_tag), _p: PhantomData }
     }
@@ -157,13 +162,11 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         let len = self.len;
         assert!(index <= len, "insert index (is {index}) should be <= len (is {len})");
 
-        if len == self.buf.capacity() {
-            let new_cap = self.buf.reserve(self.len, 1);
-            
-            // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
-            if len == new_cap {
-                panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
-            }
+        let new_cap = self.buf.reserve(self.len, 1);
+        
+        // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
+        if len == new_cap {
+            panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
         }
 
         unsafe {
@@ -399,13 +402,11 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
 
     #[inline]
     pub fn push(&mut self, value: T) {
-        if self.len == self.buf.capacity() {
-            let new_cap = self.reserve(1);
+        let new_cap = self.reserve(1);
 
-            // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
-            if self.len == new_cap {
-                panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
-            }
+        // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
+        if self.len == new_cap {
+            panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
         }
 
         unsafe { 
@@ -437,13 +438,11 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
     unsafe fn append_elements(&mut self, other: *const [T]) {
         let count = (*other).len();
 
-        if self.len == self.buf.capacity() {
-            let new_cap = self.reserve(count);
+        let new_cap = self.reserve(count);
 
-            // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
-            if self.len == new_cap {
-                panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
-            }
+        // If the buffer is not resizable, we will just panic, as that's something that the user should make sure never happens
+        if self.len == new_cap {
+            panic!("Tried to reserve space in a GenericDynArray that doesn't have a resizable buffer");
         }
 
         let len = self.len;
@@ -593,7 +592,7 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         let cap = self.reserve(n);
 
         // Clamp `n` to not overflow in case the array has a static size
-        let n = n.min(self.len - cap);
+        let n = n.min(cap - self.len);
 
         unsafe {
             let mut ptr = self.as_mut_ptr().add(self.len);

@@ -20,6 +20,7 @@ use crate::{
     alloc::{UseAlloc, Allocator, MemTag, Layout, CoreMemTag},
     collections::DynArray,
     mem::{MEMORY_MANAGER, self},
+    io,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1446,6 +1447,24 @@ impl fmt::Write for String {
     #[inline]
     fn write_char(&mut self, c: char) -> fmt::Result {
         self.push(c);
+        Ok(())
+    }
+}
+
+impl io::Write for String {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let start_len = self.len();
+        match core::str::from_utf8(buf) {
+            Ok(s) => {
+                self.push_str(s);
+                Ok(self.len() - start_len)
+            },
+            Err(_) => Err(io::const_io_error!(io::ErrorKind::InvalidData, "`io::Write` for `String` expects valid unicode")),
+        }
+        
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }

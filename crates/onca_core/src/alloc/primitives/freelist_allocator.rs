@@ -67,8 +67,7 @@ impl FreelistAllocator {
     }
 
     // Allocate from the first fitting element (not optimal for fragmentation)
-    unsafe fn alloc_first(&mut self, layout: &mut Layout) -> *mut u8
-    {
+    unsafe fn alloc_first(&mut self, layout: &mut Layout) -> *mut u8 {
         assert!(self.is_initialized(), "Trying to allocate memory using an uninitialized free-list allocator");
 
         let size = layout.size();
@@ -88,18 +87,19 @@ impl FreelistAllocator {
             // The allocation needs to have at minimum enough space to put a free block, as it's otherwise unable to deallocate the memory without overwriting other memory
             let padded_size = core::cmp::max(padding + size, size_of::<FreeBlock>());
             if padded_size <= (*cur_block).size {
-                let aligned_ptr = ptr.add(padding);
                 let remaining_size = (*cur_block).size - padded_size;
+                let aligned_ptr = ptr.add(padding);
                 
                 Self::write_alloc_block(aligned_ptr, padding as u16);
 
                 if remaining_size < size_of::<FreeBlock>() {
                     if remaining_size > 0 {
-                        layout.expand_packed(Layout::new_size_align(remaining_size, 1));
+                        *layout = layout.expand_packed(Layout::new_size_align(remaining_size, 1));
                     }
                 } else {
-                    layout.expand_packed(Layout::new_size_align(padded_size - size, 1));
-                    next_block = Self::write_free_block(aligned_ptr.add(size), next_block, remaining_size);
+                    let additional_size = padded_size - size - padding;
+                    *layout = layout.expand_packed(Layout::new_raw(additional_size, 0, 1));
+                    next_block = Self::write_free_block(ptr.add(padded_size), next_block, remaining_size);
                 }
 
                 if prev_block == null_mut() {
@@ -108,7 +108,7 @@ impl FreelistAllocator {
                     (*prev_block).next = next_block;
                 }
 
-                return ptr.add(padding);
+                return aligned_ptr;
             }
 
             cur_block = (*cur_block).next;
@@ -117,50 +117,38 @@ impl FreelistAllocator {
         null_mut()
     }
 
-    unsafe fn write_alloc_block(ptr: *mut u8, front: u16)
-    {
-        let alloc_block = (ptr as *mut Header).sub(size_of::<Header>());
+    unsafe fn write_alloc_block(ptr: *mut u8, front: u16) {
+        let alloc_block = (ptr as *mut Header).sub(1);
         (*alloc_block).padding = front;
     }
 
-    unsafe fn write_free_block(ptr: *mut u8, next: *mut FreeBlock, size: usize) -> *mut FreeBlock
-    {
+    unsafe fn write_free_block(ptr: *mut u8, next: *mut FreeBlock, size: usize) -> *mut FreeBlock {
         let free_block = ptr as *mut FreeBlock;
         (*free_block).next = next;
         (*free_block).size = size;
         free_block
     }
 
-    unsafe fn get_orig_ptr_and_front_padding(ptr: *mut u8) -> (*mut u8, usize)
-    {
-        let alloc_block = (ptr as *mut Header).sub(size_of::<Header>());
-        let front = unsafe { (*alloc_block).padding };
-        (ptr.sub(front as usize), front.into())
+    unsafe fn get_orig_ptr_and_front_padding(ptr: *mut u8) -> (*mut u8, usize) {
+        let alloc_block = (ptr as *mut Header).sub(1);
+        let front = unsafe { (*alloc_block).padding } as usize;
+        (ptr.sub(front), front)
     }
 
-    unsafe fn coalesce(prev: *mut FreeBlock, mut cur: *mut FreeBlock, next: *mut FreeBlock)
-    {
-        let prev_u8 = prev as *mut u8;
-        let cur_u8 = cur as *mut u8;
-        let next_u8 = next as *mut u8;
+    unsafe fn coalesce(first: *mut FreeBlock, mut second: *mut FreeBlock) {
+        let first_u8 = first as *mut u8;
+        let first_size = (*first).size;
+        let second_u8 = second as *mut u8;
 
-        let prev_size = if prev != null_mut() { (*prev).size } else { 0 };
-        let cur_size = (*cur).size;
-
-        if (cur_u8).add(cur_size) == next_u8 {
-            (*cur).size += (*next).size;
-            (*cur).next = (*next).next;
-        }
-        if prev_u8.add(prev_size) == cur_u8 {
-            (*prev).size += cur_size;
-            (*prev).next = (*cur).next;
+        if first_u8.add(first_size) == second_u8 {
+            (*first).size += (*second).size;
+            (*first).next = (*second).next;
         }
     }
 }
 
 impl Allocator for FreelistAllocator {
     unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
-
         let mut layout = layout;
         let ptr = {
             self.alloc_first(&mut layout)
@@ -189,10 +177,14 @@ impl Allocator for FreelistAllocator {
 
         let cur_block = Self::write_free_block(orig_ptr, next_block, ptr.layout().size() + front_pad);
 
-        unsafe { Self::coalesce(prev_block, cur_block, next_block) };
+        if next_block != null_mut() {
+            Self::coalesce(cur_block, next_block);
+        }
 
         if prev_block == null_mut() {
             self.head = cur_block
+        } else {
+            Self::coalesce(prev_block, cur_block);
         }
     }
 
