@@ -249,70 +249,70 @@ impl Logger {
 #[macro_export]
 macro_rules! log {
     ($category:expr, $level:expr, $func:ident, $text:expr) => {
-        LOGGER.lock().log_fmt($category, $level, log_location!($func), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $level:expr, $func:ident, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, $level, log_location!($func), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_severe {
     ($category:expr, $func:ident, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Severe, log_location!($func), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $func:ident, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Severe, log_location!($func), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_error {
     ($category:expr, $func:ident, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Error, log_location!($func), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $func:ident, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Error, log_location!($func), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_warning {
     ($category:expr, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Warning, log_location!(), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Warning, log_location!(), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_info {
     ($category:expr, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Info, log_location!(), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Info, log_location!(), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_verbose {
     ($category:expr, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Verbose, log_location!(), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Verbose, log_location!(), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_debug {
     ($category:expr, $func:ident, $text:expr) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Debug, log_location!($func), format_args!($text));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        LOGGER.lock().log_fmt($category, LogLevel::Debug, log_location!($func), format_args!($format, $($arg),*));
+        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
