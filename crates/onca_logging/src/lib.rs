@@ -151,7 +151,7 @@ macro_rules! log_location {
     () => {
         $crate::LogLocation::new(file!(), line!(), "", onca_core::time::get_timestamp())
     };
-    ($func: ident) => {
+    ($func: expr) => {
         $crate::LogLocation::new(file!(), line!(), $crate::get_func_name($func), onca_core::time::get_timestamp())
     };
 }
@@ -248,30 +248,30 @@ impl Logger {
 
 #[macro_export]
 macro_rules! log {
-    ($category:expr, $level:expr, $func:ident, $text:expr) => {
+    ($category:expr, $level:expr, $func:expr, $text:expr) => {
         $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($text));
     };
-    ($category:expr, $level:expr, $func:ident, $format:expr, $($arg:expr),*) => {
+    ($category:expr, $level:expr, $func:expr, $format:expr, $($arg:expr),*) => {
         $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_severe {
-    ($category:expr, $func:ident, $text:expr) => {
+    ($category:expr, $func:expr, $text:expr) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($text));
     };
-    ($category:expr, $func:ident, $format:expr, $($arg:expr),*) => {
+    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_error {
-    ($category:expr, $func:ident, $text:expr) => {
+    ($category:expr, $func:expr, $text:expr) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($text));
     };
-    ($category:expr, $func:ident, $format:expr, $($arg:expr),*) => {
+    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
@@ -308,10 +308,10 @@ macro_rules! log_verbose {
 
 #[macro_export]
 macro_rules! log_debug {
-    ($category:expr, $func:ident, $text:expr) => {
+    ($category:expr, $func:expr, $text:expr) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($text));
     };
-    ($category:expr, $format:expr, $($arg:expr),*) => {
+    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
         $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
