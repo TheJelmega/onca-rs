@@ -339,6 +339,16 @@ impl<T, const N: usize> IntoIterator for StaticDynArray<T, N> {
     }
 }
 
+impl<'a, T, const N: usize> IntoIterator for &'a StaticDynArray<T, N> {
+    type Item = &'a T;
+    type IntoIter = slice::Iter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl<'a, T, const N: usize> IntoIterator for &'a mut StaticDynArray<T, N> {
     type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;

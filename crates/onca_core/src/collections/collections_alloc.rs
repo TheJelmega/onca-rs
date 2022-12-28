@@ -35,7 +35,7 @@ unsafe impl alloc::alloc::Allocator for Alloc {
             match alloc {
                 Some(ptr) => {
                     let slice_ptr = core::ptr::slice_from_raw_parts_mut(ptr.ptr_mut(), ptr.layout().size());
-                    *self_layout = layout;
+                    *self_layout = ptr.layout();
                     *self_mem_tag = ptr.mem_tag();
                     Ok(NonNull::new_unchecked(slice_ptr))
                 },

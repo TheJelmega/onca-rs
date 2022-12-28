@@ -555,6 +555,16 @@ impl<T> IntoIterator for DynArray<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a DynArray<T> {
+    type Item = &'a T;
+    type IntoIter = slice::Iter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a mut DynArray<T> {
     type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;
