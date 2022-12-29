@@ -1,0 +1,37 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cargo build",
+            "type": "shell",
+            "command": "cargo build"
+        },
+        {
+            "label": "run post_build",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "run",
+                "-p",
+                "onca_post_build",
+                "--",
+                "${workspaceFolder}/onca.exe.manifest"
+            ]
+        },
+        {
+            "label": "build onca",
+            "dependsOn": [
+                "cargo build",
+                "run post_build"
+            ],
+            "dependsOrder": "sequence",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

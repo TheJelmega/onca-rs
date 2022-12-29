@@ -3,7 +3,7 @@ use onca_core::io;
 use windows::Win32::{
     Foundation::HANDLE, 
     System::Console::{
-        WriteConsoleA, AllocConsole, GetStdHandle, SetConsoleMode, GetConsoleMode, SetConsoleOutputCP, SetConsoleCP,
+        WriteConsoleA, AllocConsole, GetStdHandle, SetConsoleMode, GetConsoleMode,
         STD_OUTPUT_HANDLE, STD_HANDLE,
         ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
     }, Storage::FileSystem::WriteFile,
@@ -30,11 +30,6 @@ impl Terminal {
                     return Err(io::Error::last_os_error());
                 }
             }
-
-            const CP_UTF8 : u32 = 65001;
-            SetConsoleOutputCP(CP_UTF8);
-            SetConsoleCP(CP_UTF8);
-
             Ok(())
         } 
     }
