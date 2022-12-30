@@ -3,7 +3,7 @@ Game engine in rust
 
 # Building
 
-The preject can be built by just calling:
+The project can be built by using:
 
 ```
 cargo build
