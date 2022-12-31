@@ -111,6 +111,7 @@ impl FreelistAllocator {
                 return aligned_ptr;
             }
 
+            prev_block = cur_block;
             cur_block = (*cur_block).next;
         }
 
@@ -184,6 +185,7 @@ impl Allocator for FreelistAllocator {
         if prev_block == null_mut() {
             self.head = cur_block
         } else {
+            (*prev_block).next = cur_block;
             Self::coalesce(prev_block, cur_block);
         }
     }
