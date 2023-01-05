@@ -2,7 +2,7 @@
 pub use std::time::*;
 
 use core::fmt::Display;
-use crate::os::os_imp;
+use crate::os;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TimeStamp {
@@ -24,5 +24,5 @@ impl Display for TimeStamp {
 }
 
 pub fn get_timestamp() -> TimeStamp {
-    os_imp::time::get_timestamp()
+    os::time::get_timestamp()
 }

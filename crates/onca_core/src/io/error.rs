@@ -367,7 +367,7 @@ impl Error {
     #[must_use]
     #[inline]
     pub fn last_os_error() -> Error {
-        Error::from_raw_os_error(crate::os::errno() as i32)
+        Error::from_raw_os_error(crate::sys::errno() as i32)
     }
 
     /// Create a new instance of an [`Error`] from a particular OS error code.

@@ -46,9 +46,9 @@ extern crate scopeguard;
 
 
 mod bytes;
+mod os;
 
 pub mod alloc;
-pub mod os;
 pub mod sync;
 pub mod mem;
 pub mod collections;
@@ -57,6 +57,8 @@ pub mod strings;
 pub mod io;
 
 pub mod time;
+
+pub mod sys;
 
 pub use bytes::*;
 
