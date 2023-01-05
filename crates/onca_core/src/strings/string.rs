@@ -622,7 +622,8 @@ impl String {
     }
 
     // TODO: should only be called when debugging, it makes no sense otherwise, as we handle not having null terminators correctly
-    fn null_terminate(&mut self) {
+    /// Null terminate a string (for APIs that take in a null-terminated string)
+    pub fn null_terminate(&mut self) {
         self.arr.push(0);
         // SAFETY: We added a null terminator, so we can always go back 1 character
         self.arr.pop();

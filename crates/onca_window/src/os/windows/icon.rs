@@ -8,6 +8,11 @@ use windows::{
     },
     core::PCSTR
 };
+use onca_core::{
+    prelude::*,
+    strings::String,
+    alloc::CoreMemTag
+};
 
 use crate::{PhysicalSize, LOG_CAT};
 
@@ -19,6 +24,7 @@ impl OSIcon {
     pub(crate) fn from_path(path: &str, size: Option<PhysicalSize>) -> OSIcon {
         unsafe {
             let (width, height) = size.map(|size | (size.width as i32, size.height as i32)).unwrap_or((0, 0));
+            let path = String::from_str(path, UseAlloc::TlsTemp, CoreMemTag::window());
             let hicon = LoadImageA(
                 HINSTANCE(0),
                 PCSTR(path.as_ptr()),
