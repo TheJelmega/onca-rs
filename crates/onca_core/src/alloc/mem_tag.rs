@@ -261,6 +261,7 @@ pub enum CoreMemTag {
     Sync,
     Allocators,
     TlsTempAlloc,
+    Callbacks,
 
     /// External predefined tags
     Terminal,
@@ -275,9 +276,20 @@ impl CoreMemTag {
     /// Core memory tag category
     pub const CATEGORY : u8 = 0;
 
+    #[inline]
+    fn create_tag(self) -> MemTag {
+        MemTag::new(get_tls_mem_tag_plugin_id(), Self::CATEGORY, self as u8, 0)
+    }
+
     /// Create a memory tag from the Core Memory Tag category
     #[inline]
     pub fn to_mem_tag(self) -> MemTag {
-        MemTag::new(0 /* TODO */, Self::CATEGORY, self as u8, 0)
+        self.create_tag()
+    }
+
+    /// Create a callback mem tag
+    #[inline]
+    pub fn callbacks() -> MemTag {
+        CoreMemTag::Callbacks.create_tag()
     }
 }

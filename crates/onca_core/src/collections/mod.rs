@@ -1,7 +1,6 @@
 mod collections_alloc;
 mod imp;
 
-// TODO: abstract impl with a generic impl
 mod static_dyn_array;
 mod dyn_array;
 mod small_dyn_array;
@@ -13,11 +12,12 @@ mod vec_deque;
 mod hash_map;
 mod hash_set;
 
+mod callback_array;
+
 
 pub use static_dyn_array::*;
 pub use dyn_array::*;
 pub use small_dyn_array::*;
-
 
 pub use btree_map::*;
 pub use btree_set::*;
@@ -25,6 +25,8 @@ pub use linked_list::*;
 pub use vec_deque::*;
 pub use hash_map::*;
 pub use hash_set::*;
+
+pub use callback_array::*;
 
 use core::ops::Range;
 
