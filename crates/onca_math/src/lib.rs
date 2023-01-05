@@ -52,3 +52,5 @@ pub use line::*;
 
 mod intersections;
 pub use intersections::*;
+
+pub mod pixel;

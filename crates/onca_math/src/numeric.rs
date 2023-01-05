@@ -6,91 +6,37 @@ pub trait Zero {
     fn zero() -> Self;
 }
 
-impl Zero for i8 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for i16 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for i32 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for i64 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for u8 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for u16 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for u32 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for u64 {
-    #[inline(always)]
-    fn zero() -> Self { 0 }
-}
-impl Zero for f32 {
-    #[inline(always)]
-    fn zero() -> Self { 0f32 }
-}
-impl Zero for f64 {
-    #[inline(always)]
-    fn zero() -> Self { 0f64 }
-}
-
 /// Defines a type which has a 1-value, i.e. the multiplicative identity
 pub trait One {
     fn one() -> Self;
 }
 
-impl One for i8 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
+macro_rules! impl_zero_one {
+    ($($ty:ty),*) => {
+        $(
+            impl Zero for $ty {
+                #[inline(always)]
+                fn zero() -> Self { 0 as $ty }
+            }
+
+            impl One for $ty {
+                #[inline(always)]
+                fn one() -> Self { 1 as $ty }
+            }
+        )*
+    };
 }
-impl One for i16 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for i32 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for i64 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for u8 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for u16 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for u32 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for u64 {
-    #[inline(always)]
-    fn one() -> Self { 1 }
-}
-impl One for f32 {
-    #[inline(always)]
-    fn one() -> Self { 1f32 }
-}
-impl One for f64 {
-    #[inline(always)]
-    fn one() -> Self { 1f64 }
+impl_zero_one!{
+    i8,
+    i16,
+    i32,
+    i64,
+    u8,
+    u16,
+    u32,
+    u64,
+    f32,
+    f64
 }
 
 /// Defines a type that is a partial implementation of a `Numeric`
@@ -321,6 +267,33 @@ macro_rules! impl_approx_zero {
     };
 }
 impl_approx_zero!{i8, i16, i32, i64, u8, u16, u32, u64, f32, f64}
+
+/// Define a type that can be cast to another type
+pub trait NumericCast<U: Numeric> : NumericBase {
+    fn cast(self) -> U;
+}
+
+macro_rules! impl_cast {
+    ($from: ty => $($to:ty),*) => {
+        $(
+            impl NumericCast<$to> for $from {
+                fn cast(self) -> $to {
+                    self as $to
+                }
+            }
+        )*
+    };
+}
+impl_cast!{ i8  => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ i16 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ i32 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ i64 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ u8  => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ u16 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ u32 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ u64 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ f32 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
+impl_cast!{ f64 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
 
 /// Defines a type that is numeric
 pub trait Numeric : NumericBase + ApproxEq<Epsilon = Self> + ApproxZero<Epsilon = Self> + MathConsts {
