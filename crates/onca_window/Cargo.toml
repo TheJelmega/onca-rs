@@ -1,0 +1,30 @@
+[package]
+name = "onca_window"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+onca_core_macros = { path = "../onca_core_macros" }
+onca_core = { path = "../onca_core" }
+onca_logging = { path = "../onca_logging" }
+onca_math = { path = "../onca_math" }
+cfg-if = "1.0.0"
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.43.0", features = [
+    "Win32_Foundation",
+    "Win32_System_WindowsProgramming",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_System_Ole",
+    "Win32_System_Com",
+    "Win32_System_SystemServices",
+    "Win32_System_Com_StructuredStorage",
+] }
+onca_windows_utils = { path = "../onca_windows_utils" }

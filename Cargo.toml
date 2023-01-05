@@ -28,10 +28,11 @@ onca_core = { path = "crates/onca_core" }
 onca_fs = { path = "crates/onca_fs" }
 onca_terminal = { path = "crates/onca_terminal" }
 onca_logging = { path = "crates/onca_logging" }
-
+onca_window = { path = "crates/onca_window" }
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.43.0", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security"] }
+onca_windows_utils = { path = "crates/onca_windows_utils" }
 
 [build-dependencies]
 embed-manifest = "1.3.1"

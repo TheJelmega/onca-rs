@@ -266,6 +266,7 @@ pub enum CoreMemTag {
     /// External predefined tags
     Terminal,
     Logging,
+    Window,
 
     /// Uncommon
     StdCollections,
@@ -292,4 +293,11 @@ impl CoreMemTag {
     pub fn callbacks() -> MemTag {
         CoreMemTag::Callbacks.create_tag()
     }
+    
+    /// Create a window memtag
+    #[inline]
+    pub fn window() -> MemTag {
+        CoreMemTag::Window.create_tag()
+    }
+
 }

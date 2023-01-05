@@ -60,6 +60,7 @@ pub mod time;
 
 pub mod sys;
 
-pub use bytes::*;
+pub mod utils;
 
+pub use bytes::*;
 pub mod prelude;
