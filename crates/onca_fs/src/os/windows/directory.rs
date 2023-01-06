@@ -5,18 +5,17 @@ use onca_core::{
 };
 use windows::{
     Win32::{
-        Storage::FileSystem::{CreateDirectoryW, RemoveDirectoryW},
+        Storage::FileSystem::{CreateDirectoryA, RemoveDirectoryA},
         Foundation::{GetLastError, ERROR_ALREADY_EXISTS},
     },
-    core::PCWSTR,
+    core::PCSTR,
 };
 use crate::{Path, FsMemTag};
-use super::path_to_null_terminated_utf16;
 
 pub(crate) fn create(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
-        create_dir(pcwstr)
+        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        create_dir(PCSTR(path.as_ptr()))
     }
 }
 
@@ -28,15 +27,15 @@ pub(crate) fn create_recursive(path: &Path) -> io::Result<()> {
         }
 
         for cur_dir in parent_paths.into_iter().rev() {
-            let (_buf, pcwstr) = path_to_null_terminated_utf16(cur_dir);
-            create_dir(pcwstr)?;
+            let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+            create_dir(PCSTR(path.as_ptr()))?;
         }
         Ok(())
     }
 }
 
-unsafe fn create_dir(pcwstr: PCWSTR) -> io::Result<()> {
-    let res = CreateDirectoryW(pcwstr, None).as_bool();
+unsafe fn create_dir(pcstr: PCSTR) -> io::Result<()> {
+    let res = CreateDirectoryA(pcstr, None).as_bool();
     if res {
         Ok(())
     } else {
@@ -51,8 +50,8 @@ unsafe fn create_dir(pcwstr: PCWSTR) -> io::Result<()> {
 
 pub(crate) fn remove(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_but, pcwstr) = path_to_null_terminated_utf16(path);
-        let res = RemoveDirectoryW(pcwstr).as_bool();
+        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let res = RemoveDirectoryA(PCSTR(path.as_ptr())).as_bool();
         if res {
             Ok(())
         } else {

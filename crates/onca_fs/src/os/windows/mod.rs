@@ -1,9 +1,8 @@
 use onca_core::{
-    alloc::UseAlloc,
-    collections::DynArray,
+    prelude::*,
     io
 };
-use crate::{FileFlags, PathBuf, Path, FsMemTag};
+use crate::{FileFlags, PathBuf, FsMemTag};
 use windows::{Win32::{
     Storage::FileSystem::{
         FILE_FLAGS_AND_ATTRIBUTES,
@@ -25,8 +24,8 @@ use windows::{Win32::{
         FILE_ATTRIBUTE_RECALL_ON_OPEN,
         FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS,
     },
-    System::Environment::GetCurrentDirectoryW,
-}, core::PCWSTR};
+    System::Environment::GetCurrentDirectoryA,
+}};
 
 // Can't find these constants in windows headers, so create it here
 const MAX_PATH : usize = 260;
@@ -41,16 +40,16 @@ pub(crate) mod link;
 
 pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
     unsafe {
-        let expected_len = GetCurrentDirectoryW(None) as usize;
+        let expected_len = GetCurrentDirectoryA(None) as usize;
         let mut dynarr = DynArray::with_capacity(expected_len, alloc, FsMemTag::Temporary.to_mem_tag());
         
         dynarr.set_len(expected_len);
-        let len = GetCurrentDirectoryW(Some(&mut *dynarr)) as usize;
+        let len = GetCurrentDirectoryA(Some(&mut *dynarr)) as usize;
         debug_assert_eq!(len, expected_len);
 
-        let res = PathBuf::from_utf16(&*dynarr, alloc);
+        let res = String::from_utf8(dynarr).into();
         match res {
-            Ok(path) => Ok(path),
+            Ok(path) => Ok(path.into()),
             Err(_) => Err(io::Error::last_os_error()),
         }
     }
@@ -58,13 +57,6 @@ pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-
-fn path_to_null_terminated_utf16(path: &Path) -> (DynArray<u16>, PCWSTR) {
-    let mut buf = DynArray::from_iter(path.as_str().encode_utf16(), UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
-    buf.push(0);
-    let pcwstr = PCWSTR(buf.as_ptr());
-    (buf, pcwstr)
-}
 
 fn high_low_to_u64(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | low as u64

@@ -1,52 +1,50 @@
 use core::mem;
 use onca_core::{
-    collections::DynArray,
-    alloc::{UseAlloc},
-    strings::String,
+    prelude::*,
+    utils,
 };
 use windows::{
     Win32::{Storage::FileSystem::{
-        GetDiskFreeSpaceW, GetDiskFreeSpaceExW,
-        GetDriveTypeW,
-        GetLogicalDriveStringsW, 
-        GetVolumeInformationW,
-        FindFirstVolumeW, FindNextVolumeW, FindVolumeClose,
-        GetVolumePathNamesForVolumeNameW
+        GetDiskFreeSpaceA, GetDiskFreeSpaceExA,
+        GetDriveTypeA,
+        GetLogicalDriveStringsA, 
+        GetVolumeInformationA,
+        FindFirstVolumeA, FindNextVolumeA, FindVolumeClose,
+        GetVolumePathNamesForVolumeNameA
     }, Foundation::GetLastError},
-    core::PCWSTR,
-    Win32::Foundation::{ERROR_MORE_DATA},
+    core::PCSTR,
+    Win32::Foundation::ERROR_MORE_DATA,
 };
 use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, FsMemTag};
-use super::{MAX_PATH, path_to_null_terminated_utf16};
+use super::MAX_PATH;
 
 pub fn get_drive_info(path: PathBuf) -> Option<DriveInfo> {
-    let (buf, _) = path_to_null_terminated_utf16(&path);
-    get_drive_info_utf16(path, &*buf)
+    get_drive_info_internal(path)
 }
 
-pub fn get_drive_type(path: PathBuf) -> DriveType {
+pub fn get_drive_type(mut path: PathBuf) -> DriveType {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(&path); 
-        let drive_type = GetDriveTypeW(pcwstr);
+        path.null_terminate();
+        let drive_type = GetDriveTypeA(PCSTR(path.as_ptr()));
         mem::transmute_copy(&drive_type)
     }
 }
 
 pub fn get_all_drive_info(alloc: UseAlloc) -> DynArray<DriveInfo> {
     unsafe {
-        let needed = GetLogicalDriveStringsW(None) as usize;
+        let needed = GetLogicalDriveStringsA(None) as usize;
         let mut names = DynArray::with_capacity(needed, alloc, FsMemTag::Temporary.to_mem_tag());
         names.set_len(needed);
         
-        let written = GetLogicalDriveStringsW(Some(&mut *names)) as usize;
+        let written = GetLogicalDriveStringsA(Some(&mut *names)) as usize;
         // SAFETY: Calling `GetLogicalDriveStringsW` without a buffer returns size + 1
         names.set_len(written);
         debug_assert_eq!(written, needed - 1);
 
         let mut infos = DynArray::new(alloc, FsMemTag::General.to_mem_tag());
-        for utf16 in names.split_inclusive(|&c| c == 0) {
-            let path = PathBuf::from_utf16_lossy(utf16, alloc);
-            let drv_info = get_drive_info_utf16(path, utf16);
+        for utf8 in names.split_inclusive(|&c| c == 0) {
+            let mut path = PathBuf::from_str(core::str::from_utf8_unchecked(utf8), alloc);
+            let drv_info = get_drive_info_internal(path);
             if let Some(drv_info) = drv_info {
                 infos.push(drv_info);
             }
@@ -56,7 +54,7 @@ pub fn get_all_drive_info(alloc: UseAlloc) -> DynArray<DriveInfo> {
     }
 }
 
-fn get_drive_info_utf16(path: PathBuf, utf16: &[u16]) -> Option<DriveInfo> {
+fn get_drive_info_internal(mut path: PathBuf) -> Option<DriveInfo> {
     unsafe {
         let mut total_bytes = 0;
         let mut available_bytes = 0;
@@ -66,14 +64,15 @@ fn get_drive_info_utf16(path: PathBuf, utf16: &[u16]) -> Option<DriveInfo> {
         let mut total_clusters = 0;
         let mut free_clusters = 0;
 
-        let pcwstr = PCWSTR(utf16.as_ptr());
+        path.null_terminate();
+        let pcstr = PCSTR(path.as_ptr());
 
-        let res = GetDiskFreeSpaceExW(pcwstr, Some(&mut available_bytes), Some(&mut total_bytes), Some(&mut available_to_user));
+        let res = GetDiskFreeSpaceExA(pcstr, Some(&mut available_bytes), Some(&mut total_bytes), Some(&mut available_to_user));
         if !res.as_bool() {
             return None;
         }
         
-        let res = GetDiskFreeSpaceW(pcwstr,
+        let res = GetDiskFreeSpaceA(pcstr,
             Some(&mut sectors_per_cluster),
             Some(&mut bytes_per_sector),
             Some(&mut free_clusters),
@@ -83,7 +82,7 @@ fn get_drive_info_utf16(path: PathBuf, utf16: &[u16]) -> Option<DriveInfo> {
             return None;
         }
 
-        let drive_type = GetDriveTypeW(pcwstr);
+        let drive_type = GetDriveTypeA(pcstr);
 
         Some(DriveInfo {
             root: path,
@@ -100,14 +99,13 @@ fn get_drive_info_utf16(path: PathBuf, utf16: &[u16]) -> Option<DriveInfo> {
 }
 
 pub fn get_volume_info(path: PathBuf, alloc: UseAlloc) -> Option<VolumeInfo> {
-    let (buf, _) = path_to_null_terminated_utf16(&path);
-    get_volume_info_utf16(path, &*buf, alloc)
+    get_volume_info_internal(path, alloc)
 }
 
 pub fn get_all_volume_info(alloc: UseAlloc) -> DynArray<VolumeInfo> {
     unsafe {
-        let mut guid_buf = [0u16; 64];
-        let handle = FindFirstVolumeW(&mut guid_buf);
+        let mut guid_buf = [0u8; 65];
+        let handle = FindFirstVolumeA(&mut guid_buf);
         let handle = match handle {
             Ok(handle) => handle,
             Err(_) => return DynArray::new(alloc, FsMemTag::General.to_mem_tag()),
@@ -121,16 +119,15 @@ pub fn get_all_volume_info(alloc: UseAlloc) -> DynArray<VolumeInfo> {
                 let mut drain = roots.drain(..);
 
                 // SAFETY: we only get here when there is at least 1 root and we are draining the entire roots array, so we don't need to check for the first one
-                let first_path = drain.next().unwrap_unchecked();
-                let (utf16, _) = path_to_null_terminated_utf16(&first_path);
-                let info = get_volume_info_utf16(first_path, &*utf16, alloc);
+                let mut first_path = drain.next().unwrap_unchecked();
+                let info = get_volume_info_internal(first_path, alloc);
                 if let Some(mut info) = info {
                     info.roots.extend(drain);
                     infos.push(info);
                 }
             }
 
-            if !FindNextVolumeW(handle, &mut guid_buf).as_bool() {
+            if !FindNextVolumeA(handle, &mut guid_buf).as_bool() {
                 break;
             }
         }
@@ -187,10 +184,10 @@ fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
     fs_flags
 }
 
-unsafe fn get_drive_names_for_volume(guid: &[u16], alloc: UseAlloc) -> DynArray<PathBuf> {
-    let pcwstr = PCWSTR(guid.as_ptr());
+unsafe fn get_drive_names_for_volume(guid: &[u8], alloc: UseAlloc) -> DynArray<PathBuf> {
+    let pcstr = PCSTR(guid.as_ptr());
     let mut needed = 0;
-    let res = GetVolumePathNamesForVolumeNameW(pcwstr, None, &mut needed).as_bool();
+    let res = GetVolumePathNamesForVolumeNameA(pcstr, None, &mut needed).as_bool();
     if !res && GetLastError() != ERROR_MORE_DATA {
         return DynArray::new(alloc, FsMemTag::General.to_mem_tag());
     }
@@ -200,7 +197,7 @@ unsafe fn get_drive_names_for_volume(guid: &[u16], alloc: UseAlloc) -> DynArray<
     utf16_paths.set_len(needed);
 
     let mut written = 0;
-    if !GetVolumePathNamesForVolumeNameW(pcwstr, Some(&mut *utf16_paths), &mut written).as_bool() {
+    if !GetVolumePathNamesForVolumeNameA(pcstr, Some(&mut *utf16_paths), &mut written).as_bool() {
         return DynArray::new(alloc, FsMemTag::General.to_mem_tag());
     }
     let written = written as usize;
@@ -208,45 +205,45 @@ unsafe fn get_drive_names_for_volume(guid: &[u16], alloc: UseAlloc) -> DynArray<
     utf16_paths.set_len(written - 1);
 
     let mut paths = DynArray::with_capacity(needed, alloc, FsMemTag::General.to_mem_tag());
-    for utf16 in utf16_paths.split(|&c| c == 0) {
-        if utf16.is_empty() {
+    for utf8 in utf16_paths.split(|&c| c == 0) {
+        if utf8.is_empty() {
             continue;
         }
 
-        let root = PathBuf::from_utf16_lossy(utf16, alloc);
+        let root = PathBuf::from_str(core::str::from_utf8_unchecked(utf8), alloc);
         paths.push(root);
     }
     paths
 }
 
-fn get_volume_info_utf16(path: PathBuf, utf16: &[u16], alloc: UseAlloc) -> Option<VolumeInfo> {
+fn get_volume_info_internal(mut path: PathBuf, alloc: UseAlloc) -> Option<VolumeInfo> {
     unsafe {
-
-        let pwcstr = PCWSTR(utf16.as_ptr());
+        path.null_terminate();
+        let pwcstr = PCSTR(path.as_ptr());
 
         const MAX_BUF_LEN : usize = MAX_PATH + 1;
-        let mut utf16_name = [0u16; MAX_BUF_LEN];
+        let mut name = [0u8; MAX_BUF_LEN];
         let mut serial = 0u32;
         let mut max_comp_len = 0u32;
         let mut win32_fs_flags = 0u32;
-        let mut utf16_fs_name = [0u16; MAX_BUF_LEN];
+        let mut fs_name = [0u8; MAX_BUF_LEN];
 
-        if !GetVolumeInformationW(
+        if !GetVolumeInformationA(
             pwcstr,
-            Some(&mut utf16_name),
+            Some(&mut name),
             Some(&mut serial),
             Some(&mut max_comp_len),
             Some(&mut win32_fs_flags),
-            Some(&mut utf16_fs_name)
+            Some(&mut fs_name)
         ).as_bool() {
             return None;
         }
 
-        let volume_name_len = utf16_name.iter().position(|&c| c == 0).unwrap_or(MAX_BUF_LEN);
-        let volume_name_buffer = utf16_name.split_at(volume_name_len).0;
+        let volume_name_len = name.iter().position(|&c| c == 0).unwrap_or(MAX_BUF_LEN);
+        let volume_name_buffer = name.split_at(volume_name_len).0;
 
-        let volume_fs_name_len = utf16_fs_name.iter().position(|&c| c == 0).unwrap_or(MAX_BUF_LEN);
-        let volume_fs_name_buffer = utf16_fs_name.split_at(volume_fs_name_len).0;
+        let volume_fs_name_len = fs_name.iter().position(|&c| c == 0).unwrap_or(MAX_BUF_LEN);
+        let volume_fs_name_buffer = fs_name.split_at(volume_fs_name_len).0;
 
         let fs_flags = get_volume_fs_flags(win32_fs_flags);
 
@@ -256,11 +253,11 @@ fn get_volume_info_utf16(path: PathBuf, utf16: &[u16], alloc: UseAlloc) -> Optio
 
         Some(VolumeInfo {
             roots,
-            name: String::from_utf16_lossy(volume_name_buffer, alloc, FsMemTag::General.to_mem_tag()),
+            name: String::from_utf8_lossy(utils::null_terminate_slice(&name), alloc, FsMemTag::General.to_mem_tag()),
             serial,
             max_comp_len,
             fs_flags,
-            fs_name: String::from_utf16_lossy(volume_fs_name_buffer, alloc, FsMemTag::General.to_mem_tag()),
+            fs_name: String::from_utf8_lossy(utils::null_terminate_slice(&fs_name), alloc, FsMemTag::General.to_mem_tag()),
         })
     }
 }

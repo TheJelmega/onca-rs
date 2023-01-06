@@ -803,6 +803,13 @@ impl PathBuf {
         Self { inner: String::from_str(s, alloc, FsMemTag::Path.to_mem_tag()) }
     }
 
+    /// Create a `PathBuf` from a [`u8`] slice, including invalid characters.
+    #[must_use]
+    #[inline]
+    pub fn from_utf8_lossy(s: &[u8], alloc: UseAlloc) -> Self {
+        Self { inner: String::from_utf8_lossy(s, alloc, FsMemTag::Path.to_mem_tag()) }
+    }
+
     /// Coerces to a [`Path`] slice.
     #[must_use]
     #[inline]
@@ -810,20 +817,11 @@ impl PathBuf {
         self
     }
 
-    
-    /// Decode a UTF-16-enocoded vector `v` into a `string`, returning [`Err`]
-    pub fn from_utf16(v: &[u16], alloc: UseAlloc) -> Result<PathBuf, FromUtf16Error> {
-        Ok(Self{ inner: String::from_utf16(v, alloc, FsMemTag::Path.to_mem_tag())? })
-    }
-
-
-    /// Decode a UTF-16-encoded slice `v` into a `PathBug`, replacing invalid data with [the replacement character (`U+FFFD`)][U+FFFD]
-    /// 
-    /// [U+FFFD]: core::char::REPLACEMENT_CHARACTER
-    #[inline]
+    /// Get a pointer to the first character of the path.
     #[must_use]
-    pub fn from_utf16_lossy(v: &[u16], alloc: UseAlloc) -> PathBuf {
-        Self{ inner: String::from_utf16_lossy(v, alloc, FsMemTag::Path.to_mem_tag()) }
+    #[inline]
+    pub fn as_ptr(&self) -> *const u8 {
+        self.inner.as_ptr()
     }
 
     /// Extends `self` with `path`
@@ -1065,6 +1063,11 @@ impl PathBuf {
     pub fn allocator_id(&self) -> u16 {
         self.inner.allocator_id()
     }
+
+    /// Null terminate the path
+    pub fn null_terminate(&mut self) {
+        self.inner.null_terminate();
+    }
 }
 
 impl Clone for PathBuf {
@@ -1231,6 +1234,14 @@ impl Path {
     #[must_use = "this returns the result of the opration, without modifying the original"]
     pub fn to_path_buf(&self, alloc: UseAlloc) -> PathBuf {
         PathBuf::from_str(&self.inner, alloc)
+    }
+
+    /// Converts a `Path` into an owned [`PathBuf`] and null terminates it
+    #[must_use = "this returns the result of the opration, without modifying the original"]
+    pub fn to_null_terminated_path_buf(&self, alloc: UseAlloc) -> PathBuf {
+        let mut buf = PathBuf::from_str(&self.inner, alloc);
+        buf.null_terminate();
+        buf
     }
 
     // NOTE(jel): Rust also supports Redox in this call, something we are currently not doing, or care about atm

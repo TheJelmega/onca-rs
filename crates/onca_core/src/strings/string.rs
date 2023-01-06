@@ -105,33 +105,6 @@ impl String {
         res
     }
 
-    /// Decode a UTF-16-enocoded vector `v` into a `string`, returning [`Err`]
-    pub fn from_utf16(v: &[u16], alloc: UseAlloc, mem_tag: MemTag) -> Result<String, FromUtf16Error> {
-        // From rust's std impl
-        // // This isn't done via collect::<Result<_, _>>() for performance reasons.
-        // // FIX_ME: the function can be simplified again when #48994 is closed.
-        let mut ret = String::with_capacity(v.len(), alloc, mem_tag);
-        for c in decode_utf16(v.iter().cloned()) {
-            if let Ok(c) = c {
-                ret.push(c);
-            } else {
-                return Err(FromUtf16Error(()));
-            }
-        }
-        ret.null_terminate();
-        Ok(ret)
-    }
-
-    /// Decode a UTF-16-encoded slice `v` into a `String`, replacing invalid data with [the replacement character (`U+FFFD`)][U+FFFD]
-    /// 
-    /// [U+FFFD]: core::char::REPLACEMENT_CHARACTER
-    #[inline]
-    #[must_use]
-    pub fn from_utf16_lossy(v: &[u16], alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let it = decode_utf16(v.iter().cloned()).map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER));
-        String::from_iter(it, alloc, mem_tag)
-    }
-
     /// Convert a `str` into a `String` with a given allocator
     #[inline]
     #[must_use]

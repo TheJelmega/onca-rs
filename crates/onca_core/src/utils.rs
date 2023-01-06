@@ -1,17 +1,19 @@
 use core::ops;
 
-/// Convert a slice containing a null terminated string into an array
-pub fn null_terminated_arr_to_str_unchecked(arr: &[u8], max_len: usize) -> &str {
-    let len = arr.iter().position(|&b| b == 0).unwrap_or(max_len);
-    let slice = unsafe { core::slice::from_raw_parts(arr.as_ptr(), len) };
-    unsafe { core::str::from_utf8_unchecked(slice) }
+/// If the array contains `0`, return the sub-slice until that point, otherwise return the full slice.
+pub fn null_terminate_slice(slice: &[u8]) -> &[u8] {
+    let len = slice.iter().position(|&b| b == 0).unwrap_or(slice.len());
+    &slice[..len]
 }
 
 /// Convert a slice containing a null terminated string into an array
-pub fn null_terminated_arr_to_str(arr: &[u8], max_len: usize) -> Result<&str, core::str::Utf8Error> {
-    let len = arr.iter().position(|&b| b == 0).unwrap_or(max_len);
-    let slice = unsafe { core::slice::from_raw_parts(arr.as_ptr(), len) };
-    unsafe { core::str::from_utf8(slice) }
+pub fn null_terminated_arr_to_str_unchecked(arr: &[u8]) -> &str {
+    unsafe { core::str::from_utf8_unchecked(null_terminate_slice(arr)) }
+}
+
+/// Convert a slice containing a null terminated string into an array
+pub fn null_terminated_arr_to_str(arr: &[u8]) -> Result<&str, core::str::Utf8Error> {
+    unsafe { core::str::from_utf8(null_terminate_slice(arr)) }
 }
 
 /// Check if a flag is set

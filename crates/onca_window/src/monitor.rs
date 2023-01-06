@@ -111,12 +111,12 @@ impl Monitor {
 
     /// Get the monitor's name.
     pub fn dev_name(&self) -> &str {
-        utils::null_terminated_arr_to_str_unchecked(&self.dev_name, self.dev_name.len())
+        utils::null_terminated_arr_to_str_unchecked(&self.dev_name)
     }
 
     /// Get the monitor's name.
     pub fn name(&self) -> &str {
-        utils::null_terminated_arr_to_str_unchecked(&self.name, self.name.len())
+        utils::null_terminated_arr_to_str_unchecked(&self.name)
     }
 
     /// Get all available monitor modes

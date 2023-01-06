@@ -1,16 +1,20 @@
-use onca_core::io;
-use windows::Win32::{Storage::FileSystem::{CreateHardLinkW, CreateSymbolicLinkW, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_DIRECTORY}};
+use onca_core::{
+    prelude::*,   
+    io
+};
+use windows::{
+    Win32::Storage::FileSystem::{CreateHardLinkA, CreateSymbolicLinkA, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_DIRECTORY},
+    core::PCSTR
+};
 
 use crate::Path;
 
-use super::path_to_null_terminated_utf16;
-
 pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let (_s_buf, s_pcwstr) = path_to_null_terminated_utf16(source);
-        let (_d_buf, d_pcwstr) = path_to_null_terminated_utf16(dest);
+        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
-        let res = CreateHardLinkW(d_pcwstr, s_pcwstr, None).as_bool();
+        let res = CreateHardLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), None).as_bool();
         if res {
             Ok(())
         } else {
@@ -21,10 +25,10 @@ pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
 
 pub fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let (_s_buf, s_pcwstr) = path_to_null_terminated_utf16(source);
-        let (_d_buf, d_pcwstr) = path_to_null_terminated_utf16(dest);
+        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
-        let res = CreateSymbolicLinkW(d_pcwstr, s_pcwstr, SYMBOLIC_LINK_FLAGS(0)).as_bool();
+        let res = CreateSymbolicLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), SYMBOLIC_LINK_FLAGS(0)).as_bool();
         if res {
             Ok(())
         } else {
@@ -35,10 +39,10 @@ pub fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
 
 pub fn symlink_dir(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let (_s_buf, s_pcwstr) = path_to_null_terminated_utf16(source);
-        let (_d_buf, d_pcwstr) = path_to_null_terminated_utf16(dest);
+        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
-        let res = CreateSymbolicLinkW(d_pcwstr, s_pcwstr, SYMBOLIC_LINK_FLAG_DIRECTORY).as_bool();
+        let res = CreateSymbolicLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), SYMBOLIC_LINK_FLAG_DIRECTORY).as_bool();
         if res {
             Ok(())
         } else {

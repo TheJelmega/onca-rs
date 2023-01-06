@@ -15,26 +15,35 @@ use windows::{
         Storage::FileSystem::{
             GetFileInformationByHandleEx,
             FileStandardInfo, FILE_STANDARD_INFO,
-            FindFirstFileW, WIN32_FIND_DATAW, 
-            FindFileHandle, FindClose, FindNextFileW, WIN32_FILE_ATTRIBUTE_DATA, GetFileAttributesExW, GetFileExInfoStandard, CreateFileW, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, FILE_ALIGNMENT_INFO, FileAlignmentInfo, FILE_ID_INFO, FileIdInfo, FILE_READ_DATA, FILE_WRITE_ATTRIBUTES, FILE_EXECUTE, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_WRITE_EA, DELETE
+            FindFirstFileA, WIN32_FIND_DATAA, 
+            FindFileHandle, FindClose, FindNextFileA,
+            WIN32_FILE_ATTRIBUTE_DATA,
+            GetFileAttributesExA, GetFileExInfoStandard, CreateFileA,
+            FILE_READ_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, FILE_ALIGNMENT_INFO,
+            FileAlignmentInfo,
+            FILE_ID_INFO,
+            FileIdInfo,
+            FILE_READ_DATA, FILE_WRITE_ATTRIBUTES, FILE_EXECUTE, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_WRITE_EA,
+            DELETE
         }, 
         Security::{
-            GetFileSecurityW, LookupAccountNameW, SID, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SID_NAME_USE, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
+            GetFileSecurityA, LookupAccountNameA, SID, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SID_NAME_USE, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
             Authorization::{
-                AUTHZ_ACCESS_REQUEST, AUTHZ_ACCESS_REPLY, AuthzAccessCheck, AUTHZ_ACCESS_CHECK_FLAGS, AUTHZ_AUDIT_EVENT_HANDLE, AuthzInitializeResourceManager, AUTHZ_RM_FLAG_NO_AUDIT, AUTHZ_RESOURCE_MANAGER_HANDLE, AUTHZ_CLIENT_CONTEXT_HANDLE, AuthzInitializeContextFromSid
+                AuthzAccessCheck, AuthzInitializeResourceManager, AuthzInitializeContextFromSid,
+                AUTHZ_ACCESS_REQUEST, AUTHZ_ACCESS_REPLY, AUTHZ_ACCESS_CHECK_FLAGS, AUTHZ_AUDIT_EVENT_HANDLE, AUTHZ_RM_FLAG_NO_AUDIT, AUTHZ_RESOURCE_MANAGER_HANDLE, AUTHZ_CLIENT_CONTEXT_HANDLE,
             }
         },
         System::{
             SystemServices::MAXIMUM_ALLOWED, 
-            WindowsProgramming::GetUserNameW
+            WindowsProgramming::GetUserNameA
         },
     }, 
-    core::{PCWSTR, PWSTR}
+    core::{PCSTR, PSTR, PCWSTR}
 };
 
 use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FsMemTag};
 
-use super::{high_low_to_u64, dword_to_flags, path_to_null_terminated_utf16, MAX_PATH, file};
+use super::{high_low_to_u64, dword_to_flags, MAX_PATH, file};
 
 
 pub(crate) struct EntrySearchHandle(FindFileHandle);
@@ -42,32 +51,31 @@ pub(crate) struct EntrySearchHandle(FindFileHandle);
 impl EntrySearchHandle {
     pub(crate) fn new(path: &Path, alloc: UseAlloc) -> io::Result<(EntrySearchHandle, PathBuf)> {
         unsafe{
-            let (mut buf, _pcwstr) = path_to_null_terminated_utf16(path);
+            let mut buf = path.to_path_buf(alloc);
             buf.pop();
-            buf.push('/' as u16);
-            buf.push('*' as u16);
-            buf.push(0);
-            let pcwstr = PCWSTR(buf.as_ptr());
+            buf.push("/*");
+            buf.null_terminate();
+            let pcwstr = PCSTR(buf.as_ptr());
 
-            let mut find_data = WIN32_FIND_DATAW::default();
-            let handle = FindFirstFileW(pcwstr, &mut find_data);
+            let mut find_data = WIN32_FIND_DATAA::default();
+            let handle = FindFirstFileA(pcwstr, &mut find_data);
             
             match handle {
                 Ok(handle) => {
                     // Skip both "." and ".."
-                    while find_data.cFileName[0] == '.' as u16 && find_data.cFileName[1] == 0 || // "."
-                        find_data.cFileName[0] == '.' as u16 && find_data.cFileName[0] == '.' as u16 && find_data.cFileName[2] == 0 // ".."
+                    while find_data.cFileName[0].0 as char == '.' && find_data.cFileName[1].0 == 0 || // "."
+                        find_data.cFileName[0].0 as char == '.' && find_data.cFileName[0].0 as char == '.' && find_data.cFileName[2].0 == 0 // ".."
                     {
-                        let res = FindNextFileW(handle, &mut find_data).as_bool();
+                        let res = FindNextFileA(handle, &mut find_data).as_bool();
                         if !res {
                             return Err(io::Error::last_os_error());
                         }
                     }
 
                     let mut path = path.to_path_buf(alloc);
-                    let filename_len = find_data.cFileName.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
-                    let filename_slice = core::slice::from_raw_parts(find_data.cFileName.as_ptr(), filename_len);
-                    path.push(PathBuf::from_utf16_lossy(filename_slice, alloc));
+                    let filename_len = find_data.cFileName.iter().position(|&c| c.0 == 0).unwrap_or(MAX_PATH);
+                    let filename_slice = core::slice::from_raw_parts(find_data.cFileName.as_ptr() as *const u8, filename_len);
+                    path.push(PathBuf::from_utf8_lossy(filename_slice, alloc));
                     Ok((EntrySearchHandle(handle), path))
                 },
                 Err(err) => Err(io::Error::from_raw_os_error(err.code().0)),
@@ -76,10 +84,12 @@ impl EntrySearchHandle {
     }
 
     pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
-        let mut find_data = WIN32_FIND_DATAW::default();
-        if unsafe { FindNextFileW(self.0, &mut find_data).as_bool() } {
-            let mut it = find_data.cFileName.split(|&c| c == 0);
-            let file_name = String::from_utf16_lossy(it.next().unwrap(), UseAlloc::TlsTemp, FsMemTag::Path.to_mem_tag());
+        let mut find_data = WIN32_FIND_DATAA::default();
+        if unsafe { FindNextFileA(self.0, &mut find_data).as_bool() } {
+            let mut it = find_data.cFileName.split(|&c| c.0 == 0);
+            let char_slice = it.next().unwrap();
+            let utf8_slice = unsafe { core::slice::from_raw_parts(char_slice.as_ptr() as *const u8, char_slice.len()) };
+            let file_name = String::from_utf8_lossy(utf8_slice, UseAlloc::TlsTemp, FsMemTag::Path.to_mem_tag());
             path.set_file_name(file_name);
             Some(path)
         } else {
@@ -99,10 +109,10 @@ impl Drop for EntrySearchHandle {
 
 pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
+        let path = &path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
-        let res = GetFileAttributesExW(pcwstr, GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
+        let res = GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
         if !res.as_bool() {
             return Err(io::Error::last_os_error());
         }
@@ -126,11 +136,11 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
                 FileType::File
             };
 
-        let permissions = get_permissions_pcwstr(pcwstr);
+        let permissions = get_permissions_pcstr(PCSTR(path.as_ptr()));
 
         // Open file to get remaining data
-        let handle = CreateFileW(
-            pcwstr,
+        let handle = CreateFileA(
+            PCSTR(path.as_ptr()),
             FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ,
             None,
@@ -180,7 +190,7 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
     }
 }
 
-fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
+fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
     unsafe {
         // Get the SID of the current user, we will use this later to get the correct file permissions for the user
 
@@ -188,7 +198,7 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
         const UNLEN : usize = 256;
         let mut username_buf = [0; UNLEN + 1];
         let mut written = UNLEN as u32 + 1;
-        let res = GetUserNameW(PWSTR(username_buf.as_mut_ptr()), &mut written);
+        let res = GetUserNameA(PSTR(username_buf.as_mut_ptr()), &mut written);
         if !res.as_bool() {
             return Permission::None;
         }
@@ -196,12 +206,12 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
         let mut sid_len = size_of::<SID>() as u32;
         let mut domain_len = 0;
         let mut sid_name_use = SID_NAME_USE::default();
-        let res = LookupAccountNameW(
-            PCWSTR(null_mut()),
-            PCWSTR(username_buf.as_mut_ptr()),
+        let res = LookupAccountNameA(
+            PCSTR(null_mut()),
+            PCSTR(username_buf.as_mut_ptr()),
             PSID(null_mut()),
             &mut sid_len,
-            PWSTR(null_mut()),
+            PSTR(null_mut()),
             &mut domain_len,
             &mut sid_name_use
         );
@@ -212,15 +222,15 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
         let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         sid_buf.set_len(sid_len as usize);
 
-        let mut domain_buf = DynArray::<u16>::with_capacity(domain_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
+        let mut domain_buf = DynArray::<u8>::with_capacity(domain_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         domain_buf.set_len(domain_len as usize);
 
-        let res = LookupAccountNameW(
-            PCWSTR(null_mut()),
-            PCWSTR(username_buf.as_mut_ptr()),
+        let res = LookupAccountNameA(
+            PCSTR(null_mut()),
+            PCSTR(username_buf.as_mut_ptr()),
             PSID(sid_buf.as_mut_ptr() as *mut c_void),
             &mut sid_len,
-            PWSTR(domain_buf.as_mut_ptr()),
+            PSTR(domain_buf.as_mut_ptr()),
             &mut domain_len,
             &mut sid_name_use
         );
@@ -233,7 +243,7 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
         // Now get the security descriptor associated with the file, we just need it to contain the DACL of the file (which contains the user's access permissions)
         let mut needed = 0;
         let requested_info = OWNER_SECURITY_INFORMATION.0 | DACL_SECURITY_INFORMATION.0 | GROUP_SECURITY_INFORMATION.0;
-        let res = GetFileSecurityW(pcwstr, requested_info, PSECURITY_DESCRIPTOR(null_mut()), 0, &mut needed);
+        let res = GetFileSecurityA(pcstr, requested_info, PSECURITY_DESCRIPTOR(null_mut()), 0, &mut needed);
         if !res.as_bool() && GetLastError() != ERROR_INSUFFICIENT_BUFFER {
             return Permission::None;
         }
@@ -241,7 +251,7 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
         let mut buf = DynArray::<u8>::with_capacity(needed as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
         buf.set_len(needed as usize);
         let sec_desc_ptr = PSECURITY_DESCRIPTOR(buf.as_mut_ptr() as *mut c_void);
-        let res = GetFileSecurityW(pcwstr, requested_info, sec_desc_ptr, needed, &mut needed);
+        let res = GetFileSecurityA(pcstr, requested_info, sec_desc_ptr, needed, &mut needed);
         if !res.as_bool() {
             return Permission::None;
         }
@@ -314,10 +324,10 @@ fn get_permissions_pcwstr(pcwstr: PCWSTR) -> Permission {
 
 pub(crate) fn get_entry_file_type(path: &Path) -> FileType {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
+        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
-        let res = GetFileAttributesExW(pcwstr, GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
+        let res = GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
         if !res.as_bool() {
             return FileType::Unknown;
         }

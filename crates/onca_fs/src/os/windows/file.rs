@@ -11,33 +11,33 @@ use onca_core::{
 use windows::{
     Win32::{
         Storage::FileSystem::{
-            GetCompressedFileSizeW, 
-            CreateFileW, 
+            GetCompressedFileSizeA, 
+            CreateFileA, 
             FILE_APPEND_DATA, FILE_ACCESS_FLAGS, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE,
             OPEN_ALWAYS, OPEN_EXISTING, CREATE_NEW, CREATE_ALWAYS, TRUNCATE_EXISTING,
-            DeleteFileW, 
+            DeleteFileA, 
             ReadFile,  WriteFile, FlushFileBuffers,
             SetFilePointerEx, SET_FILE_POINTER_MOVE_METHOD, FILE_BEGIN, FILE_CURRENT, FILE_END,
             FILE_FLAGS_AND_ATTRIBUTES, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_FLAG_BACKUP_SEMANTICS,
             SetFileInformationByHandle, GetFileInformationByHandleEx, FileBasicInfo,  FILE_BASIC_INFO, FileEndOfFileInfo, FILE_END_OF_FILE_INFO,
-            SetFileTime,  GetTempFileNameW
+            SetFileTime,  GetTempFileNameA
         }, 
         Foundation::{GetLastError, NO_ERROR, HANDLE, CloseHandle, FILETIME}, 
         System::SystemServices::{GENERIC_READ, GENERIC_EXECUTE, GENERIC_WRITE}
     }, 
-    core::PCWSTR,
+    core::PCSTR,
 };
 
 use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH};
 
-use super::{path_to_null_terminated_utf16, INVALID_FILE_SIZE, high_low_to_u64};
+use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
 pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
+        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
         let mut high = 0;
-        let low = GetCompressedFileSizeW(pcwstr, Some(&mut high));
+        let low = GetCompressedFileSizeA(PCSTR(path.as_ptr()), Some(&mut high));
         if low == INVALID_FILE_SIZE {
             let error = GetLastError();
             if error == NO_ERROR {
@@ -53,8 +53,8 @@ pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
 
 pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe {
-        let (_buf, pcwstr) = path_to_null_terminated_utf16(path);
-        let res = DeleteFileW(pcwstr).as_bool();
+        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let res = DeleteFileA(PCSTR(path.as_ptr())).as_bool();
         if res {
             Ok(())
         } else {
@@ -68,22 +68,20 @@ pub struct FileHandle(pub(crate) HANDLE);
 impl FileHandle {
     pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc, open_link: bool, temporary: bool) -> io::Result<(FileHandle, PathBuf)> {
         unsafe {
-            let (mut buf, pcwstr) = path_to_null_terminated_utf16(path);
-            let mut path_buf = path.to_path_buf(alloc);
+            let mut path_buf = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
 
             if temporary {
-                let mut file_name = [0u16; MAX_PATH];
+                let mut file_name = [0u8; MAX_PATH];
                 let path_name = ['.' as u16, 0];
                 let prefix_string = ['O' as u16, 'N' as u16, 'C' as u16, 'A' as u16, 0];
                 static UUNIQUE : AtomicU32 = AtomicU32::new(1);
                 let unique = UUNIQUE.fetch_add(1, Ordering::AcqRel);
-                let res = GetTempFileNameW(PCWSTR(path_name.as_ptr() as *const _), PCWSTR(prefix_string.as_ptr() as *const _), unique, &mut file_name);
+                let res = GetTempFileNameA(PCSTR(path_name.as_ptr() as *const _), PCSTR(prefix_string.as_ptr() as *const _), unique, &mut file_name);
                 assert!(res != 0);
 
                 let temp_end = file_name.iter().position(|&c| c == 0).unwrap_or_default();
                 if temp_end > 0 {
-                    buf.extend_from_slice(&file_name[..temp_end]);
-                    path_buf.push(PathBuf::from_utf16_lossy(&file_name[..temp_end], alloc))
+                    path_buf.push(PathBuf::from_utf8_lossy(&file_name[..temp_end], UseAlloc::TlsTemp))
                 }
             }
             
@@ -133,8 +131,8 @@ impl FileHandle {
                 win32_flags |= FILE_ATTRIBUTE_TEMPORARY.0;
             }
             
-            let handle = CreateFileW(
-                pcwstr,
+            let handle = CreateFileA(
+                PCSTR(path_buf.as_ptr()),
                 FILE_ACCESS_FLAGS(win32_access),
                 FILE_SHARE_MODE(win32_access_share),
                 None,
