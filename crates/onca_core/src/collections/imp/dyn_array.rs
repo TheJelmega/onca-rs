@@ -14,16 +14,16 @@ use core::{
 };
 use std::collections::TryReserveError;
 use crate::{
-    alloc::{UseAlloc, MemTag, Layout},
+    alloc::{Layout, MemTag, ScopedAlloc, UseAlloc, ScopedMemTag},
     collections::{ExtendFunc, ExtendElement, ExtendWith, SetLenOnDrop, SpecExtendFromWithin, SpecCloneFrom, SpecExtend, IsZero, SpecFromIterNested, SpecFromIter, impl_slice_partial_eq},
 };
 
 
 /// Trait representing the internal storage for any DynamicArray implementation
 pub trait DynArrayBuffer<T> {
-    fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self;
-    fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self;
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self;
+    fn new() -> Self;
+    fn with_capacity(capacity: usize) -> Self;
+    fn with_capacity_zeroed(capacity: usize) -> Self;
 
     fn reserve(&mut self, len: usize, additional: usize) -> usize;
     fn try_reserve(&mut self, len: usize, additional: usize) -> Result<usize, TryReserveError>;
@@ -53,8 +53,8 @@ pub struct DynArray<T, B: DynArrayBuffer<T>> {
 
 impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
     #[inline]
-    pub fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self {len: 0, buf: B::new(alloc, mem_tag), _p: PhantomData }
+    pub fn new() -> Self {
+        Self {len: 0, buf: B::new(), _p: PhantomData }
     }
 
     #[inline]
@@ -63,8 +63,8 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
     }
 
     #[inline]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { len: 0, buf: B::with_capacity(capacity, alloc, mem_tag), _p: PhantomData }
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self { len: 0, buf: B::with_capacity(capacity), _p: PhantomData }
     }
 
     #[inline]
@@ -514,18 +514,18 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
     pub fn split_off(&mut self, at: usize) -> Self {
         assert!(at < self.len);
 
-        let alloc_id = self.buf.allocator_id();
-        let mem_tag = self.buf.mem_tag();
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         if at == 0 {
             return mem::replace(
                 self, 
-                Self::with_capacity(self.capacity(), UseAlloc::Id(alloc_id), mem_tag)  
+                Self::with_capacity(self.capacity())  
             );
         }
 
         let other_len = self.len - at;
-        let mut other = DynArray::with_capacity(self.capacity(), UseAlloc::Id(alloc_id), mem_tag);
+        let mut other = DynArray::with_capacity(self.capacity());
 
         // Unsafely `set_len` and copy items to `other`.
         unsafe {
@@ -625,11 +625,6 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         I : IntoIterator<Item = T>,
     {
         Splice { drain: self.drain(range), replace_with: replace_with.into_iter() }
-    }
-
-    /// Create a `DynArray` from an iterator and an allocator
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        <Self as SpecFromIter<T, I>>::from_iter(iter, alloc, mem_tag)
     }
 
     // Leaf method to  which various SpecFrom/SpecExtend implementations delegate when the y have no furter optimizations to apply
@@ -765,12 +760,12 @@ impl<'a, T: 'a + Copy, B: DynArrayBuffer<T>> SpecExtend<&'a T, slice::Iter<'a, T
 //--------------------------------------------------------------
 
 pub trait SpecFromElem<B: DynArrayBuffer<Self>> : Sized {
-    fn from_elem(elem: Self, n: usize, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<Self, B>;
+    fn from_elem(elem: Self, n: usize) -> DynArray<Self, B>;
 }
 
 impl<T: Clone, B: DynArrayBuffer<Self>> SpecFromElem<B> for T{
-    default fn from_elem(elem: Self, n: usize, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<Self, B> {
-        let mut dynarr = DynArray::new(alloc, mem_tag);
+    default fn from_elem(elem: Self, n: usize) -> DynArray<Self, B> {
+        let mut dynarr = DynArray::new();
         dynarr.extend_with(n, ExtendElement(elem));
         dynarr
     }
@@ -778,11 +773,11 @@ impl<T: Clone, B: DynArrayBuffer<Self>> SpecFromElem<B> for T{
 
 impl<T: Clone + IsZero, B: DynArrayBuffer<Self>> SpecFromElem<B> for T {
     #[inline]
-    default fn from_elem(elem: Self, n: usize, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<Self, B> {
+    default fn from_elem(elem: Self, n: usize) -> DynArray<Self, B> {
         if elem.is_zero() {
-            return DynArray{ len: n, buf: B::with_capacity_zeroed(n, alloc, mem_tag), _p: PhantomData };
+            return DynArray{ len: n, buf: B::with_capacity_zeroed(n), _p: PhantomData };
         }
-        let mut dynarr = DynArray::new(alloc, mem_tag);
+        let mut dynarr = DynArray::new();
         dynarr.extend_with(n, ExtendElement(elem));
         dynarr
     }
@@ -790,12 +785,12 @@ impl<T: Clone + IsZero, B: DynArrayBuffer<Self>> SpecFromElem<B> for T {
 
 impl<B: DynArrayBuffer<i8>> SpecFromElem<B> for i8 {
     #[inline]
-    fn from_elem(elem: Self, n: usize, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<Self, B> {
+    fn from_elem(elem: Self, n: usize) -> DynArray<Self, B> {
         if elem == 0 {
-            return DynArray{ len: n, buf: B::with_capacity_zeroed(n, alloc, mem_tag), _p: PhantomData };
+            return DynArray{ len: n, buf: B::with_capacity_zeroed(n), _p: PhantomData };
         }
         unsafe {
-            let mut dynarr = DynArray::new(alloc, mem_tag);
+            let mut dynarr = DynArray::new();
             ptr::write_bytes(dynarr.as_mut_ptr(), elem as u8, n);
             dynarr.set_len(n);
             dynarr
@@ -805,12 +800,12 @@ impl<B: DynArrayBuffer<i8>> SpecFromElem<B> for i8 {
 
 impl<B: DynArrayBuffer<u8>> SpecFromElem<B> for u8 {
     #[inline]
-    fn from_elem(elem: Self, n: usize, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<Self, B> {
+    fn from_elem(elem: Self, n: usize) -> DynArray<Self, B> {
         if elem == 0 {
-            return DynArray{ len: n, buf: B::with_capacity_zeroed(n, alloc, mem_tag), _p: PhantomData };
+            return DynArray{ len: n, buf: B::with_capacity_zeroed(n), _p: PhantomData };
         }
         unsafe {
-            let mut dynarr = DynArray::new(alloc, mem_tag);
+            let mut dynarr = DynArray::new();
             ptr::write_bytes(dynarr.as_mut_ptr(), elem, n);
             dynarr.set_len(n);
             dynarr
@@ -825,17 +820,17 @@ where
     I : Iterator<Item = T>,
     B : DynArrayBuffer<T>
 {
-    default fn from_iter(mut iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+    default fn from_iter(mut iter: I) -> Self {
         // Unroll the first iteration, as the dynarr is going to be expanded on this iteration in every case when the iterable is not empyt, 
         // but the loop is extend_desugared() is not going to see the vector being full in the few subsequent loop iterations.
         // So we get better branch prediction.
         let mut dynarr = match iter.next() {
-            None => return DynArray::new(alloc, mem_tag),
+            None => return DynArray::new(),
             Some(element) => {
                 let (lower, _) = iter.size_hint();
                 const MIN_CAP : usize = 8;
                 let initial_capacity = cmp::max(MIN_CAP, lower.saturating_add(1));
-                let mut dynarr = DynArray::with_capacity(initial_capacity, alloc, mem_tag);
+                let mut dynarr = DynArray::with_capacity(initial_capacity);
                 // The rare case where the backend has no memory
                 if dynarr.capacity() == 0 {
                     return dynarr;
@@ -863,15 +858,15 @@ where
     I : Iterator<Item = T>,
     B : DynArrayBuffer<T>
 {
-    default fn from_iter(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        SpecFromIterNested::from_iter(iter, alloc, mem_tag)
+    default fn from_iter(iter: I) -> Self {
+        SpecFromIterNested::from_iter(iter)
     }
 }
 
 // NOTE(jel): Because of some limiations on `min_specialization`, specifically using `B` twice, i.e. in `IntoIter<T, B>` and `GenericDynArray<T, B>`,
 //            is not allowed atm in `min_specialization`, even though they are unrelated to the actual specialization
 impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for DynArray<T, B> {
-    fn from_iter(iter: IntoIter<T, B>, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+    fn from_iter(iter: IntoIter<T, B>) -> Self {
         // A common case is passing a dynarr into a function which immediately re-collects inot a dynarray.
         // We can short circuit this if the IntoIter has not been advanced at all.
         // When it has been advanced, we can also reuse the memeory and move the data to the fron.
@@ -879,9 +874,7 @@ impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for DynArray<T, B>
         // That limitaition is not strictly necessary as DynArray's alloction behavior is intentionally unspecified.
         // But it is a conservative choice.
 
-
-
-        let mut dynarr = DynArray::new(alloc, mem_tag);
+        let mut dynarr = DynArray::new();
 
         let has_advanced = iter.buf.as_ptr() as *const _ != iter.ptr;
         if !has_advanced || iter.len() >= iter.buf.capacity() / 2 {
@@ -987,7 +980,10 @@ impl<T, B: DynArrayBuffer<T>> DerefMut for DynArray<T, B> {
 impl<T: Clone, B: DynArrayBuffer<T>> Clone for DynArray<T, B> {
     #[inline]
     fn clone(&self) -> Self {
-        <[T]>::to_imp_dynarray(&**self, UseAlloc::Id(self.buf.allocator_id()), self.buf.mem_tag())
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.buf.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.buf.mem_tag());
+
+        <[T]>::to_imp_dynarray(&**self)
     }
 
     #[inline]
@@ -1023,7 +1019,7 @@ impl<T, I: SliceIndex<[T]>, B: DynArrayBuffer<T>> IndexMut<I> for DynArray<T, B>
 impl<T, B: DynArrayBuffer<T>> FromIterator<T> for DynArray<T, B> {
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        <Self as SpecFromIter<T, I::IntoIter>>::from_iter(iter.into_iter(), UseAlloc::Default, MemTag::default())
+        <Self as SpecFromIter<T, I::IntoIter>>::from_iter(iter.into_iter())
     }
 }
 
@@ -1104,7 +1100,7 @@ impl<T, B: DynArrayBuffer<T>> Drop for DynArray<T, B> {
 
 impl<T, B: DynArrayBuffer<T>> Default for DynArray<T, B> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default, MemTag::default())
+        Self::new()
     }
 }
 
@@ -1140,20 +1136,20 @@ impl<T, B: DynArrayBuffer<T>> AsMut<[T]> for DynArray<T, B> {
 
 impl<T: Clone, B: DynArrayBuffer<T>> From<&[T]> for DynArray<T, B> {
     fn from(s: &[T]) -> Self {
-        s.to_imp_dynarray::<B>(UseAlloc::Default, MemTag::default())
+        s.to_imp_dynarray::<B>()
     }
 }
 
 impl<T: Clone, B: DynArrayBuffer<T>> From<&mut [T]> for DynArray<T, B> {
     fn from(s: & mut[T]) -> Self {
-        s.to_imp_dynarray::<B>(UseAlloc::Default, MemTag::default())
+        s.to_imp_dynarray::<B>()
     }
 }
 
 impl<T, B: DynArrayBuffer<T>, const N: usize> From<[T; N]> for DynArray<T, B> {
     /// Truncates the given array if it's larger than the StaticDynArray
     fn from(arr: [T; N]) -> Self {
-        let mut dynarr = Self::new(UseAlloc::Default, MemTag::default());
+        let mut dynarr = Self::new();
         dynarr.extend(arr);
         dynarr
     }
@@ -1232,16 +1228,22 @@ impl<T, B: DynArrayBuffer<T>> IntoIter<T, B> {
         self.buf.allocator_id()
     }
 
+    pub fn mem_tag(&self) -> MemTag {
+        self.buf.mem_tag()
+    }
+
     fn as_raw_mut_slice(&mut self) -> *mut [T] {
         ptr::slice_from_raw_parts_mut(self.ptr as *mut T, self.len())
     }
 
     fn forget_allocataion_drop_remaining(&mut self) {
         let remaining = self.as_raw_mut_slice();
-        let alloc_id = self.allocator_id();
-        let mem_tag = self.buf.mem_tag();
+        
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
-        self.buf = ManuallyDrop::new(DynArray::new(UseAlloc::Id(alloc_id), mem_tag));
+
+        self.buf = ManuallyDrop::new(DynArray::new());
         self.ptr = self.buf.as_ptr();
         self.end = self.buf.as_ptr();
 
@@ -1325,7 +1327,10 @@ impl<T, B: DynArrayBuffer<T>> FusedIterator for IntoIter<T, B> {}
 
 impl<T: Clone, B: DynArrayBuffer<T>> Clone for IntoIter<T, B> {
     fn clone(&self) -> Self {
-        self.as_slice().to_imp_dynarray::<B>(UseAlloc::Id(self.allocator_id()), self.buf.mem_tag()).into_iter()
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.buf.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.buf.mem_tag());
+
+        self.as_slice().to_imp_dynarray::<B>().into_iter()
     }
 }
 
@@ -1591,11 +1596,11 @@ impl<I: Iterator, B: DynArrayBuffer<I::Item>> Drop for Splice<'_, I, B> {
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub trait SliceToImpDynArray<T: Clone> {
-    fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<T, B>;
+    fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self) -> DynArray<T, B>;
 }
 
 impl<T: Clone> SliceToImpDynArray<T> for [T] {
-    default fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<T, B> {
+    default fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self) -> DynArray<T, B> {
         struct DropGuard<'a, T, B: DynArrayBuffer<T>> {
             dynarr: &'a mut DynArray<T, B>,
             num_init: usize
@@ -1610,7 +1615,7 @@ impl<T: Clone> SliceToImpDynArray<T> for [T] {
             }
         }
 
-        let mut dynarr = DynArray::with_capacity(self.len(), alloc, mem_tag);
+        let mut dynarr = DynArray::with_capacity(self.len());
         let mut guard = DropGuard{ dynarr: &mut dynarr, num_init: 0 };
         let slots = guard.dynarr.spare_capacity_mut();
         // .take(slots.len()) is necessary for LLVM to remove bounds checks and has better code gen than zip (mentioned by rust's implementation)
@@ -1630,8 +1635,8 @@ impl<T: Clone> SliceToImpDynArray<T> for [T] {
 
 impl<T: Copy> SliceToImpDynArray<T> for [T] {
     #[inline]
-    fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<T, B> {
-        let mut dynarr = DynArray::with_capacity(self.len(), alloc, mem_tag);
+    fn to_imp_dynarray<B: DynArrayBuffer<T>>(&self) -> DynArray<T, B> {
+        let mut dynarr = DynArray::with_capacity(self.len());
         let n = cmp::min(self.len(), dynarr.capacity());
         // SAfETY: allocated above with the capacity of`n`, and initialized to `n` is ptr:copy_to_non_overlapping below
         unsafe {

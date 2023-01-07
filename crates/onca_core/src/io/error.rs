@@ -1,14 +1,13 @@
 use core::{
-    fmt,
+    fmt::{self, Debug},
     result,
     mem::{size_of, align_of},
     ptr::NonNull,
     marker::PhantomData
 };
-use std::{error, any::Any, fmt::Debug};
+use std::{error, any::Any};
 
-use crate::{mem::HeapPtr, alloc::{Allocation, UseAlloc, MemTag}};
-
+use crate::mem::HeapPtr;
 
 // TODO(jel): Split off the errors for their relavent systems, i.e. file system related errors only in onca_fs. if possible
 
@@ -327,26 +326,26 @@ impl Error {
     /// The `error` argument is an arbitrary payload which will be contained in this [`Error`].
     /// 
     /// If no extra payload is required, used the `From` conversion from `ErrorKind`.
-    pub fn new<E>(kind: ErrorKind, error: E, alloc: UseAlloc, mem_tag: MemTag) -> Error
+    pub fn new<E>(kind: ErrorKind, error: E) -> Error
     where
         E : Into<HeapPtr<dyn error::Error + Send + Sync>>,
     {
-        Self::_new(kind, error.into(), alloc, mem_tag)
+        Self::_new(kind, error.into())
     }
 
     /// Creates a new I/O error from an arbitrary error payload.
     /// 
     /// This function is used to generically create I/O errors which do not originate from the OS itself.
     /// It is a shortcut for [`Error::new`] with [`ErrorKind::Other`].
-    pub fn other<E>(error: E, alloc: UseAlloc, mem_tag: MemTag) -> Error
+    pub fn other<E>(error: E) -> Error
     where
         E: Into<HeapPtr<dyn error::Error + Send + Sync>>
     {
-        Self::_new(ErrorKind::Other, error.into(), alloc, mem_tag)
+        Self::_new(ErrorKind::Other, error.into())
     }
 
-    fn _new(kind: ErrorKind, error: HeapPtr<dyn error::Error + Send + Sync>, alloc: UseAlloc, mem_tag: MemTag) -> Error {
-        Error { repr: Repr::new_custom(HeapPtr::new(Custom{ kind, error }, alloc, mem_tag)) }
+    fn _new(kind: ErrorKind, error: HeapPtr<dyn error::Error + Send + Sync>) -> Error {
+        Error { repr: Repr::new_custom(HeapPtr::new(Custom{ kind, error })) }
     }
 
     /// Creates a new I/O error from a known kind of error as well as a xonstant message.

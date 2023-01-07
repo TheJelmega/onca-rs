@@ -10,7 +10,7 @@ use alloc::collections::TryReserveError;
 use alloc::collections::vec_deque as alloc_vec_deque;
 
 use crate::{
-    alloc::{Allocator, UseAlloc},
+    alloc::UseAlloc,
     mem::MEMORY_MANAGER
 };
 use super::DynArray;
@@ -23,13 +23,12 @@ type IntoIter<T> = alloc_vec_deque::IntoIter<T, Alloc>;
 type Drain<'a, T> = alloc_vec_deque::Drain<'a, T, Alloc>;
 
 impl<T> VecDeque<T> {
-    
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self(alloc_vec_deque::VecDeque::new_in(Alloc::new(alloc)))
+    pub fn new() -> Self {
+        Self(alloc_vec_deque::VecDeque::new_in(Alloc::new()))
     }
 
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self(alloc_vec_deque::VecDeque::with_capacity_in(capacity, Alloc::new(alloc)))
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(alloc_vec_deque::VecDeque::with_capacity_in(capacity, Alloc::new()))
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
@@ -236,16 +235,6 @@ impl<T> VecDeque<T> {
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator().layout().alloc_id()
     }
-
-    pub fn allocator(&mut self) -> &mut dyn Allocator {
-        MEMORY_MANAGER.get_allocator(UseAlloc::Id(self.allocator_id())).unwrap()
-    }
-
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, alloc: UseAlloc) -> Self {
-        let mut deque = VecDeque::new(alloc);
-        deque.extend(iter);
-        deque
-    }
 }
 
 impl<T: Clone> VecDeque<T> {
@@ -267,7 +256,7 @@ impl<T: Clone> Clone for VecDeque<T> {
 
 impl<T> Default for VecDeque<T> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default)
+        Self::new()
     }
 }
 
@@ -313,7 +302,7 @@ impl<T> Extend<T> for VecDeque<T> {
 
 impl<T, const N: usize> From<[T; N]> for VecDeque<T> {
     fn from(arr: [T; N]) -> Self {
-        Self::from_iter(arr, UseAlloc::Default)
+        Self::from_iter(arr)
     }
 }
 
@@ -334,7 +323,9 @@ impl<T> From<VecDeque<T>> for DynArray<T> {
 
 impl<T> FromIterator<T> for VecDeque<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter(iter, UseAlloc::Default)
+        let mut deque = VecDeque::new();
+        deque.extend(iter);
+        deque
     }
 }
 

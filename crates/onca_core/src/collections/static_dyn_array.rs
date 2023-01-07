@@ -9,7 +9,7 @@ use core::{
     hash::{Hash, Hasher},
     array,
 };
-use crate::alloc::{UseAlloc, MemTag, Layout};
+use crate::alloc::{MemTag, Layout};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -25,15 +25,15 @@ impl<T, const N: usize> StaticBuf<T, N> {
 }
 
 impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
-    fn new(_: UseAlloc, _: MemTag) -> Self {
+    fn new() -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
-    fn with_capacity(_: usize, _: UseAlloc, _: MemTag) -> Self {
+    fn with_capacity(_: usize) -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
-    fn with_capacity_zeroed(_: usize, _: UseAlloc, _: MemTag) -> Self {
+    fn with_capacity_zeroed(_: usize) -> Self {
         Self { buf: MaybeUninit::uninit() }
     }
 
@@ -640,12 +640,12 @@ pub trait SliceToStaticDynArray<T: Clone> {
 
 impl<T: Clone> SliceToStaticDynArray<T> for [T] {
     default fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default, MemTag::default()))
+        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>())
     }
 }
 
 impl<T: Copy> SliceToStaticDynArray<T> for [T] {
     fn to_static_dynarray<const N: usize>(&self) -> StaticDynArray<T, N> {
-        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>(UseAlloc::Default, MemTag::default()))
+        StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>())
     }
 }

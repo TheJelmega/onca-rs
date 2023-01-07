@@ -1,6 +1,7 @@
 use onca_core::{
     prelude::*,
-    io
+    alloc::ScopedMemTag,
+    io,
 };
 use crate::{FileFlags, PathBuf, FsMemTag};
 use windows::{Win32::{
@@ -38,10 +39,12 @@ pub(crate) mod file_async;
 pub(crate) mod directory;
 pub(crate) mod link;
 
-pub(crate) fn get_working_dir(alloc: UseAlloc) -> io::Result<PathBuf> {
+pub(crate) fn get_working_dir() -> io::Result<PathBuf> {
     unsafe {
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::path());
+
         let expected_len = GetCurrentDirectoryA(None) as usize;
-        let mut dynarr = DynArray::with_capacity(expected_len, alloc, FsMemTag::Temporary.to_mem_tag());
+        let mut dynarr = DynArray::with_capacity(expected_len);
         
         dynarr.set_len(expected_len);
         let len = GetCurrentDirectoryA(Some(&mut *dynarr)) as usize;

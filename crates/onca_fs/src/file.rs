@@ -1,6 +1,9 @@
 use core::future::Future;
 
-use onca_core::{io, alloc::UseAlloc, prelude::DynArray};
+use onca_core::{
+    prelude::*,
+    io,
+};
 use onca_core_macros::flags;
 
 use crate::{Path, os::os_imp, Permission, PathBuf};
@@ -62,20 +65,20 @@ pub struct File {
 
 impl File {
     /// Create/open a file.
-    pub fn create<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, false, false)
+    pub fn create<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, false, false)
             .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a link.
-    pub fn create_link<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, true, false)
+    pub fn create_link<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, true, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a temporary file, in the folder given by `path`.
-    pub fn create_temp<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, alloc, false, false)
+    pub fn create_temp<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, false, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
@@ -163,16 +166,16 @@ impl io::Seek for File {
 impl io::AsyncRead for File {
     type AsyncResult = AsyncReadResult;
 
-    fn read_async(&mut self, bytes_to_read: u64, alloc: UseAlloc) -> io::Result<Self::AsyncResult> {
-        self.handle.read_async(bytes_to_read, alloc).map(|inner| AsyncReadResult(inner))
+    fn read_async(&mut self, bytes_to_read: u64) -> io::Result<Self::AsyncResult> {
+        self.handle.read_async(bytes_to_read).map(|inner| AsyncReadResult(inner))
     }
 }
 
 impl io::AsyncWrite for File {
     type AsyncResult = AsyncWriteResult;
 
-    fn write_async(&mut self, buf: DynArray<u8>, alloc: UseAlloc) -> io::Result<Self::AsyncResult> {
-        self.handle.write_async(buf, alloc).map(|inner| AsyncWriteResult(inner))
+    fn write_async(&mut self, buf: DynArray<u8>) -> io::Result<Self::AsyncResult> {
+        self.handle.write_async(buf).map(|inner| AsyncWriteResult(inner))
     }
 }
  

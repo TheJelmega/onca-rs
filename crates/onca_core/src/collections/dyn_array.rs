@@ -10,7 +10,7 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag, ScopedMemTag, ScopedAlloc}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -37,12 +37,12 @@ impl<T> DynamicBuffer<T> {
         1
     };
 
-    fn allocate(capacity: usize, init_state: AllocInitState, alloc: UseAlloc, mem_tag: MemTag) -> Self {
+    fn allocate(capacity: usize, init_state: AllocInitState) -> Self {
         if mem::size_of::<T>() == 0 || capacity == 0 {
-            Self::new(alloc, mem_tag)
+            Self::new()
         } else {
             let layout = Layout::array::<T>(capacity);
-            let res = MEMORY_MANAGER.alloc_raw(init_state, alloc, layout, mem_tag);
+            let res = MEMORY_MANAGER.alloc_raw(init_state, layout);
             let ptr = match res {
                 Some(ptr) => ptr,
                 None => panic!("Failed to allocate memory")
@@ -95,7 +95,10 @@ impl<T> DynamicBuffer<T> {
 
     pub fn finish_grow(&mut self, new_layout: Layout, new_cap: usize) -> Result<usize, std::collections::TryReserveError> {
         if self.cap == 0 {
-            let res = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(self.allocator_id()), new_layout, self.mem_tag());
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+            let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
+            let res = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, new_layout);
             self.ptr = match res {
                 Some(ptr) => ptr.cast(),
                 None => {
@@ -105,7 +108,7 @@ impl<T> DynamicBuffer<T> {
                 }
             };
         } else {
-            self.ptr = match MEMORY_MANAGER.grow(mem::replace(&mut self.ptr, unsafe { Allocation::null() }), new_layout) {
+            self.ptr = match MEMORY_MANAGER.grow(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
                 Ok(ptr) => ptr,
                 Err(_) => {
                     let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
@@ -121,16 +124,16 @@ impl<T> DynamicBuffer<T> {
 }
 
 impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
-    fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { ptr: unsafe { Allocation::null_alloc_tag(alloc, mem_tag) }, cap: 0 }
+    fn new() -> Self {
+        Self { ptr: unsafe { Allocation::null() }, cap: 0 }
     }
 
-    fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::allocate(capacity, AllocInitState::Uninitialized, alloc, mem_tag)
+    fn with_capacity(capacity: usize) -> Self {
+        Self::allocate(capacity, AllocInitState::Uninitialized)
     }
 
-    fn with_capacity_zeroed(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::allocate(capacity, AllocInitState::Zeroed, alloc, mem_tag)
+    fn with_capacity_zeroed(capacity: usize) -> Self {
+        Self::allocate(capacity, AllocInitState::Zeroed)
     }
 
     fn reserve(&mut self, len: usize, additional: usize) -> usize {
@@ -168,7 +171,7 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
         }
 
         let new_layout = Layout::array::<T>(cap);
-        self.ptr = match MEMORY_MANAGER.shrink(mem::replace(&mut self.ptr, unsafe { Allocation::null() }), new_layout) {
+        self.ptr = match MEMORY_MANAGER.shrink(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
             Ok(ptr) => ptr,
             Err(_) => {
                 //let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
@@ -212,7 +215,7 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
 impl<T> Drop for DynamicBuffer<T> {
     fn drop(&mut self) {
         if self.cap > 0 {
-            MEMORY_MANAGER.dealloc(mem::replace(&mut self.ptr, unsafe { Allocation::null() }))
+            MEMORY_MANAGER.dealloc(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }))
         }
     }
 }
@@ -225,14 +228,14 @@ pub struct DynArray<T> (imp::DynArray<T, DynamicBuffer<T>>);
 impl<T> DynArray<T> {
     #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self(imp::DynArray::new(alloc, mem_tag))
+    pub fn new() -> Self {
+        Self(imp::DynArray::new())
     }
 
     #[inline]
     #[must_use]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self(imp::DynArray::with_capacity(capacity, alloc, mem_tag))
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(imp::DynArray::with_capacity(capacity))
     }
 
     #[inline]
@@ -442,11 +445,6 @@ impl<T> DynArray<T> {
             let ptr = slice::from_raw_parts_mut(alloc.ptr_mut(), slice_len);
             HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), alloc.layout(), alloc.mem_tag())
         }
-    }
-
-    /// Create a `DynArray` from an iterator and an allocator
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self(imp::DynArray::from_iter(iter, alloc, mem_tag))
     }
 
     /// Interpret the contents of the buffer as raw bytes
@@ -856,12 +854,12 @@ pub trait SliceToDynArray<T: Clone> {
 
 impl<T: Clone> SliceToDynArray<T> for [T] {
     default fn to_static_dynarray(&self) -> DynArray<T> {
-        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default, MemTag::default()))
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>())
     }
 }
 
 impl<T: Copy> SliceToDynArray<T> for [T] {
     fn to_static_dynarray(&self) -> DynArray<T> {
-        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>(UseAlloc::Default, MemTag::default()))
+        DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>())
     }
 }

@@ -5,7 +5,7 @@ use onca_core::{
     io::{self, prelude::*},
     sync::Mutex,
     mem::HeapPtr,
-    alloc::CoreMemTag,
+    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag},
     time::TimeStamp,
 };
 use onca_terminal::{Terminal, TerminalColor, TextFormatting};
@@ -210,7 +210,10 @@ impl Logger {
     /// Log a message to the console
     pub fn log(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, text: &str) {
         if level as u8 <= self.max_level as u8 {
-            let mut formatted = String::new(UseAlloc::TlsTemp, CoreMemTag::Logging.to_mem_tag());
+            let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::logging());
+
+            let mut formatted = String::new();
 
             let loc_formatter = LogLocationFormatter::new(&loc, level);
             let timestamp = loc.timestamp();
@@ -222,7 +225,10 @@ impl Logger {
 
     pub fn log_fmt(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, format: Arguments) {
         if level as u8 <= self.max_level as u8 {
-            let mut formatted = String::new(UseAlloc::TlsTemp, CoreMemTag::Logging.to_mem_tag());
+            let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::logging());
+
+            let mut formatted = String::new();
 
             let loc_formatter = LogLocationFormatter::new(&loc, level);
             let timestamp = loc.timestamp();

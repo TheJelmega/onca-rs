@@ -6,7 +6,7 @@ use core::{
 use crate::{
     alloc::{
         Allocator, Allocation, Layout, UseAlloc, MemTag,
-        primitives::{Mallocator, FreelistAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS,
+        primitives::{Mallocator, FreelistAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS, get_active_mem_tag, get_active_alloc, ScopedAlloc, ScopedMemTag,
     },
     sync::RwLock, MiB
 };
@@ -110,13 +110,13 @@ impl MemoryManager {
         })
     }
 
-    /// Allocate a raw allocation with the given allocator and layout
-    pub fn alloc_raw(&self, init_state: AllocInitState, alloc: UseAlloc, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
-        let alloc = self.get_allocator(alloc);
+    /// Allocate a raw allocation with the given layout, using the active allocator and memory tag.
+    pub fn alloc_raw(&self, init_state: AllocInitState, layout: Layout) -> Option<Allocation<u8>> {
+        let alloc = self.get_allocator(get_active_alloc());
         match alloc {
             None => None,
             Some(alloc) => {
-                match unsafe{ alloc.alloc(layout, mem_tag) } {
+                match unsafe{ alloc.alloc(layout, get_active_mem_tag()) } {
                     None => None,
                     Some(ptr) => {
                         if init_state == AllocInitState::Zeroed {
@@ -129,9 +129,9 @@ impl MemoryManager {
         }
     }
 
-    /// Allocate memory with the given allocator
-    pub fn alloc<T>(&self, init_state: AllocInitState, alloc: UseAlloc, mem_tag: MemTag) -> Option<Allocation<T>> {
-        match self.alloc_raw(init_state, alloc, Layout::new::<T>(), mem_tag) {
+    /// Allocate memory with the given layout, using the active allocator and memory tag.
+    pub fn alloc<T>(&self, init_state: AllocInitState) -> Option<Allocation<T>> {
+        match self.alloc_raw(init_state, Layout::new::<T>()) {
             None => None,
             Some(ptr) => Some(ptr.cast())
         }
@@ -159,15 +159,18 @@ impl MemoryManager {
             return Ok(ptr);
         }
 
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(ptr.layout().alloc_id()));
+        let _scope_mem_tag = ScopedMemTag::new(ptr.mem_tag());
+
         if ptr.ptr() == core::ptr::null() {
-            return match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
+            return match self.alloc_raw(AllocInitState::Uninitialized, new_layout) {
                 Some(mem) => Ok(mem.cast()),
                 None => Err(ptr)
             };
         }
         
         let copy_count = ptr.layout().size();
-        match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
+        match self.alloc_raw(AllocInitState::Uninitialized, new_layout) {
             Some(mem) => unsafe {
                 copy_nonoverlapping(ptr.ptr() as *const u8, mem.ptr_mut(), copy_count);
                 self.dealloc(ptr);
@@ -200,13 +203,16 @@ impl MemoryManager {
     pub fn shrink<T>(&self, ptr: Allocation<T>, new_layout: Layout) -> Result<Allocation<T>, Allocation<T>> {
         if new_layout.size() == 0 {
             self.dealloc(ptr);
-            return Ok(unsafe{ Allocation::<T>::null() });
+            return Ok(unsafe{ Allocation::<T>::const_null() });
         }
 
         // TODO(jel): should these be asserts or just return an Err
         assert!(new_layout.size() < ptr.layout().size(), "new size needs to be smaller that the current size");
 
-        match self.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(ptr.layout().alloc_id()), new_layout, ptr.mem_tag()) {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(ptr.layout().alloc_id()));
+        let _scope_mem_tag = ScopedMemTag::new(ptr.mem_tag());
+
+        match self.alloc_raw(AllocInitState::Uninitialized, new_layout) {
             Some(mem) => unsafe {
                 let count = mem.layout().size();
                 copy_nonoverlapping(ptr.ptr() as *const u8, mem.ptr_mut(), count);
@@ -221,8 +227,11 @@ impl MemoryManager {
         unsafe {
             let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
             if !is_init {
-                let layout = Layout::new_raw(MiB(1), UseAlloc::Malloc.get_id(), 8);
-                let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Malloc, layout, CoreMemTag::TlsTempAlloc.to_mem_tag());
+                let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
+                let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::tls_temp_alloc());
+
+                let layout = Layout::new_size_align(MiB(1), 8);
+                let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);
                 let buffer = match buffer {
                     None => return None,
                     Some(buf) => buf

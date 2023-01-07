@@ -1,6 +1,9 @@
 use core::{ptr::NonNull, cell::UnsafeCell};
 
-use crate::{alloc::{Layout, Allocator, UseAlloc, Allocation, CoreMemTag, MemTag}, mem::{MEMORY_MANAGER, AllocInitState}};
+use crate::{
+    alloc::{Layout, UseAlloc, Allocation, CoreMemTag, MemTag, get_active_alloc, get_active_mem_tag, ScopedAlloc, ScopedMemTag},
+    mem::{MEMORY_MANAGER, AllocInitState}
+};
 
 extern crate alloc;
 
@@ -10,16 +13,20 @@ pub struct Alloc {
 }
 
 impl Alloc {
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self::with_id(alloc.get_id())
+    pub fn new() -> Self {
+        Self::with_id(get_active_alloc().get_id(), get_active_mem_tag())
     }
 
-    pub fn layout(&self) -> &Layout {
-        unsafe{ &*self.layout.get() }
+    pub fn layout(&self) -> Layout {
+        unsafe{ *self.layout.get() }
     } 
 
-    fn with_id(id: u16) -> Self {
-        Alloc { layout: UnsafeCell::new(Layout::null().with_alloc_id(id)), mem_tag: UnsafeCell::new(CoreMemTag::StdCollections.to_mem_tag()) }
+    pub fn mem_tag(&self) -> MemTag {
+        unsafe{ *self.mem_tag.get() }
+    } 
+
+    fn with_id(id: u16, mem_tag: MemTag) -> Self {
+        Alloc { layout: UnsafeCell::new(Layout::null().with_alloc_id(id)), mem_tag: UnsafeCell::new(mem_tag) }
     }
 }
 
@@ -30,7 +37,11 @@ unsafe impl alloc::alloc::Allocator for Alloc {
         unsafe {
             let self_layout = &mut *self.layout.get();
             let self_mem_tag = &mut *self.mem_tag.get();
-            let alloc = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, UseAlloc::Id(self_layout.alloc_id()), layout, CoreMemTag::StdCollections.to_mem_tag());
+            
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self_layout.alloc_id()));
+            let _scope_mem_tag = ScopedMemTag::new(*self_mem_tag);
+
+            let alloc = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);
 
             match alloc {
                 Some(ptr) => {
@@ -47,13 +58,13 @@ unsafe impl alloc::alloc::Allocator for Alloc {
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
         let layout = unsafe { *self.layout.get() };
         let mem_tag = unsafe { *self.mem_tag.get() };
-        let alloc = Allocation::new(ptr.as_ptr(), layout, mem_tag);
+        let alloc = Allocation::new_tagged(ptr.as_ptr(), layout, mem_tag);
         MEMORY_MANAGER.dealloc(alloc);
     }
 }
 
 impl Clone for Alloc {
     fn clone(&self) -> Self {
-        Self::with_id(self.layout().alloc_id())
+        Self::with_id(self.layout().alloc_id(), self.mem_tag())
     }   
 }

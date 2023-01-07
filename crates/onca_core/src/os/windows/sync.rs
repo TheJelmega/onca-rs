@@ -14,8 +14,7 @@ use core::{
 };
 use crate::{
     sync::*,
-    mem::HeapPtr, 
-    alloc::UseAlloc,
+    mem::HeapPtr,
     time::Instant,
 };
 

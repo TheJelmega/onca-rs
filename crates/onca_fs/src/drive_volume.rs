@@ -109,22 +109,22 @@ pub fn get_drive_type(path: PathBuf) -> DriveType {
 
 /// Retrieve the drive info for all available drives
 // TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_drive_info(alloc: UseAlloc) -> DynArray<DriveInfo> {
-    os_imp::drive_volume::get_all_drive_info(alloc)
+pub fn get_all_drive_info() -> DynArray<DriveInfo> {
+    os_imp::drive_volume::get_all_drive_info()
 }
 
 /// Retrieve the volume info for the given root
 /// 
 /// Returns `None` if the the path is not a valid volume root, returns the volume's into otherwise
 // TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_volume_info(path: PathBuf, alloc: UseAlloc) -> Option<VolumeInfo> {
-    os_imp::drive_volume::get_volume_info(path, alloc)
+pub fn get_volume_info(path: PathBuf) -> Option<VolumeInfo> {
+    os_imp::drive_volume::get_volume_info(path)
 }
 
 /// Retrieve th evolume info for all available volumes
 // TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_volume_info(alloc: UseAlloc) -> DynArray<VolumeInfo> {
-    os_imp::drive_volume::get_all_volume_info(alloc)
+pub fn get_all_volume_info() -> DynArray<VolumeInfo> {
+    os_imp::drive_volume::get_all_volume_info()
 }
 
 

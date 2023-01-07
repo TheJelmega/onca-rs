@@ -41,7 +41,7 @@ impl Allocator for LinearAllocator {
             None
         } else {
             self.head = new_head;
-            Some(Allocation::<_>::new(aligned_ptr, layout.with_alloc_id(self.id), mem_tag))
+            Some(Allocation::<_>::new_tagged(aligned_ptr, layout.with_alloc_id(self.id), mem_tag))
         }
     }
 
@@ -61,7 +61,7 @@ impl Allocator for LinearAllocator {
 
 impl Drop for LinearAllocator {
     fn drop(&mut self) {
-        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::null() }));
+        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
     }
 }
 
@@ -72,11 +72,11 @@ mod tests {
     #[test]
     fn alloc_dealloc() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = LinearAllocator::new(buffer);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
             alloc.dealloc(ptr);
         }
     }
@@ -84,13 +84,13 @@ mod tests {
     #[test]
     fn multi_allocs() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = LinearAllocator::new(buffer);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);

@@ -1,7 +1,7 @@
 use core::mem::size_of;
 use onca_core::{
     prelude::*,
-    alloc::CoreMemTag,
+    alloc::{CoreMemTag, ScopedMemTag},
     collections::BTreeSet,
     utils
 };
@@ -35,8 +35,7 @@ impl MonitorHandle {
 
 unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _dc: HDC, _rect: *mut RECT, lparam: LPARAM) -> BOOL {
     let monitors = &mut *(lparam.0 as *mut DynArray<Monitor>);
-    let alloc = UseAlloc::Id(monitors.allocator_id());
-    let monitor = get_monitor(hmonitor, alloc, false);
+    let monitor = get_monitor(hmonitor, false);
     if let Some(mon) = monitor {
         monitors.push(mon);
     }
@@ -44,12 +43,14 @@ unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _dc: HDC, _rect:
 }
 
 unsafe extern "system" fn primary_monitor_enum_proc(hmonitor: HMONITOR, _dc: HDC, _rect: *mut RECT, lparam: LPARAM) -> BOOL {
-    let pair = &mut *(lparam.0 as *mut (Option<Monitor>, UseAlloc));
-    pair.0 = get_monitor(hmonitor, pair.1, true);
-    BOOL(pair.0.is_none() as i32)
+    let monitor = &mut *(lparam.0 as *mut Option<Monitor>);
+    *monitor = get_monitor(hmonitor, true);
+    BOOL(monitor.is_none() as i32)
 }
 
-unsafe fn get_monitor(hmonitor: HMONITOR, alloc: UseAlloc, want_primary: bool) -> Option<Monitor> {
+unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor> {
+    let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
     // Both values are identical
     let mut dpi_x = 0;
     let mut dpi_y = 0;
@@ -84,7 +85,7 @@ unsafe fn get_monitor(hmonitor: HMONITOR, alloc: UseAlloc, want_primary: bool) -
         dev_mode.dmSize = size_of::<onca_windows_utils::definitions::DEVMODEA>() as u16;
 
         // All available modes
-        let mut monitor_btree = BTreeSet::new(alloc);
+        let mut monitor_btree = BTreeSet::new();
         while res {
             res = EnumDisplaySettingsExA(PCSTR(dev_name.as_ptr()), ENUM_DISPLAY_SETTINGS_MODE(i), &mut dev_mode as *mut _ as *mut DEVMODEA, EDS_RAWMODE).as_bool();
             
@@ -102,7 +103,7 @@ unsafe fn get_monitor(hmonitor: HMONITOR, alloc: UseAlloc, want_primary: bool) -
             monitor_btree.insert(MonitorModeOrdWrapper(mon_mode));
             i += 1;
         }
-        let monitor_modes = DynArray::from_iter(monitor_btree.into_iter().map(|val| val.0), alloc, CoreMemTag::window());
+        let monitor_modes = DynArray::from_iter(monitor_btree.into_iter().map(|val| val.0));
 
         // Current settings
         EnumDisplaySettingsExA(PCSTR(dev_name.as_ptr()), ENUM_CURRENT_SETTINGS, &mut dev_mode as *mut _ as *mut DEVMODEA, EDS_RAWMODE).as_bool();
@@ -133,9 +134,11 @@ unsafe fn get_monitor(hmonitor: HMONITOR, alloc: UseAlloc, want_primary: bool) -
     }
 }
 
-pub(crate) fn enumerate_monitors(alloc: UseAlloc) -> DynArray<Monitor> {
+pub(crate) fn enumerate_monitors() -> DynArray<Monitor> {
     unsafe {
-        let mut monitors = DynArray::new(alloc, CoreMemTag::window());
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
+        let mut monitors = DynArray::new();
 
         let lparam = LPARAM(&mut monitors as *mut DynArray<Monitor> as isize);
         let res = EnumDisplayMonitors(HDC(0), None, Some(monitor_enum_proc), lparam).as_bool();
@@ -148,46 +151,46 @@ pub(crate) fn enumerate_monitors(alloc: UseAlloc) -> DynArray<Monitor> {
     }
 }
 
-pub(crate) fn primary_monitor(alloc: UseAlloc) -> Option<Monitor> {
+pub(crate) fn primary_monitor() -> Option<Monitor> {
     unsafe {
-        let mut monitor_pair : (Option<Monitor>, UseAlloc) = (None, alloc);
+        let mut monitor : Option<Monitor> = None;
         
-        let lparam = LPARAM(&mut monitor_pair as *mut (Option<Monitor>, UseAlloc) as isize);
+        let lparam = LPARAM(&mut monitor as *mut Option<Monitor> as isize);
         EnumDisplayMonitors(HDC(0), None, Some(primary_monitor_enum_proc), lparam);
-        monitor_pair.0
+        monitor
     }
 }
 
-pub(crate) fn get_monitor_from_hwnd(hwnd: HWND, alloc: UseAlloc) -> Option<Monitor> {
+pub(crate) fn get_monitor_from_hwnd(hwnd: HWND) -> Option<Monitor> {
     unsafe {
         let hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
         if hmonitor.is_invalid() {
             None
         } else {
-            get_monitor(hmonitor, alloc, false)
+            get_monitor(hmonitor, false)
         } 
     }
 }
 
-pub(crate) fn get_monitor_at(x: i32, y: i32, alloc: UseAlloc) -> Option<Monitor> {
+pub(crate) fn get_monitor_at(x: i32, y: i32) -> Option<Monitor> {
     unsafe {
         let hmonitor = MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONULL);
         if hmonitor.is_invalid() {
             None
         } else {
-            get_monitor(hmonitor, alloc, false)
+            get_monitor(hmonitor, false)
         } 
     }
 }
 
-pub(crate) fn get_monitor_from_largest_overlap(rect: MonitorRect, alloc: UseAlloc) -> Option<Monitor> {
+pub(crate) fn get_monitor_from_largest_overlap(rect: MonitorRect) -> Option<Monitor> {
     unsafe {
         let rect = RECT { left: rect.x, top: rect.y, right: rect.x + rect.width as i32, bottom: rect.y + rect.height as i32  };
         let hmonitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONULL);
         if hmonitor.is_invalid() {
             None
         } else {
-            get_monitor(hmonitor, alloc, false)
+            get_monitor(hmonitor, false)
         } 
     }
 }

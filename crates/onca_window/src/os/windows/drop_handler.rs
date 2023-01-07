@@ -2,7 +2,7 @@ use core::ffi::c_void;
 use onca_core::{
     prelude::*,
     mem::HeapPtr,
-    alloc::{CoreMemTag, Allocation},
+    alloc::{Allocation, ScopedAlloc},
 };
 use onca_logging::{log_warning, log_error, log_debug};
 use win_utils::com::ComInterface;
@@ -44,16 +44,16 @@ pub(crate) struct DropHandler {
 }
 
 impl DropHandler {
-    pub(crate) fn new(window: &mut Window, alloc: UseAlloc) -> DropHandler {
+    pub(crate) fn new(window: &mut Window) -> DropHandler {
         let heap_ptr = HeapPtr::new(DropHandlerData {
             vtable: &DROP_HANDLER_VTBL,
-            allocation: unsafe { Allocation::null() },
+            allocation: unsafe { Allocation::const_null() },
             ref_count: win_utils::com::ComRefCount::new(),
             window: window as *mut _,
             valid: false,
             effect: DROPEFFECT_NONE
 
-        }, alloc, CoreMemTag::window());
+        });
 
         let mut data = heap_ptr.ptr_mut();
         unsafe { (*data).allocation = HeapPtr::leak(heap_ptr) };
@@ -79,7 +79,7 @@ impl DropHandler {
     unsafe extern "system" fn Release(this: &mut DropHandlerData) -> u32 {
         let this = Self::from_interface(this);
         this.ref_count.release(|| {
-            drop(HeapPtr::from_raw(core::mem::replace(&mut this.allocation, Allocation::null())));
+            drop(HeapPtr::from_raw(core::mem::replace(&mut this.allocation, Allocation::const_null())));
         })
     }
 
@@ -158,8 +158,10 @@ impl DropHandler {
                 let num_files = DragQueryFileA(hdrop, 0xFFFF_FFFF, None);
 
                 for i in 0..num_files {
+                    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
                     let path_len = DragQueryFileA(hdrop, i, None);
-                    let mut buf = DynArray::<u8>::new(UseAlloc::TlsTemp, CoreMemTag::window());
+                    let mut buf = DynArray::<u8>::new();
                     buf.reserve(path_len as usize + 1);
                     buf.set_len(path_len as usize + 1);
 

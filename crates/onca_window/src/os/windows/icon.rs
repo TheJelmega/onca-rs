@@ -11,7 +11,7 @@ use windows::{
 use onca_core::{
     prelude::*,
     strings::String,
-    alloc::CoreMemTag
+    alloc::{CoreMemTag, ScopedMemTag, ScopedAlloc}
 };
 
 use crate::{PhysicalSize, LOG_CAT};
@@ -23,8 +23,11 @@ pub struct OSIcon {
 impl OSIcon {
     pub(crate) fn from_path(path: &str, size: Option<PhysicalSize>) -> OSIcon {
         unsafe {
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
             let (width, height) = size.map(|size | (size.width as i32, size.height as i32)).unwrap_or((0, 0));
-            let path = String::from_str(path, UseAlloc::TlsTemp, CoreMemTag::window());
+            let path = String::from_str(path);
             let hicon = LoadImageA(
                 HINSTANCE(0),
                 PCSTR(path.as_ptr()),

@@ -2,7 +2,7 @@ use core::fmt;
 use onca_core::{
     prelude::*,
     mem::HeapPtr,
-    collections::{CallbackArray, CallbackHandle}, sync::Mutex,
+    collections::{CallbackArray, CallbackHandle}, sync::Mutex, alloc::ScopedAlloc,
 };
 use onca_logging::log_warning;
 use crate::{
@@ -381,8 +381,8 @@ impl Window {
             return;
         }
 
-        let alloc_id = unsafe { (*self.manager).allocator_id() };
-        os::OSWindowData::set_accept_files(self, UseAlloc::Id(alloc_id))
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(unsafe { (*self.manager).allocator_id() }));
+        os::OSWindowData::set_accept_files(self,)
     }
 
     fn set_flag(&mut self, flag: Flags, enable: bool) -> bool {
@@ -448,8 +448,8 @@ impl Window {
 
     // Crate private
     
-    pub(crate) fn create(manager: &mut WindowManager, settings: WindowSettings, alloc: UseAlloc) -> Option<HeapPtr<Window>> {
-        os::window::create(manager, settings, alloc)
+    pub(crate) fn create(manager: &mut WindowManager, settings: WindowSettings) -> Option<HeapPtr<Window>> {
+        os::window::create(manager, settings)
     }
 
     // Notifications

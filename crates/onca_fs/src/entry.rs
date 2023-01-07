@@ -1,5 +1,3 @@
-use onca_core::alloc::UseAlloc;
-
 use crate::{
     os::os_imp::{self, entry::EntrySearchHandle},
     Path, PathBuf, Metadata, FileType, 
@@ -56,12 +54,12 @@ pub struct EntryIter {
 impl EntryIter {
     /// Create a new entry iterator from a given path
     // TODO(jel): Alloc context containing main and temp alloc?
-    pub(crate) fn new<P: AsRef<Path>>(path: P, alloc: UseAlloc) -> Option<EntryIter> {
-        Self::_new(path.as_ref(), alloc)
+    pub(crate) fn new<P: AsRef<Path>>(path: P) -> Option<EntryIter> {
+        Self::_new(path.as_ref())
     }
 
-    fn _new(path: &Path, alloc: UseAlloc) -> Option<EntryIter> {
-        let handle = EntrySearchHandle::new(path, alloc);
+    fn _new(path: &Path) -> Option<EntryIter> {
+        let handle = EntrySearchHandle::new(path);
         match handle {
             Ok((handle, path)) => Some(EntryIter { path, handle }),
             Err(_) => None,

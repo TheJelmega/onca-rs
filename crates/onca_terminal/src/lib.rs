@@ -1,6 +1,6 @@
 use onca_core::{
     prelude::*, 
-    alloc::CoreMemTag,
+    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag},
     io::{self, prelude::*},
 };
 
@@ -284,7 +284,10 @@ impl Terminal {
     pub fn exec_terminal_sequence<F>(write_sequence: F)
         where F : FnOnce(&mut DynArray<u8>)
     {
-        let mut buffer = DynArray::with_capacity(32, UseAlloc::TlsTemp, CoreMemTag::Terminal.to_mem_tag());
+        let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::terminal());
+
+        let mut buffer = DynArray::with_capacity(32);
         write_sequence(&mut buffer);
         let _ = unsafe { os_imp::Terminal::write(core::str::from_utf8_unchecked(&buffer)) };
     }

@@ -44,7 +44,10 @@ use core::{
     ops::{Deref},
 };
 use std::collections::TryReserveError;
-use onca_core::{prelude::*, strings::FromUtf16Error};
+use onca_core::{
+    prelude::*,
+    alloc::ScopedMemTag
+};
 
 use crate::FsMemTag;
 
@@ -782,8 +785,9 @@ impl PathBuf {
     /// Creates an empty `PathBuf` with the given allocator.
     #[must_use]
     #[inline]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self { inner: String::new(alloc, FsMemTag::Path.to_mem_tag()) }
+    pub fn new() -> Self {
+        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
+        Self { inner: String::new() }
     }
 
     /// Creates a new `PathBuf` with a given capacity and allocator, used to created the internal [`String`].
@@ -792,22 +796,25 @@ impl PathBuf {
     /// [`with_capacity`]: String::with_capacity
     #[must_use]
     #[inline]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self { inner: String::with_capacity(capacity, alloc, FsMemTag::Path.to_mem_tag()) }
+    pub fn with_capacity(capacity: usize) -> Self {
+        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
+        Self { inner: String::with_capacity(capacity) }
     }
 
     /// Create a `PathBuf` from a [`str`] slice.
     #[must_use]
     #[inline]
-    pub fn from_str(s: &str, alloc: UseAlloc) -> Self {
-        Self { inner: String::from_str(s, alloc, FsMemTag::Path.to_mem_tag()) }
+    pub fn from_str(s: &str) -> Self {
+        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
+        Self { inner: String::from_str(s) }
     }
 
     /// Create a `PathBuf` from a [`u8`] slice, including invalid characters.
     #[must_use]
     #[inline]
-    pub fn from_utf8_lossy(s: &[u8], alloc: UseAlloc) -> Self {
-        Self { inner: String::from_utf8_lossy(s, alloc, FsMemTag::Path.to_mem_tag()) }
+    pub fn from_utf8_lossy(s: &[u8]) -> Self {
+        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
+        Self { inner: String::from_utf8_lossy(s) }
     }
 
     /// Coerces to a [`Path`] slice.
@@ -874,7 +881,8 @@ impl PathBuf {
                 }
             }
 
-            let mut res = String::new(UseAlloc::Id(self.allocator_id()), FsMemTag::Path.to_mem_tag());
+            let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
+            let mut res = String::new();
             let mut need_sep = false;
 
             for c in buf {
@@ -1083,7 +1091,7 @@ impl Clone for PathBuf {
 
 impl<T: ?Sized + AsRef<str>> From<&T> for PathBuf {
     fn from(s: &T) -> Self {
-        PathBuf::from_str(s.as_ref(), UseAlloc::Default)
+        PathBuf::from_str(s.as_ref())
     }
 }
 
@@ -1108,13 +1116,13 @@ impl FromStr for PathBuf {
     /// Create a `PathBuf` from a [`str`] slice, using the default allocator
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(PathBuf::from_str(s, UseAlloc::Default))
+        Ok(PathBuf::from_str(s))
     }
 }
 
 impl<P: AsRef<Path>> iter::FromIterator<P> for PathBuf {
     fn from_iter<I: IntoIterator<Item = P>>(iter: I) -> Self {
-        let mut buf = PathBuf::new(UseAlloc::Default);
+        let mut buf = PathBuf::new();
         buf.extend(iter);
         buf
     }
@@ -1156,7 +1164,7 @@ impl Borrow<Path> for PathBuf {
 impl Default for PathBuf {
     #[inline]
     fn default() -> Self {
-        PathBuf::new(UseAlloc::Default)
+        PathBuf::new()
     }
 }
 
@@ -1232,14 +1240,14 @@ impl Path {
 
     /// Converts a `Path` into an owned [`PathBuf`]
     #[must_use = "this returns the result of the opration, without modifying the original"]
-    pub fn to_path_buf(&self, alloc: UseAlloc) -> PathBuf {
-        PathBuf::from_str(&self.inner, alloc)
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from_str(&self.inner)
     }
 
     /// Converts a `Path` into an owned [`PathBuf`] and null terminates it
     #[must_use = "this returns the result of the opration, without modifying the original"]
-    pub fn to_null_terminated_path_buf(&self, alloc: UseAlloc) -> PathBuf {
-        let mut buf = PathBuf::from_str(&self.inner, alloc);
+    pub fn to_null_terminated_path_buf(&self) -> PathBuf {
+        let mut buf = PathBuf::from_str(&self.inner);
         buf.null_terminate();
         buf
     }
@@ -1407,12 +1415,12 @@ impl Path {
     /// 
     /// See [`PathBuf::push`] for more details on what it means to adjoin a path
     #[must_use]
-    pub fn join<P: AsRef<Path>>(&self, path: P, alloc: UseAlloc) -> PathBuf {
-        self._join(path.as_ref(), alloc)
+    pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
+        self._join(path.as_ref())
     }
 
-    fn _join(&self, path: &Path, alloc: UseAlloc) -> PathBuf {
-        let mut buf = self.to_path_buf(alloc);
+    fn _join(&self, path: &Path) -> PathBuf {
+        let mut buf = self.to_path_buf();
         buf.push(path);
         buf
     }
@@ -1421,12 +1429,12 @@ impl Path {
     /// 
     /// See [`PathBut::set_file_name`] for more details
     #[must_use]
-    pub fn with_file_name<S: AsRef<str>>(&self, file_name: S, alloc: UseAlloc) -> PathBuf {
-        self._with_file_name(file_name.as_ref(), alloc)
+    pub fn with_file_name<S: AsRef<str>>(&self, file_name: S) -> PathBuf {
+        self._with_file_name(file_name.as_ref())
     }
 
-    fn _with_file_name(&self, file_name: &str, alloc: UseAlloc) -> PathBuf {
-        let mut buf = self.to_path_buf(alloc);
+    fn _with_file_name(&self, file_name: &str) -> PathBuf {
+        let mut buf = self.to_path_buf();
         buf.set_file_name(file_name);
         buf
     }
@@ -1435,12 +1443,12 @@ impl Path {
     /// 
     /// See [`PathBuf::set_extension`] for more details
     #[must_use]
-    pub fn with_extension<S: AsRef<str>>(&self, file_name: S, alloc: UseAlloc) -> PathBuf {
-        self._with_extension(file_name.as_ref(), alloc)
+    pub fn with_extension<S: AsRef<str>>(&self, file_name: S) -> PathBuf {
+        self._with_extension(file_name.as_ref())
     }
 
-    fn _with_extension(&self, file_name: &str, alloc: UseAlloc) -> PathBuf {
-        let mut buf = self.to_path_buf(alloc);
+    fn _with_extension(&self, file_name: &str) -> PathBuf {
+        let mut buf = self.to_path_buf();
         buf.set_extension(file_name);
         buf
     }

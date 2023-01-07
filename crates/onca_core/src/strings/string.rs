@@ -17,7 +17,7 @@ use std::{
 };
 
 use crate::{
-    alloc::{UseAlloc, Allocator, MemTag, Layout, CoreMemTag},
+    alloc::{UseAlloc, MemTag, Layout, ScopedAlloc, ScopedMemTag},
     collections::DynArray,
     mem::{MEMORY_MANAGER, self},
     io,
@@ -29,9 +29,6 @@ pub struct FromUtf8Error {
     error: Utf8Error
 }
 
-#[derive(Debug)]
-pub struct FromUtf16Error(());
-
 #[derive(PartialOrd, Eq, Ord)]
 pub struct String {
     arr : DynArray<u8>
@@ -42,15 +39,15 @@ impl String {
     /// Create a new empty string
     #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { arr: DynArray::new(alloc, mem_tag) }
+    pub fn new() -> Self {
+        Self { arr: DynArray::new() }
     }
 
     /// Create a new empty string with a minimum given capacity
     #[inline]
     #[must_use]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { arr: DynArray::with_capacity(capacity, alloc, mem_tag) }
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self { arr: DynArray::with_capacity(capacity) }
     }
 
     /// Create a string from raw utf8 bytes if the utf8 bytes are valid, otherwise return an error
@@ -72,25 +69,25 @@ impl String {
     ///   - str already has ToOwned implemented, returning `std::string::String`'
     ///   - We would be missing info about the request allocator, because of how `Cow::Borrowed` works
     #[must_use]
-    pub fn from_utf8_lossy(v: &[u8], alloc: UseAlloc, mem_tag: MemTag) -> String {
+    pub fn from_utf8_lossy(v: &[u8]) -> String {
         let mut iter = Utf8Chunks::new(v);
 
         let first_valid = if let Some(chunk) = iter.next() {
             let valid = chunk.valid();
             if chunk.invalid().is_empty() {
                 debug_assert_eq!(valid.len(), v.len());
-                let mut s = String::new(alloc, mem_tag);
+                let mut s = String::new();
                 s.push_str(valid);
                 return s;
             }
             valid
         } else {
-            return String::new(alloc, mem_tag);
+            return String::new();
         };
 
         const REPLACEMENT: &str = "\u{FFFD}";
 
-        let mut res = String::with_capacity(v.len(), alloc, mem_tag);
+        let mut res = String::with_capacity(v.len());
         res.push_str(first_valid);
         res.push_str(REPLACEMENT);
 
@@ -108,8 +105,8 @@ impl String {
     /// Convert a `str` into a `String` with a given allocator
     #[inline]
     #[must_use]
-    pub fn from_str(s: &str, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        let mut res = String::new(alloc, mem_tag);
+    pub fn from_str(s: &str) -> Self {
+        let mut res = String::new();
         res.push_str(s);
         res.null_terminate();
         res
@@ -614,7 +611,10 @@ impl String {
     #[inline]
     #[must_use = "this returns the replaced string as a new allocation, without modifying the original"]
     pub fn replace<'a, P: Pattern<'a>>(&'a self, from: P, to: &str) -> String {
-        let mut res = String::new(UseAlloc::Id(self.allocator_id()), self.mem_tag());
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
+        let mut res = String::new();
         let mut last_end = 0;
         for (start, part) in self.match_indices(from) {
             res.push_str(unsafe { self.get_unchecked(last_end..start) });
@@ -631,8 +631,11 @@ impl String {
     /// While doing so, it attempts to find matches of a pattern.
     /// If it finds any, it replaces them with the replacement string slice at the most `count` times
     pub fn replacen<'a, P: Pattern<'a>>(&'a self, pat: P, to: &str, count: usize) -> String {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
         // Hope to reduce the times of re-allocation
-        let mut res = String::with_capacity(32, UseAlloc::Id(self.allocator_id()), self.mem_tag());
+        let mut res = String::with_capacity(32);
         let mut last_end = 0;
         for (start, part) in self.match_indices(pat).take(count) {
             res.push_str(unsafe { self.get_unchecked(last_end..start) });
@@ -649,7 +652,10 @@ impl String {
     /// 
     /// Since some charactes can expend into multiple characters when changing case, this functions returns a `String` instead of modifying the paramter in-place
     pub fn to_lowercase(&self) -> String {
-        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_lowercase, UseAlloc::Id(self.allocator_id()), self.mem_tag());
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
+        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_lowercase);
 
         // Safety: we know this is a valid char boundary since out.len() is only progressed if ascii bytes are found
         let rest = unsafe { self.get_unchecked(out.len()..) };
@@ -706,7 +712,10 @@ impl String {
     /// SInce some characters can expand into multiple characters when changing the case, this funciton reutns a `String` instead of modigying the paramter in-place.
     #[must_use = "this returns the uppercase string as a new String, without modigying the original"]
     pub fn to_uppercase(&self) -> String {
-        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_uppercase, UseAlloc::Id(self.allocator_id()), self.mem_tag());
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
+        let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_uppercase);
 
         // Safety: we know this is a valid char boundary since out.len() is only progressed if ascii bytes are found
         let rest = unsafe { self.get_unchecked(out.len()..) };
@@ -739,8 +748,11 @@ impl String {
     /// This function will panic if th capacity would overflow
     #[must_use]
     pub fn repeat(&self, n: usize) -> String {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+
         if n == 0 {
-            return String::new(UseAlloc::Id(self.allocator_id()), self.mem_tag());
+            return String::new();
         }
 
         // If `n` is larger than zero, it can be split as
@@ -749,7 +761,7 @@ impl String {
         // and `rem` is the remaining part of `n`.
 
         let capacity = self.len().checked_mul(n).expect("capacity overflow");
-        let mut buf = DynArray::<u8>::with_capacity(capacity, UseAlloc::Id(self.allocator_id()), self.mem_tag());
+        let mut buf = DynArray::<u8>::with_capacity(capacity);
 
         // `2^exp` repetition is done by doubling `buf` `expn`-times
         buf.extend(self.as_bytes());
@@ -819,8 +831,8 @@ impl String {
         unsafe { String::from_utf8_unchecked(bytes) }
     }
 
-    fn convert_while_ascii(b: &[u8], convert: fn(&u8) -> u8, alloc: UseAlloc, mem_tag: MemTag) -> DynArray<u8> {
-        let mut out = DynArray::with_capacity(b.len(), alloc, mem_tag);
+    fn convert_while_ascii(b: &[u8], convert: fn(&u8) -> u8) -> DynArray<u8> {
+        let mut out = DynArray::with_capacity(b.len());
 
         const USIZE_SIZE : usize = core::mem::size_of::<usize>();
         const MAGIC_UNROLL : usize = 2;
@@ -857,8 +869,8 @@ impl String {
         out
     }
 
-    pub fn from_iter<I: Iterator<Item = char>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::new(alloc, mem_tag);
+    pub fn from_iter_alloc_tag<I: Iterator<Item = char>>(iter: I) -> String {
+        let mut buf = String::new();
         buf.extend(iter);
         buf
     }
@@ -897,12 +909,6 @@ impl fmt::Display for FromUtf8Error {
     }
 }
 
-impl fmt::Display for FromUtf16Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt("invalid utf-16: lone surrogate found", f)
-    }
-}
-
 impl Clone for String {
     fn clone(&self) -> Self {
         let mut res = Self { arr: self.arr.clone() };
@@ -919,7 +925,7 @@ impl Clone for String {
 impl FromIterator<char> for String {
     /// Creat a new string from an iterator, using the default allocator
     fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.extend(iter);
         buf
     }
@@ -928,7 +934,7 @@ impl FromIterator<char> for String {
 impl<'a> FromIterator<&'a char> for String {
     /// Creat a new string from an iterator, using the default allocator
     fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.extend(iter);
         buf
     }
@@ -937,7 +943,7 @@ impl<'a> FromIterator<&'a char> for String {
 impl<'a> FromIterator<&'a str> for String {
     /// Creat a new string from a [`str`], using the default allocator
     fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.extend(iter);
         buf
     }
@@ -950,7 +956,7 @@ impl FromIterator<String> for String {
 
         // Because we're iterating over `String`s, we can avoid at least one allocation by getting the first string from the iterator and appending to it all the subsequent strings
         match iterator.next() {
-            None => String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag()),
+            None => String::new(),
             Some(mut buf) => {
                 buf.extend(iterator);
                 buf
@@ -1093,7 +1099,7 @@ impl_eq!{ String, &'a str }
 impl Default for String {
     /// Create as an empty 'String` with the default allocator
     fn default() -> Self {
-        Self::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag())
+        Self::new()
     }
 }
 
@@ -1268,12 +1274,7 @@ impl FromStr for String {
 /// ['Display']: fmt::Display
 pub trait ToString {
     /// Converts the given value to a `String` with the default allocator
-    fn to_string(&self) -> String {
-        self.to_string_with_alloc(UseAlloc::Default, CoreMemTag::String.to_mem_tag())
-    }
-    
-    /// Converts the given value to a `String` with the given allocator
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String;
+    fn to_string(&self) -> String;
 }
 
 /// # Panics
@@ -1282,26 +1283,26 @@ pub trait ToString {
 /// This indicated an incorrect `Display` implementation since `fmt::Write for String` never returns an error itself
 impl<T: fmt::Display + ?Sized> ToString for T {
     #[inline]
-    default fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::new(alloc, mem_tag);
+    default fn to_string(&self) -> String {
+        let mut buf = String::new();
         let mut formatter = core::fmt::Formatter::new(&mut buf);
-        // Bypass format_args!() to avoid wrtie_str with zero-length strs
+        // Bypass format_args!() to avoid write_str with zero-length strs
         fmt::Display::fmt(self, &mut formatter).expect("a Display implementation returned an error unexpectedly");
         buf
     }
 }
 
 impl ToString for char {
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::new(alloc, mem_tag);
+    fn to_string(&self) -> String {
+        let mut buf = String::new();
         buf.push_str(self.encode_utf8(&mut [0; 4]));
         buf
     }
 }
 
 impl ToString for u8 {
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::with_capacity(3, alloc, mem_tag);
+    fn to_string(&self) -> String {
+        let mut buf = String::with_capacity(3);
         let mut n = *self;
         if n >= 10 {
             if n >= 100 {
@@ -1317,8 +1318,8 @@ impl ToString for u8 {
 }
 
 impl ToString for i8 {
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::with_capacity(4, alloc, mem_tag);
+    fn to_string(&self) -> String {
+        let mut buf = String::with_capacity(4);
         if self.is_negative() {
             buf.push('-')
         }
@@ -1339,15 +1340,15 @@ impl ToString for i8 {
 
 impl ToString for str {
     #[inline]
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
-        let mut buf = String::new(alloc, mem_tag);
+    fn to_string(&self) -> String {
+        let mut buf = String::new();
         buf.push_str(self);
         buf
     }
 }
 
 impl ToString for String {
-    fn to_string_with_alloc(&self, alloc: UseAlloc, mem_tag: MemTag) -> String {
+    fn to_string(&self) -> String {
         self.to_owned()
     }
 }
@@ -1376,7 +1377,7 @@ impl From<&str> for String {
     /// The result is allocated on the heap
     #[inline]
     fn from(s: &str) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.push_str(s);
         buf
     }
@@ -1388,7 +1389,7 @@ impl From<&mut str> for String {
     /// The result is allocated on the heap
     #[inline]
     fn from(s: &mut str) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.push_str(s);
         buf
     }
@@ -1524,7 +1525,7 @@ impl From<char> for String {
     /// Allocatoed an owned [`String`] from a single character
     #[inline]
     fn from(c: char) -> Self {
-        let mut buf = String::new(UseAlloc::Default, CoreMemTag::String.to_mem_tag());
+        let mut buf = String::new();
         buf.push(c);
         buf
     }

@@ -5,8 +5,8 @@ use core::{
 };
 use std::mem::size_of;
 use onca_core::{
+    prelude::*,
     io,
-    alloc::{UseAlloc},
 };
 use windows::{
     Win32::{
@@ -28,13 +28,16 @@ use windows::{
     core::PCSTR,
 };
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FsMemTag};
 
 use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
 pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
     unsafe {
-        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
+        let path = path.to_null_terminated_path_buf();
 
         let mut high = 0;
         let low = GetCompressedFileSizeA(PCSTR(path.as_ptr()), Some(&mut high));
@@ -53,7 +56,10 @@ pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
 
 pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe {
-        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
+        let path = path.to_null_terminated_path_buf();
         let res = DeleteFileA(PCSTR(path.as_ptr())).as_bool();
         if res {
             Ok(())
@@ -66,9 +72,9 @@ pub(crate) fn delete(path: &Path) -> io::Result<()> {
 pub struct FileHandle(pub(crate) HANDLE);
 
 impl FileHandle {
-    pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, alloc: UseAlloc, open_link: bool, temporary: bool) -> io::Result<(FileHandle, PathBuf)> {
+    pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, open_link: bool, temporary: bool) -> io::Result<(FileHandle, PathBuf)> {
         unsafe {
-            let mut path_buf = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+            let mut path_buf = path.to_null_terminated_path_buf();
 
             if temporary {
                 let mut file_name = [0u8; MAX_PATH];
@@ -81,7 +87,8 @@ impl FileHandle {
 
                 let temp_end = file_name.iter().position(|&c| c == 0).unwrap_or_default();
                 if temp_end > 0 {
-                    path_buf.push(PathBuf::from_utf8_lossy(&file_name[..temp_end], UseAlloc::TlsTemp))
+                    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+                    path_buf.push(PathBuf::from_utf8_lossy(&file_name[..temp_end]))
                 }
             }
             

@@ -7,7 +7,6 @@ use core::{
 };
 
 use alloc::collections::btree_map as alloc_btree_map;
-use crate::alloc::UseAlloc;
 use super::collections_alloc::Alloc;
 
 
@@ -31,8 +30,8 @@ pub type ValuesMut<'a, K, V> = alloc_btree_map::ValuesMut<'a, K, V>;
 impl<K, V> BTreeMap<K, V> {
     
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self(alloc_btree_map::BTreeMap::new_in(Alloc::new(alloc)))
+    pub fn new() -> Self {
+        Self(alloc_btree_map::BTreeMap::new_in(Alloc::new()))
     }
 
     pub fn clear(&mut self) {
@@ -210,20 +209,6 @@ impl<K: Ord, V> BTreeMap<K, V> {
         self.0.drain_filter(pred)
     }
     */
-
-    pub fn from_array<const N: usize>(arr: [(K, V); N], alloc: UseAlloc) -> Self {
-        let mut map = Self::new(alloc);
-        for (key, value) in arr {
-            map.insert(key, value);
-        }
-        map
-    }
-
-    pub fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        let mut map = Self::new(UseAlloc::Default);
-        map.extend(iter);
-        map
-    }
 }
 
 impl<K: Clone, V: Clone> Clone for BTreeMap<K, V> {
@@ -234,7 +219,7 @@ impl<K: Clone, V: Clone> Clone for BTreeMap<K, V> {
 
 impl<K, V> Default for BTreeMap<K, V> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default)
+        Self::new()
     }
 }
 
@@ -274,13 +259,19 @@ impl<K: Ord, V> Extend<(K, V)> for BTreeMap<K, V> {
 
 impl<K: Ord, V, const N: usize> From<[(K, V); N]> for BTreeMap<K, V> {
     fn from(arr: [(K, V); N]) -> Self {
-        Self::from_array(arr, UseAlloc::Default)
+        let mut map = Self::new();
+        for (key, value) in arr {
+            map.insert(key, value);
+        }
+        map
     }
 }
 
 impl<K: Ord, V> FromIterator<(K, V)> for BTreeMap<K, V> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        Self::from_iter(iter)
+        let mut map = Self::new();
+        map.extend(iter);
+        map
     }
 }
 

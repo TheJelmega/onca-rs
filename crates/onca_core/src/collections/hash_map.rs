@@ -6,7 +6,6 @@ use core::{
 };
 
 use hashbrown::TryReserveError;
-use crate::{alloc::{UseAlloc, Allocator}, mem::MEMORY_MANAGER};
 use super::collections_alloc::Alloc;
 
 pub struct HashMap<K, V, S = DefaultHashBuilder>(pub(crate) hashbrown::HashMap<K, V, S, Alloc>);
@@ -35,22 +34,22 @@ pub type RawEntryBuilderMut<'a, K, V, S> = hashbrown::hash_map::RawEntryBuilderM
 pub type DefaultHashBuilder = hashbrown::hash_map::DefaultHashBuilder;
 
 impl<K, V> HashMap<K, V, DefaultHashBuilder> {
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self::with_hasher(DefaultHashBuilder::new(), alloc)
+    pub fn new() -> Self {
+        Self::with_hasher(DefaultHashBuilder::new())
     }
 
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new(), alloc)
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new())
     }
 }
 
 impl<K, V, S> HashMap<K, V, S> {
-    pub fn with_hasher(hash_builder: S, alloc: UseAlloc) -> Self {
-        Self(hashbrown::HashMap::<K, V, S, Alloc>::with_hasher_in(hash_builder, Alloc::new(alloc)))
+    pub fn with_hasher(hash_builder: S) -> Self {
+        Self(hashbrown::HashMap::<K, V, S, Alloc>::with_hasher_in(hash_builder, Alloc::new()))
     }
 
-    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S, alloc: UseAlloc) -> Self {
-        Self(hashbrown::HashMap::with_capacity_and_hasher_in(capacity, hash_builder, Alloc::new(alloc)))
+    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
+        Self(hashbrown::HashMap::with_capacity_and_hasher_in(capacity, hash_builder, Alloc::new()))
     }
 
     pub fn capacity(&self) -> usize {
@@ -116,10 +115,6 @@ impl<K, V, S> HashMap<K, V, S> {
 
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator().layout().alloc_id()
-    }
-
-    pub fn allocator(&self) -> &mut dyn Allocator {
-        MEMORY_MANAGER.get_allocator(UseAlloc::Id(self.allocator_id())).unwrap()
     }
 }
 
@@ -189,16 +184,10 @@ impl<K: Eq + Hash, V, S: BuildHasher> HashMap<K, V, S> {
         self.0.remove_entry(k)
     }
 
-    pub fn from_iter_with_hasher<I: IntoIterator<Item = (K, V)>>(iter: I, hash_builder: S, alloc: UseAlloc) -> Self {
-        let mut map = Self::with_hasher(hash_builder, alloc);
+    pub fn from_iter_with_hasher<I: IntoIterator<Item = (K, V)>>(iter: I, hash_builder: S) -> Self {
+        let mut map = Self::with_hasher(hash_builder);
         map.extend(iter);
         map
-    }
-
-    pub fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I, alloc: UseAlloc) -> Self 
-        where S : Default
-    {
-        Self::from_iter_with_hasher(iter, Default::default(), alloc)
     }
 }
 
@@ -226,7 +215,7 @@ impl<K: Clone, V: Clone, S: Clone> Clone for HashMap<K, V, S> {
 
 impl<K, V, S: Default> Default for HashMap<K, V, S> {
     fn default() -> Self {
-        Self::with_hasher(Default::default(), UseAlloc::Default)
+        Self::with_hasher(Default::default())
     }
 }
 
@@ -282,13 +271,13 @@ impl<K, V, S, const N: usize> From<[(K, V); N]> for HashMap<K, V, S>
           S : BuildHasher + Default
 {
     fn from(arr: [(K, V); N]) -> Self {
-        Self::from_iter_with_hasher(arr, Default::default(), UseAlloc::Default)
+        Self::from_iter_with_hasher(arr, Default::default())
     }
 }
 
 impl<K: Eq + Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for HashMap<K, V, S> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        Self::from_iter_with_hasher(iter, Default::default(), UseAlloc::Default)
+        Self::from_iter_with_hasher(iter, Default::default())
     }
 }
 

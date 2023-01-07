@@ -16,7 +16,7 @@ impl Allocator for Mallocator {
         if ptr == core::ptr::null_mut() {
             None
         } else {
-            Some(Allocation::<u8>::new(ptr, layout.with_alloc_id(Layout::MAX_ALLOC_ID), mem_tag))
+            Some(Allocation::<u8>::new_tagged(ptr, layout.with_alloc_id(Layout::MAX_ALLOC_ID), mem_tag))
         }
     }
 

@@ -3,7 +3,8 @@ mod buffer;
 use core::fmt;
 use crate::{
     io::{self, BorrowedCursor, BufRead, IoSliceMut, Read, Seek, SeekFrom, SizeHint, DEFAULT_BUF_SIZE},
-    alloc::{UseAlloc, MemTag}, collections::DynArray
+    alloc::{UseAlloc, ScopedAlloc, ScopedMemTag},
+    collections::DynArray
 };
 use buffer::Buffer;
 
@@ -27,13 +28,13 @@ pub struct BufReader<R> {
 
 impl<R: Read> BufReader<R> {
     /// Creates a new `BufRewader` wit ha default buffer capacity. The default is currently 8KB
-    pub fn new(inner: R, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::with_capacity(inner, DEFAULT_BUF_SIZE, alloc, mem_tag)
+    pub fn new(inner: R) -> Self {
+        Self::with_capacity(inner, DEFAULT_BUF_SIZE)
     }
 
     /// Creates a new `BufReader<R>` with the specified buffer capacity
-    pub fn with_capacity(inner: R, capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { inner, buf: Buffer::with_capacity(capacity, alloc, mem_tag) }
+    pub fn with_capacity(inner: R, capacity: usize) -> Self {
+        Self { inner, buf: Buffer::with_capacity(capacity) }
     }
 }
 
@@ -183,9 +184,12 @@ impl<R: Read> Read for BufReader<R> {
             // On the other hand, if `buf` is empty then by definition any writed mused be appended and `append_to_string` will validate all of the new bytes.
             unsafe { crate::io::append_to_string(buf, |b| self.read_to_end(b)) }
         } else {
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(buf.allocator_id()));
+            let _scope_mem_tag = ScopedMemTag::new(buf.mem_tag());
+
             // We cannot append our byte buffer directly onto the `buf` String as there could be an incomplete UTF-8 sequence that has only been partially read.
             // We must read everything into a side buffer first and then call `from_utf8` on the complete buffer
-            let mut bytes = DynArray::new(UseAlloc::Id(buf.allocator_id()), buf.mem_tag());
+            let mut bytes = DynArray::new();
             self.read_to_end(&mut bytes)?;
             let string = core::str::from_utf8(&bytes).map_err(|_| {
                 io::const_io_error!(

@@ -35,28 +35,28 @@ pub struct Monitor {
 
 impl Monitor {
     /// Enumerate over all attached monitors and return a array of them.
-    pub fn enumerate_monitors(alloc: UseAlloc) -> DynArray<Monitor> {
-        os::monitor::enumerate_monitors(alloc)
+    pub fn enumerate_monitors() -> DynArray<Monitor> {
+        os::monitor::enumerate_monitors()
     }
 
     /// Get the primary monitor. If a monitor cannot be detected, return `None`.
-    pub fn primary(alloc: UseAlloc) -> Option<Monitor> {
-        os::monitor::primary_monitor(alloc)
+    pub fn primary() -> Option<Monitor> {
+        os::monitor::primary_monitor()
     }
 
     /// Get the monitor with the largest overlap with a window. If a monitor cannot be detected, return `None`.
-    pub fn from_window(window: Window, alloc: UseAlloc) -> Option<Monitor> {
-        os::monitor::get_monitor_from_hwnd(window.os_handle().hwnd(), alloc)
+    pub fn from_window(window: Window) -> Option<Monitor> {
+        os::monitor::get_monitor_from_hwnd(window.os_handle().hwnd())
     }
 
     /// Get the monitor with the largest overlap of the given rect. If the rect does not overlap a monitor, return `None`.
-    pub fn from_largest_overlap(rect: MonitorRect, alloc: UseAlloc) -> Option<Monitor> {
-        os::monitor::get_monitor_from_largest_overlap(rect, alloc)
+    pub fn from_largest_overlap(rect: MonitorRect) -> Option<Monitor> {
+        os::monitor::get_monitor_from_largest_overlap(rect)
     }
 
     /// Get the monitor at a certain point. If the point does not fall inside a monitor, return `None`.
-    pub fn at(x: i32, y: i32, alloc: UseAlloc) -> Option<Monitor> {
-        os::monitor::get_monitor_at(x, y, alloc)
+    pub fn at(x: i32, y: i32) -> Option<Monitor> {
+        os::monitor::get_monitor_at(x, y)
     }
 
     /// Get the monitors OS handle.

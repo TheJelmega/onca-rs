@@ -48,8 +48,6 @@ macro_rules! impl_slice_partial_eq {
 }
 use impl_slice_partial_eq;
 
-use crate::alloc::{UseAlloc, MemTag};
-
 //--------------------------------------------------------------
 
 trait SpecExtend<T, I> {
@@ -74,11 +72,11 @@ trait ExtendWith<T> {
 }
 
 trait SpecFromIterNested<T, I> {
-    fn from_iter(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self;
+    fn from_iter(iter: I) -> Self;
 }
 
 trait SpecFromIter<T, I> {
-    fn from_iter(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self;
+    fn from_iter(iter: I) -> Self;
 }
 
 //--------------------------------------------------------------

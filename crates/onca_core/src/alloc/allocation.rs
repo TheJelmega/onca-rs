@@ -3,7 +3,7 @@ use std::mem::MaybeUninit;
 
 use crate::mem::MEMORY_MANAGER;
 
-use super::{Layout, Allocator, UseAlloc, layout};
+use super::{Layout, layout, get_active_mem_tag, CoreMemTag, get_active_alloc};
 
 #[cfg(feature = "memory_tracking")]
 use super::mem_tag::MemTag;
@@ -104,13 +104,23 @@ impl<T: ?Sized> Allocation<T>
         self.with_ptr(self.ptr.as_ptr())
     }
 
-    /// Create a `Allocation<T>` from a raw pointer and a layout
+    /// Create a `Allocation<T>` from a raw pointer and a layout, using the active memory tag.
     /// 
     /// # Panics
     /// 
-    /// Panics when the provided pointer is null
+    /// Panics when the provided pointer is null.
     #[inline]
-    pub fn new(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
+    pub fn new(ptr: *mut T, layout: Layout) -> Self {
+        Self::new_tagged(ptr, layout, get_active_mem_tag())
+    }
+
+    /// Create a `Allocation<T>` from a raw pointer, a layout, and a memory tag.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics when the provided pointer is null.
+    #[inline]
+    pub fn new_tagged(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
         Self { ptr: unsafe { NonNull::<_>::new_unchecked(ptr) }, layout, mem_tag }
     }
 
@@ -158,21 +168,15 @@ impl<T> Allocation<T>
     /// 
     /// This function is meant for internal use, calling anything using it is UB
     #[inline]
-    pub const unsafe fn null() -> Self {
+    pub const unsafe fn const_null() -> Self {
         Self { ptr: NonNull::new_unchecked(null_mut()), layout: Layout::null(), mem_tag: MemTag::unknown(0) }
     }
 
     
     /// Create a null heap pointer that store an allocator id for future use
-    pub unsafe fn null_alloc(alloc: UseAlloc) -> Self {
-        let layout = Layout::null().with_alloc_id(alloc.get_id());
-        Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag: MemTag::default() }
-    }
-
-    /// Create a null heap pointer that store an allocator id and memory tag for future use
-    pub unsafe fn null_alloc_tag(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        let layout = Layout::null().with_alloc_id(alloc.get_id());
-        Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag }
+    pub unsafe fn null() -> Self {
+        let layout = Layout::null().with_alloc_id(get_active_alloc().get_id());
+        Self { ptr: NonNull::new_unchecked(null_mut()), layout, mem_tag: get_active_mem_tag() }
     }
 }
 

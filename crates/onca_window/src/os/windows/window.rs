@@ -1,7 +1,7 @@
 use crate::*;
 use core::{ffi::c_void, mem};
 use onca_core::{
-    alloc::CoreMemTag, collections::CallbackArray, mem::HeapPtr, prelude::*, sync::Mutex,
+    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag}, collections::CallbackArray, mem::HeapPtr, prelude::*, sync::Mutex,
     sys::get_app_handle, utils::is_flag_set,
 };
 use onca_logging::{log_debug, log_error, log_warning};
@@ -432,10 +432,10 @@ pub(crate) struct OSWindowData {
 }
 
 impl OSWindowData {
-    pub(crate) fn new(window: &mut Window, alloc: UseAlloc) -> Self {
+    pub(crate) fn new(window: &mut Window) -> Self {
         if window.settings().does_accept_files() {
             Self {
-                drop_handler: Some(Self::create_and_register_drop_handler(window, alloc)),
+                drop_handler: Some(Self::create_and_register_drop_handler(window)),
                 windowed_state: WINDOWPLACEMENT::default(),
             }
         } else {
@@ -446,18 +446,18 @@ impl OSWindowData {
         }
     }
 
-    pub(crate) fn set_accept_files(window: &mut Window, alloc: UseAlloc) {
+    pub(crate) fn set_accept_files(window: &mut Window) {
         let accepts_files = window.settings().does_accept_files();
         if accepts_files {
             window.os_data.drop_handler =
-                Some(Self::create_and_register_drop_handler(window, alloc));
+                Some(Self::create_and_register_drop_handler(window));
         } else {
             window.os_data.drop_handler = None;
         }
     }
 
-    fn create_and_register_drop_handler(window: &mut Window, alloc: UseAlloc) -> DropHandler {
-        let handler = DropHandler::new(window, alloc);
+    fn create_and_register_drop_handler(window: &mut Window) -> DropHandler {
+        let handler = DropHandler::new(window);
 
         unsafe {
             let res = RegisterDragDrop(window.os_handle().hwnd(), &handler.data);
@@ -883,9 +883,11 @@ unsafe extern "system" fn wnd_proc(
                 window.id
             );
 
+            let _scope_alloc: ScopedAlloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
             for i in 0..num_files {
                 let path_len = DragQueryFileA(hdrop, i, None);
-                let mut buf = DynArray::<u8>::new(UseAlloc::TlsTemp, CoreMemTag::window());
+                let mut buf = DynArray::<u8>::new();
                 buf.reserve(path_len as usize);
                 buf.set_len(path_len as usize);
 
@@ -918,13 +920,12 @@ unsafe extern "system" fn wnd_proc(
 
 pub(crate) fn create(
     manager: &mut WindowManager,
-    mut settings: WindowSettings,
-    alloc: UseAlloc,
+    mut settings: WindowSettings
 ) -> Option<HeapPtr<Window>> {
     unsafe {
         let atom = match manager
             .get_os_data()
-            .register_wndclassex(&settings, alloc, wnd_proc)
+            .register_wndclassex(&settings, wnd_proc)
         {
             Some(atom) => atom,
             None => return None,
@@ -937,9 +938,14 @@ pub(crate) fn create(
         let pos = settings.outer_position();
         let PhysicalSize { width, height } = settings.size_with_borders();
 
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
         let title = match &settings.title {
             Some(title) => title.clone(),
-            None => String::new(UseAlloc::TlsTemp, CoreMemTag::window()),
+            None => {
+                let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+                String::new()
+            },
         };
 
         let is_dpi_aware = settings.is_dpi_aware();
@@ -951,10 +957,10 @@ pub(crate) fn create(
             id: WindowId(0),
             settings,
             manager: manager as *mut WindowManager,
-            callbacks: Mutex::new(CallbackArray::new(alloc)),
+            callbacks: Mutex::new(CallbackArray::new()),
             is_closing: false,
         };
-        let mut window_ptr = HeapPtr::new(window, alloc, CoreMemTag::window());
+        let mut window_ptr = HeapPtr::new(window);
 
         let hwnd = CreateWindowExA(
             ex_style,
@@ -981,7 +987,7 @@ pub(crate) fn create(
             return None;
         }
         window_ptr.os_handle = OSWindowHandle { hwnd };
-        window_ptr.os_data = OSWindowData::new(&mut window_ptr, alloc);
+        window_ptr.os_data = OSWindowData::new(&mut window_ptr);
 
         if is_dpi_aware {
             let window_dpi = GetDpiForWindow(hwnd) as u16;

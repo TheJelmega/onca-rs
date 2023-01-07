@@ -3,7 +3,7 @@ use core::{
     task::Poll,
 };
 
-use crate::{alloc::UseAlloc, prelude::DynArray};
+use crate::collections::DynArray;
 
 use super::Result;
 
@@ -59,7 +59,7 @@ pub trait AsyncRead {
     /// If an error is returned, then it must be guaranteed that no bytes were read.
     /// 
     /// If the function is unable to create a future, an error is returned.
-    fn read_async(&mut self, bytes_to_read: u64, alloc: UseAlloc) -> Result<Self::AsyncResult>;
+    fn read_async(&mut self, bytes_to_read: u64) -> Result<Self::AsyncResult>;
 }
 
 pub trait AsyncWrite {
@@ -83,5 +83,5 @@ pub trait AsyncWrite {
     /// An error of the [`ErrorKind::Interrupted`] kind is non-fatal and the write opeartion should be retired if there is nothing else to do.
     /// 
     /// If the function is unable to create a future, an error is returned.
-    fn write_async(&mut self, buf: DynArray<u8>, alloc: UseAlloc) -> Result<Self::AsyncResult>;
+    fn write_async(&mut self, buf: DynArray<u8>) -> Result<Self::AsyncResult>;
 }

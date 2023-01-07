@@ -116,7 +116,7 @@ impl MemTag {
     }
 
     /// Returns `true` if the tag is tracked, `false` otherwise
-    pub fn tracked(&self) -> bool {
+    pub const fn tracked(&self) -> bool {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {
                 self.packed & Self::TRACKED_FLAG == Self::TRACKED_FLAG
@@ -140,7 +140,7 @@ impl MemTag {
     }
 
     /// Get the mem tag state
-    pub fn state(&self) -> MemTagState {
+    pub const fn state(&self) -> MemTagState {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 unsafe { mem::transmute(((self.packed >> Self::STATE_SHIFT) & Self::STATE_MASK) as u8) }
@@ -161,7 +161,7 @@ impl MemTag {
     }
 
     /// Get the plugin id
-    pub fn plugin_id(&self) -> u16 {
+    pub const fn plugin_id(&self) -> u16 {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 (self.packed >> Self::PLUGIN_SHIFT) as u16
@@ -172,7 +172,7 @@ impl MemTag {
     }
 
     /// Get the plugin id
-    pub fn category(&self) -> u8 {
+    pub const fn category(&self) -> u8 {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 (self.packed >> Self::CATEGORY_SHIFT) as u8
@@ -183,7 +183,7 @@ impl MemTag {
     }
 
     /// Get the plugin id
-    pub fn sub_category(&self) -> u8 {
+    pub const fn sub_category(&self) -> u8 {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 (self.packed >> Self::SUB_CATEGORY_SHIFT) as u8
@@ -194,7 +194,7 @@ impl MemTag {
     }
 
     /// Get the UTID (Unique Tracking ID)
-    pub fn utid(&self) -> u32 {
+    pub const fn utid(&self) -> u32 {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 self.packed as u32
@@ -205,7 +205,7 @@ impl MemTag {
     }
 
     /// Get the unique id, including the plugin id, category, and sub-category
-    pub fn id(&self) -> u64 {
+    pub const fn id(&self) -> u64 {
         cfg_if!{
             if #[cfg(feature = "memory_tracking")] {   
                 self.packed & Self::ID_MASK
@@ -216,10 +216,19 @@ impl MemTag {
     }
 
     /// Check if the category is a user category 
-    pub fn is_user_category(&self) -> bool {
+    pub const fn is_user_category(&self) -> bool {
         self.category() & Self::USER_CATEGORY_BIT == Self::USER_CATEGORY_BIT
     }
 
+    /// Get the mem tag, but with the plugin id set to the current plugin id
+    pub fn with_cur_plugin_id(&self) -> MemTag {
+        let mut packed = self.packed;
+        packed &= !((Self::MAX_PLUGIN_ID as u64) << Self::PLUGIN_SHIFT);
+        packed |= ((get_tls_mem_tag_plugin_id() & Self::MAX_PLUGIN_ID) as u64) << Self::PLUGIN_SHIFT;
+        MemTag { packed }
+    }
+
+    /// Create an unknown memtag with the given id
     pub const fn unknown(plugin_id: u16) -> Self {
         Self::new(plugin_id & Self::MAX_PLUGIN_ID, 0, 0, 0)
     }
@@ -227,7 +236,7 @@ impl MemTag {
 
 impl Default for MemTag {
     fn default() -> Self {
-        Self::unknown(0)
+        CoreMemTag::unknown()
     }
 }
 
@@ -254,12 +263,52 @@ impl fmt::Display for MemTag {
     }
 }
 
+thread_local! {
+    static TLS_ACTIVE_MEMTAG : Cell<MemTag> = Cell::new(MemTag::default());
+}
+
+/// Get the active memory tag used on this thread
+pub fn get_active_mem_tag() -> MemTag {
+    TLS_ACTIVE_MEMTAG.get().with_cur_plugin_id()
+}
+
+/// Set the active memory tag used on this thread
+pub fn set_active_mem_tag(mem_tag: MemTag) {
+    TLS_ACTIVE_MEMTAG.set(mem_tag);
+}
+
+/// Scoped allocator.
+/// 
+/// Sets the active alloc on this thread for the current scope, and resets it to the previous allocator once it exits the scope
+pub struct ScopedMemTag {
+    old_mem_tag : MemTag,
+}
+
+impl ScopedMemTag {
+    /// Create a new scoped mem tag
+    pub fn new(mem_tag: MemTag) -> ScopedMemTag {
+        let old_mem_tag = get_active_mem_tag();
+        set_active_mem_tag(mem_tag);
+        ScopedMemTag { old_mem_tag }
+    }
+
+    /// Set the current scoped mem tag
+    pub fn set(&self, mem_tag: MemTag) {
+        set_active_mem_tag(mem_tag);
+    }
+}
+
+impl Drop for ScopedMemTag {
+    fn drop(&mut self) {
+        set_active_mem_tag(self.old_mem_tag);
+    }
+}
+
 
 pub enum CoreMemTag {
     Unknown,
-    String,
     Sync,
-    Allocators,
+    Allocator,
     TlsTempAlloc,
     Callbacks,
 
@@ -269,7 +318,7 @@ pub enum CoreMemTag {
     Window,
 
     /// Uncommon
-    StdCollections,
+    #[cfg(test)]
     Test,
 }
 
@@ -282,22 +331,59 @@ impl CoreMemTag {
         MemTag::new(get_tls_mem_tag_plugin_id(), Self::CATEGORY, self as u8, 0)
     }
 
-    /// Create a memory tag from the Core Memory Tag category
+    /// Create a unknown mem tag
     #[inline]
-    pub fn to_mem_tag(self) -> MemTag {
-        self.create_tag()
+    pub fn unknown() -> MemTag {
+        CoreMemTag::Unknown.create_tag()
     }
-
+    
+    /// Create a synchronization mem tag
+    #[inline]
+    pub fn sync() -> MemTag {
+        CoreMemTag::Sync.create_tag()
+    }
+    
+    /// Create a allocator mem tag
+    #[inline]
+    pub fn allocator() -> MemTag {
+        CoreMemTag::Allocator.create_tag()
+    }
+    
+    /// Create a tls temp alloc mem tag
+    #[inline]
+    pub fn tls_temp_alloc() -> MemTag {
+        CoreMemTag::TlsTempAlloc.create_tag()
+    }
+    
     /// Create a callback mem tag
     #[inline]
     pub fn callbacks() -> MemTag {
         CoreMemTag::Callbacks.create_tag()
     }
     
+    /// Create a terminal memtag
+    #[inline]
+    pub fn terminal() -> MemTag {
+        CoreMemTag::Terminal.create_tag()
+    }
+
+    /// Create a logging memtag
+    #[inline]
+    pub fn logging() -> MemTag {
+        CoreMemTag::Logging.create_tag()
+    }
+
     /// Create a window memtag
     #[inline]
     pub fn window() -> MemTag {
         CoreMemTag::Window.create_tag()
+    }
+
+    /// Create a test memtag
+    #[cfg(test)]
+    #[inline]
+    pub fn test() -> MemTag {
+        CoreMemTag::Test.create_tag()
     }
 
 }

@@ -5,9 +5,10 @@ use core::{
 };
 
 use onca_core::{
+    prelude::*,
     io::{SeekFrom, self},
     mem::HeapPtr,
-    prelude::{UseAlloc, DynArray}
+    alloc::ScopedMemTag,
 };
 use windows::Win32::{
     Storage::FileSystem::{ReadFileEx, WriteFileEx},
@@ -162,18 +163,20 @@ impl AsyncWriteResult {
 }
 
 impl FileHandle {
-    pub(crate) fn read_async(&mut self, bytes_to_read: u64, alloc: UseAlloc) -> io::Result<AsyncReadResult> {
+    pub(crate) fn read_async(&mut self, bytes_to_read: u64) -> io::Result<AsyncReadResult> {
         unsafe {
+            let _scope_mem_tag = ScopedMemTag::new(FsMemTag::asynchronous());
+
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
-            let mut overlapped = HeapPtr::new(OVERLAPPED::default(), alloc, FsMemTag::Async.to_mem_tag());
+            let mut overlapped = HeapPtr::new(OVERLAPPED::default());
             overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
             overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
 
-            let completion_data = HeapPtr::new(AsyncIOCompletionData::new(), alloc, FsMemTag::Async.to_mem_tag());
+            let completion_data = HeapPtr::new(AsyncIOCompletionData::new());
             overlapped.hEvent = core::mem::transmute(completion_data.ptr());
 
-            let mut buffer = DynArray::with_capacity(bytes_to_read as usize, alloc, FsMemTag::Async.to_mem_tag());
+            let mut buffer = DynArray::with_capacity(bytes_to_read as usize);
             buffer.set_len(bytes_to_read as usize);
             let res = ReadFileEx(
                 self.0,
@@ -195,15 +198,17 @@ impl FileHandle {
         }
     }
 
-    pub(crate) fn write_async(&mut self, buffer: DynArray<u8>, alloc: UseAlloc) -> io::Result<AsyncWriteResult> {
+    pub(crate) fn write_async(&mut self, buffer: DynArray<u8>) -> io::Result<AsyncWriteResult> {
         unsafe {
+            let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
-            let mut overlapped = HeapPtr::new(OVERLAPPED::default(), alloc, FsMemTag::Async.to_mem_tag());
+            let mut overlapped = HeapPtr::new(OVERLAPPED::default());
             overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
             overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
 
-            let completion_data = HeapPtr::new(AsyncIOCompletionData::new(), alloc, FsMemTag::Async.to_mem_tag());
+            let completion_data = HeapPtr::new(AsyncIOCompletionData::new());
             overlapped.hEvent = core::mem::transmute(completion_data.ptr());
 
             let bytes_to_write = buffer.len() as u32;

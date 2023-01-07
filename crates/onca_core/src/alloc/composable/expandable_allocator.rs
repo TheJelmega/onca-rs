@@ -21,8 +21,10 @@ where A    : Allocator + ComposableAllocator<Args>,
       Args : Copy  
 {
     pub fn new(args: Args, arena_alloc: UseAlloc) -> Self {
+        let _scope_alloc = ScopedAlloc::new(arena_alloc);
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::allocator());
         Self {
-            allocs: Mutex::new(DynArray::new(arena_alloc, CoreMemTag::Allocators.to_mem_tag())),
+            allocs: Mutex::new(DynArray::new()),
             args,
             arena_alloc_id: arena_alloc.get_id(),
             id: 0
@@ -45,8 +47,9 @@ where
                 }
             }
         }
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.arena_alloc_id));
 
-        let mut new_alloc = A::new_composable(UseAlloc::Id(self.arena_alloc_id), self.args);
+        let mut new_alloc = A::new_composable(self.args);
         new_alloc.set_alloc_id(self.id);
         let allocation = new_alloc.alloc(layout, mem_tag);
         if let None = allocation {

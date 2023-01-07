@@ -2,7 +2,6 @@ use core::{mem, ptr};
 use onca_core::{
     prelude::*,
     collections::HashMap,
-    alloc::CoreMemTag,
     io::Write,
     sys::get_app_handle,
 };
@@ -38,7 +37,7 @@ pub(crate) struct WindowManagerData {
 }
 
 impl WindowManagerData {
-    pub(crate) fn new(alloc: UseAlloc) -> Self {
+    pub(crate) fn new() -> Self {
         // TODO: move to system initialization
         // Setup OLE
         unsafe {
@@ -60,10 +59,10 @@ impl WindowManagerData {
             }
         }
 
-        Self { wnd_classes: HashMap::new(alloc) }
+        Self { wnd_classes: HashMap::new() }
     }
 
-    pub(crate) fn register_wndclassex(&mut self, settings: &WindowSettings, alloc: UseAlloc, wnd_proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT) -> Option<u16> {
+    pub(crate) fn register_wndclassex(&mut self, settings: &WindowSettings, wnd_proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT) -> Option<u16> {
         unsafe {
             let search_key = WndClassExKey {
                 icon: settings.icon().map(|ico| ico.get_os_icon().hicon().0),
@@ -75,7 +74,7 @@ impl WindowManagerData {
                 return Some(*class_atom);
             }
 
-            let mut class_name = String::new(alloc, CoreMemTag::window());
+            let mut class_name = String::new();
             let class_id = self.wnd_classes.values().len();
             let _ = write!(&mut class_name, "Win32 Class {class_id}");
 

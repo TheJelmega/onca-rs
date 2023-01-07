@@ -4,7 +4,7 @@ use core::{
     slice::{self, SliceIndex}
 };
 
-use crate::{alloc::{UseAlloc, MemTag, Layout, CoreMemTag}, mem::HeapPtr};
+use crate::{alloc::{UseAlloc, MemTag, Layout, CoreMemTag, ScopedMemTag, ScopedAlloc}, mem::HeapPtr};
 
 use super::DynArray;
 
@@ -26,9 +26,10 @@ impl<F: ?Sized> CallbackArray<F> {
     /// Create a new callback array
     #[inline]
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
+    pub fn new() -> Self {
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::callbacks());
         Self {
-            arr: DynArray::new(alloc, CoreMemTag::callbacks()),
+            arr: DynArray::new(),
             cur_id: 0
         }
     }
@@ -36,9 +37,10 @@ impl<F: ?Sized> CallbackArray<F> {
     /// Create a new callback array with a given capacity
     #[inline]
     #[must_use]
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::callbacks());
         Self {
-            arr: DynArray::with_capacity(capacity, alloc, CoreMemTag::callbacks()),
+            arr: DynArray::with_capacity(capacity),
             cur_id: 0
         }
     }
@@ -91,10 +93,11 @@ impl<F: ?Sized> CallbackArray<F> {
     where
         G : Unsize<F>
     {
-        let alloc = UseAlloc::Id(self.arr.allocator_id());
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.arr.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::callbacks());
 
         let handle = CallbackHandle(self.cur_id);
-        let heap_ptr = HeapPtr::new(callback, alloc, CoreMemTag::callbacks());
+        let heap_ptr = HeapPtr::new(callback);
 
         self.arr.push((handle, heap_ptr));
         self.cur_id += 1;

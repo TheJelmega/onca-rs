@@ -4,7 +4,10 @@ use core::{
     ptr
 };
 use std::error;
-use crate::{io::{self, ErrorKind, IntoInnerError, IoSlice, Seek, SeekFrom, Write, DEFAULT_BUF_SIZE}, collections::DynArray, alloc::{UseAlloc, MemTag}};
+use crate::{
+    collections::DynArray,
+    io::{self, ErrorKind, IntoInnerError, IoSlice, Seek, SeekFrom, Write, DEFAULT_BUF_SIZE},
+};
 
 /// Wraps a writer an buffers its output
 /// 
@@ -34,13 +37,13 @@ pub struct BufWriter<W: Write> {
 impl<W: Write> BufWriter<W> {
     /// Crates a new `BufWriter` with a default buffe capacity.
     /// The default is currently 8KB.
-    pub fn new(inner: W, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self::with_capacity(inner, DEFAULT_BUF_SIZE, alloc, mem_tag)
+    pub fn new(inner: W) -> Self {
+        Self::with_capacity(inner, DEFAULT_BUF_SIZE)
     }
 
     /// Creates a new `BufWriter` with a t least the specified buffer capacity.
-    pub fn with_capacity(inner: W, capacity: usize, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { inner, buf: DynArray::with_capacity(capacity, alloc, mem_tag), panicked: false }
+    pub fn with_capacity(inner: W, capacity: usize) -> Self {
+        Self { inner, buf: DynArray::with_capacity(capacity), panicked: false }
     }
 
     /// Send data in our local buffer into the inner writer, looping as necessary until wither it's all been sent of an error occurs.

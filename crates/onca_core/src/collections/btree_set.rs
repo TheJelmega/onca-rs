@@ -7,7 +7,6 @@ use std::{
 };
 
 use alloc::collections::btree_set as alloc_btree_set;
-use crate::alloc::UseAlloc;
 use super::collections_alloc::Alloc;
 
 
@@ -26,10 +25,9 @@ pub type Iter<'a, T> = alloc_btree_set::Iter<'a, T>;
 // pub type DrainFilter<'a, T, F: FnMut(&T) -> bool> = alloc_btree_set::DrainFilter<'a, T, F, Alloc>;
 
 impl<T> BTreeSet<T> {
-    
     #[must_use]
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self(alloc_btree_set::BTreeSet::new_in(Alloc::new(alloc)))
+    pub fn new() -> Self {
+        Self(alloc_btree_set::BTreeSet::new_in(Alloc::new()))
     }
 
     pub fn iter(&self) -> Iter<'_, T>  {
@@ -171,12 +169,6 @@ impl<T: Ord> BTreeSet<T> {
         self.0.drain_filter(pred)
     }
     */
-
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut set = Self::new(UseAlloc::Default);
-        set.extend(iter);
-        set
-    }
 }
 
 // TODO(jel): Binary operators should use self's allocator, but BTreeSet cannot return its allocator
@@ -221,7 +213,7 @@ impl<T: Clone> Clone for BTreeSet<T> {
 
 impl<T> Default for BTreeSet<T> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default)
+        Self::new()
     }
 }
 
@@ -267,7 +259,9 @@ impl<T: Ord> Extend<T> for BTreeSet<T> {
 
 impl<T: Ord> FromIterator<T> for BTreeSet<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter(iter)
+        let mut set = Self::new();
+        set.extend(iter);
+        set
     }
 }
 

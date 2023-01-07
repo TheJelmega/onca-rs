@@ -1,10 +1,15 @@
-use onca_core::{io, alloc::UseAlloc};
+use onca_core::{
+    prelude::*,
+    io
+};
 
 use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
 
-/// Returns the if the given path is valid and points to a directory
+/// Returns if the given path is valid and points to a directory
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
-    let entry = Entry::new(path.as_ref().to_path_buf(UseAlloc::TlsTemp));
+    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
+    let entry = Entry::new(path.as_ref().to_path_buf());
     match entry {
         Some(entry) => entry.file_type() == FileType::Directory,
         None => false
@@ -33,7 +38,9 @@ pub fn remove<P: AsRef<Path>>(path: P) -> io::Result<()> {
 /// 
 /// Use carefully!
 pub fn remove_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    if let Some(iter) = read(path.as_ref(), UseAlloc::TlsTemp) {
+    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
+    if let Some(iter) = read(path.as_ref()) {
         for entry in iter {
             match entry.file_type() {
                 FileType::Unknown => {}
@@ -49,6 +56,6 @@ pub fn remove_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
 }
 
 /// Reads the content of a directory and returns an iterator over the content
-pub fn read<P: AsRef<Path>>(path: P, alloc: UseAlloc) -> Option<EntryIter> {
-    EntryIter::new(path, alloc)
+pub fn read<P: AsRef<Path>>(path: P) -> Option<EntryIter> {
+    EntryIter::new(path)
 }

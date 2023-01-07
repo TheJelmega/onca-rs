@@ -6,7 +6,10 @@ use core::{
 };
 
 use hashbrown::TryReserveError;
-use crate::{alloc::{UseAlloc, Allocator}, mem::MEMORY_MANAGER};
+use crate::{
+    alloc::{UseAlloc, MemTag, ScopedAlloc, ScopedMemTag},
+    mem::MEMORY_MANAGER
+};
 use super::{collections_alloc::Alloc, HashMap};
 
 
@@ -30,23 +33,22 @@ pub struct HashSet<T, S = DefaultHashBuilder>(hashbrown::HashSet<T, S, Alloc>);
 
 impl<T> HashSet<T, DefaultHashBuilder> {
     
-    pub fn new(alloc: UseAlloc) -> Self {
-        Self::with_hasher(DefaultHashBuilder::new(), alloc)
+    pub fn new() -> Self {
+        Self::with_hasher(DefaultHashBuilder::new())
     }
 
-    pub fn with_capacity(capacity: usize, alloc: UseAlloc) -> Self {
-        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new(), alloc)
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new())
     }
 }
 
 impl<T, S> HashSet<T, S> {
-    
-    pub fn with_hasher(hash_builder: S, alloc: UseAlloc) -> Self {
-        Self(hashbrown::HashSet::with_hasher_in(hash_builder, Alloc::new(alloc)))
+    pub fn with_hasher(hash_builder: S) -> Self {
+        Self(hashbrown::HashSet::with_hasher_in(hash_builder, Alloc::new()))
     }
 
-    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S, alloc: UseAlloc) -> Self {
-        Self(hashbrown::HashSet::with_capacity_and_hasher_in(capacity, hash_builder, Alloc::new(alloc)))
+    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
+        Self(hashbrown::HashSet::with_capacity_and_hasher_in(capacity, hash_builder, Alloc::new()))
     }
 
     pub fn capacity(self) -> usize {
@@ -93,8 +95,8 @@ impl<T, S> HashSet<T, S> {
         self.0.allocator().layout().alloc_id()
     }
 
-    pub fn allocator(&self) -> &mut dyn Allocator {
-        MEMORY_MANAGER.get_allocator(UseAlloc::Id(self.allocator_id())).unwrap()
+    pub fn mem_tag(&self) -> MemTag {
+        self.0.allocator().mem_tag()
     }
 }
 
@@ -203,16 +205,10 @@ impl<T: Eq + Hash, S: BuildHasher> HashSet<T, S> {
         self.0.take(value)
     }
 
-    pub fn from_iter_with_hasher<I: IntoIterator<Item = T>>(iter: I, hash_builder: S, alloc: UseAlloc) -> Self {
-        let mut set = Self::with_hasher(hash_builder, alloc);
+    pub fn from_iter_with_hasher<I: IntoIterator<Item = T>>(iter: I, hash_builder: S) -> Self {
+        let mut set = Self::with_hasher(hash_builder);
         set.extend(iter);
         set
-    }
-
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, hash_builder: S, alloc: UseAlloc) -> Self 
-        where S : Default
-    {
-        Self::from_iter_with_hasher(iter, Default::default(), alloc)
     }
 }
 
@@ -223,8 +219,9 @@ impl<T, S> BitAnd<&HashSet<T, S>> for &HashSet<T, S>
     type Output = HashSet<T, S>;
 
     fn bitand(self, other: &HashSet<T, S>) -> Self::Output {
-        let alloc = UseAlloc::Id(self.allocator_id());
-        HashSet::from_iter_with_hasher(self.intersection(other).cloned(), self.hasher().clone(), alloc)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+        HashSet::from_iter_with_hasher(self.intersection(other).cloned(), self.hasher().clone())
     }
 }
 
@@ -235,8 +232,9 @@ impl<T, S> BitOr<&HashSet<T, S>> for &HashSet<T, S>
     type Output = HashSet<T, S>;
 
     fn bitor(self, other: &HashSet<T, S>) -> Self::Output {
-        let alloc = UseAlloc::Id(self.allocator_id());
-        HashSet::from_iter_with_hasher(self.union(other).cloned(), self.hasher().clone(), alloc)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+        HashSet::from_iter_with_hasher(self.union(other).cloned(), self.hasher().clone())
     }
 }
 
@@ -247,8 +245,9 @@ impl<T, S> BitXor<&HashSet<T, S>> for &HashSet<T, S>
     type Output = HashSet<T, S>;
 
     fn bitxor(self, other: &HashSet<T, S>) -> Self::Output {
-        let alloc = UseAlloc::Id(self.allocator_id());
-        HashSet::from_iter_with_hasher(self.symmetric_difference(other).cloned(), self.hasher().clone(), alloc)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+        HashSet::from_iter_with_hasher(self.symmetric_difference(other).cloned(), self.hasher().clone())
     }
 }
 
@@ -259,8 +258,9 @@ impl<T, S> Sub<&HashSet<T, S>> for &HashSet<T, S>
     type Output = HashSet<T, S>;
 
     fn sub(self, other: &HashSet<T, S>) -> Self::Output {
-        let alloc = UseAlloc::Id(self.allocator_id());
-        HashSet::from_iter_with_hasher(self.difference(other).cloned(), self.hasher().clone(), alloc)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
+        HashSet::from_iter_with_hasher(self.difference(other).cloned(), self.hasher().clone())
     }
 }
 
@@ -277,7 +277,7 @@ impl<T: Clone, S: Clone> Clone for HashSet<T, S> {
 
 impl<T, S: Default> Default for HashSet<T, S> {
     fn default() -> Self {
-        Self::with_hasher(Default::default(), UseAlloc::Default)
+        Self::with_hasher(Default::default())
     }
 }
 
@@ -338,7 +338,7 @@ impl<T, S, const N: usize> From<[T; N]> for HashSet<T, S>
           S : BuildHasher + Default
 {
     fn from(arr: [T; N]) -> Self {
-        Self::from_iter_with_hasher(arr, Default::default(), UseAlloc::Default)
+        Self::from_iter(arr)
     }
 }
 
@@ -347,7 +347,7 @@ impl<T, S> FromIterator<T> for HashSet<T, S>
           S : BuildHasher + Default
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter_with_hasher(iter, Default::default(), UseAlloc::Default)
+        Self::from_iter_with_hasher(iter, Default::default())
     }
 }
 

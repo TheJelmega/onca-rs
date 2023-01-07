@@ -1,6 +1,6 @@
 use onca_core::{
     prelude::*,   
-    io
+    io, alloc::ScopedAlloc
 };
 use windows::{
     Win32::Storage::FileSystem::{CreateHardLinkA, CreateSymbolicLinkA, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_DIRECTORY},
@@ -11,8 +11,10 @@ use crate::Path;
 
 pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
-        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
+        let source = source.to_null_terminated_path_buf();
+        let dest = dest.to_null_terminated_path_buf();
 
         let res = CreateHardLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), None).as_bool();
         if res {
@@ -25,8 +27,8 @@ pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
 
 pub fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
-        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let source = source.to_null_terminated_path_buf();
+        let dest = dest.to_null_terminated_path_buf();
 
         let res = CreateSymbolicLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), SYMBOLIC_LINK_FLAGS(0)).as_bool();
         if res {
@@ -39,8 +41,8 @@ pub fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
 
 pub fn symlink_dir(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let source = source.to_null_terminated_path_buf(UseAlloc::TlsTemp);
-        let dest = dest.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let source = source.to_null_terminated_path_buf();
+        let dest = dest.to_null_terminated_path_buf();
 
         let res = CreateSymbolicLinkA(PCSTR(source.as_ptr()), PCSTR(dest.as_ptr()), SYMBOLIC_LINK_FLAG_DIRECTORY).as_bool();
         if res {

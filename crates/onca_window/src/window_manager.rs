@@ -1,7 +1,7 @@
 use onca_core::{
     prelude::*,
     mem::HeapPtr,
-    alloc::CoreMemTag,
+    alloc::{CoreMemTag, ScopedMemTag, get_active_alloc, ScopedAlloc},
     collections::{CallbackArray, CallbackHandle},
     sys::is_on_main_thread, sync::Mutex,
 };
@@ -23,18 +23,20 @@ impl WindowManager {
     /// Create a new window manager.
     /// 
     /// DPI awareness is set at creation and cannot be changed later
-    pub fn new(alloc: UseAlloc) -> Self {
+    pub fn new() -> Self {
         assert!(is_on_main_thread(), "The window manager should be only be created on the main thread");
 
-        let os_data = os::WindowManagerData::new(alloc);
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
+        let os_data = os::WindowManagerData::new();
 
         Self {
             os_data,
-            windows: DynArray::new(alloc, CoreMemTag::window()),
-            alloc,
+            windows: DynArray::new(),
+            alloc: get_active_alloc(),
             cur_id: 0,
-            created_callbacks: Mutex::new(CallbackArray::new(alloc)),
-            new_callbacks: Mutex::new(DynArray::new(alloc, CoreMemTag::window())),
+            created_callbacks: Mutex::new(CallbackArray::new()),
+            new_callbacks: Mutex::new(DynArray::new()),
         }
     }
 
@@ -42,7 +44,10 @@ impl WindowManager {
     pub fn create_window(&mut self, settings: WindowSettings) -> Option<WindowId> {
         assert!(is_on_main_thread(), "A window should only be crated on the main thead");
 
-        let heap_ptr = Window::create(self, settings, self.alloc);
+        let _scope_alloc = ScopedAlloc::new(self.alloc);
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
+
+        let heap_ptr = Window::create(self, settings);
         let mut heap_ptr = match heap_ptr {
             Some(ptr) => ptr,
             None => return None,

@@ -42,7 +42,7 @@ impl FreelistAllocator {
 
     /// Create an uninitialized freelist allocator
     pub const fn new_uninit() -> Self {
-        Self { buffer: unsafe { Allocation::null() }, head: null_mut(), mutex: Mutex::new(()), id: 0 }
+        Self { buffer: unsafe { Allocation::const_null() }, head: null_mut(), mutex: Mutex::new(()), id: 0 }
     }
 
     /// Initialize an unitilialized freelist allocator
@@ -158,7 +158,7 @@ impl Allocator for FreelistAllocator {
         if ptr == null_mut() {
             None
         } else {
-            Some(Allocation::<_>::new(ptr, layout.with_alloc_id(self.id), mem_tag))
+            Some(Allocation::<_>::new_tagged(ptr, layout.with_alloc_id(self.id), mem_tag))
         }
     }
 
@@ -200,8 +200,11 @@ impl Allocator for FreelistAllocator {
 }
 
 impl ComposableAllocator<usize> for FreelistAllocator {
-    fn new_composable(alloc: UseAlloc, args: usize) -> Self {
-        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, alloc, Layout::new_size_align(args, 8), CoreMemTag::Allocators.to_mem_tag()).expect("Failed to allocate memory for composable allocator") };
+    fn new_composable(args: usize) -> Self {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
+        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::allocator());
+
+        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, Layout::new_size_align(args, 8)).expect("Failed to allocate memory for composable allocator") };
         FreelistAllocator::new(buffer)
     }
 
@@ -216,7 +219,7 @@ impl ComposableAllocator<usize> for FreelistAllocator {
 
 impl Drop for FreelistAllocator {
     fn drop(&mut self) {
-        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::null() }));
+        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
     }
 }
 
@@ -229,11 +232,11 @@ mod tests {
     #[test]
     fn alloc_dealloc() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = FreelistAllocator::new(buffer);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
             alloc.dealloc(ptr);
         }
     }
@@ -241,13 +244,13 @@ mod tests {
     #[test]
     fn multi_allocs() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = FreelistAllocator::new(buffer);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);
@@ -258,20 +261,20 @@ mod tests {
     #[test]
     fn dealloc_then_realloc() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = FreelistAllocator::new(buffer);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
 
             let raw0 = ptr0.ptr();
 
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::Test.to_mem_tag()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
 
             alloc.dealloc(ptr0);
 
-            let new_ptr = alloc.alloc(Layout::new::<u16>(), CoreMemTag::Test.to_mem_tag()).unwrap();
+            let new_ptr = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
             assert_eq!(raw0, new_ptr.ptr());
         }
     }
@@ -279,11 +282,11 @@ mod tests {
     #[test]
     fn alloc_too_large() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::Test.to_mem_tag()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
         let mut alloc = FreelistAllocator::new(buffer);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new_size_align(300, 8), CoreMemTag::Test.to_mem_tag());
+            let ptr = alloc.alloc(Layout::new_size_align(300, 8), CoreMemTag::test());
             match ptr {
                 None => {},
                 Some(_) => panic!()

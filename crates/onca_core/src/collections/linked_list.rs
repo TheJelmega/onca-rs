@@ -9,7 +9,7 @@ use core::{
 
 use crate::{
     mem::{HeapPtr, MEMORY_MANAGER}, 
-    alloc::{UseAlloc, MemTag}
+    alloc::{UseAlloc, MemTag, get_active_alloc, get_active_mem_tag, ScopedAlloc, ScopedMemTag}
 };
 use super::SpecExtend;
 
@@ -95,8 +95,8 @@ impl<T> LinkedList<T> {
 
     #[inline]
     #[must_use]
-    pub const fn new(alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        Self { head: None, tail: None, len: 0, alloc_id: alloc.get_id(), mem_tag, phantom: PhantomData }
+    pub fn new() -> Self {
+        Self { head: None, tail: None, len: 0, alloc_id: get_active_alloc().get_id(), mem_tag: get_active_mem_tag(), phantom: PhantomData }
     }
 
     pub fn append(&mut self, other: &mut Self) {
@@ -158,7 +158,9 @@ impl<T> LinkedList<T> {
 
     #[inline]
     pub fn clear(&mut self) {
-        *self = Self::new(UseAlloc::Id(self.alloc_id), self.mem_tag)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+        *self = Self::new()
     }
 
     #[inline]
@@ -193,7 +195,9 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&mut self, elt: T) {
-        self.push_front_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id), self.mem_tag));
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+        self.push_front_node(HeapPtr::new(Node::new(elt)));
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -201,7 +205,9 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_back(&mut self, elt: T) {
-        self.push_back_node(HeapPtr::new(Node::new(elt), UseAlloc::Id(self.alloc_id), self.mem_tag));
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+        self.push_back_node(HeapPtr::new(Node::new(elt)));
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -212,10 +218,13 @@ impl<T> LinkedList<T> {
         let len = self.len();
         assert!(at <= len, "Connot split off at a nonexistent index");
 
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+
         if at == 0 {
-            return mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag));
+            return mem::replace(self, LinkedList::new());
         } else if at == len {
-            return LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag);
+            return LinkedList::new();
         }
 
         let split_node = if at - 1 <= len - 1 - (at - 1) {
@@ -265,13 +274,6 @@ impl<T> LinkedList<T> {
         DrainFilter { list: self, it: it, pred: filter, idx: 0, old_len }
     }
 
-    pub fn from_iter<I: IntoIterator<Item = T>>(iter: I, alloc: UseAlloc, mem_tag: MemTag) -> Self {
-        let mut list = LinkedList::new(alloc, mem_tag);
-        list.extend(iter);
-        list
-    }
-    
-    
     fn get_node_from_non_null_opt(&mut self, mut node: Option<NonNull<Node<T>>>) -> Option<HeapPtr<Node<T>>> {
         unsafe {
             match node {
@@ -409,7 +411,11 @@ impl<T> LinkedList<T> {
 
     unsafe fn split_off_before_node(&mut self, split_node: Option<NonNull<Node<T>>>, at: usize) -> Self {
         match split_node {
-            None => mem::replace(self, LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag)),
+            None => {
+                let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+                let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+                mem::replace(self, LinkedList::new())
+            },
             Some(mut split_node) => {
                 let first_part_tail = unsafe {
                     split_node.as_mut().prev.take()
@@ -442,7 +448,11 @@ impl<T> LinkedList<T> {
 
     unsafe fn split_off_after_node(&mut self, split_node: Option<NonNull<Node<T>>>, at: usize) -> Self {
         match split_node {
-            None => LinkedList::new(UseAlloc::Id(self.alloc_id), self.mem_tag),
+            None => {
+                let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+                let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+                LinkedList::new()
+            },
             Some(mut split_node) => {
                 let mut second_part_head = split_node.as_mut().next.take();
 
@@ -476,7 +486,7 @@ impl<T> LinkedList<T> {
 
 impl<T> Default for LinkedList<T> {
     fn default() -> Self {
-        Self::new(UseAlloc::Default, MemTag::default())
+        Self::new()
     }
 }
 
@@ -500,7 +510,9 @@ impl<T> Drop for LinkedList<T> {
 
 impl<T> FromIterator<T> for LinkedList<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from_iter(iter, UseAlloc::Default, MemTag::default())
+        let mut list = LinkedList::new();
+        list.extend(iter);
+        list
     }
 }
 
@@ -595,7 +607,10 @@ impl<T: Ord> Ord for LinkedList<T> {
 
 impl<T: Clone> Clone for LinkedList<T> {
     fn clone(&self) -> Self {
-        Self::from_iter(self.iter().cloned(), UseAlloc::Id(self.alloc_id), self.mem_tag)
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
+        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
+
+        Self::from_iter(self.iter().cloned())
     }
 
     fn clone_from(&mut self, other: &Self)
@@ -877,7 +892,10 @@ impl<'a, T> CursorMut<'a, T> {
 
      pub fn insert_after(&mut self, item: T) {
         unsafe {
-            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id), self.list.mem_tag);
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.list.alloc_id));
+            let _scope_mem_tag = ScopedMemTag::new(self.list.mem_tag);
+
+            let spliced_node = HeapPtr::new(Node::new(item));
             let node_next = match self.current {
                 None => as_non_null(&self.list.head),
                 Some(node) => as_non_null(&node.as_ref().next),
@@ -893,7 +911,10 @@ impl<'a, T> CursorMut<'a, T> {
 
     pub fn insert_before(&mut self, item: T) {
         unsafe {
-            let spliced_node = HeapPtr::new(Node::new(item), UseAlloc::Id(self.list.alloc_id), self.list.mem_tag);
+            let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.list.alloc_id));
+            let _scope_mem_tag = ScopedMemTag::new(self.list.mem_tag);
+
+            let spliced_node = HeapPtr::new(Node::new(item));
             let node_prev = match self.current {
                 None => self.list.tail,
                 Some(node) => node.as_ref().prev

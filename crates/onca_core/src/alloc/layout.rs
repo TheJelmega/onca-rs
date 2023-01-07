@@ -42,7 +42,7 @@ impl Layout {
     /// Mask for the log2(align)
     pub const ALIGN_MASK : u64 = 0x0F;
 
-    pub fn new_raw(size: usize, alloc_id: u16, align: usize) -> Self
+    pub const fn new_raw(size: usize, alloc_id: u16, align: usize) -> Self
     {
         Self { packed: 
             (size as u64) << Self::SIZE_SHIFT |
@@ -52,14 +52,14 @@ impl Layout {
     }
 
     /// Create a new layout for type `T`
-    pub fn new<T>() -> Self {
+    pub const fn new<T>() -> Self {
         let size = mem::size_of::<T>();
         let align = mem::align_of::<T>();
         Self::new_size_align(size, align)
     }
 
     /// Create a new layout from a `size` and an `alignment`
-    pub fn new_size_align(size: usize, align: usize) -> Self {
+    pub const fn new_size_align(size: usize, align: usize) -> Self {
         assert!(size  != 0                       , "Size needs to be larger than 0");
         assert!(size  <= Self::MAX_SIZE as usize , "Can only allocate up to and including MAX_SIZE bytes");
         assert!(align != 0                       , "Alignment needs to be larger than 0");
@@ -70,7 +70,7 @@ impl Layout {
     }
 
     /// Create a new layout for an array that can store `count` elements of type `T`
-    pub fn array<T>(count: usize) -> Self {
+    pub const fn array<T>(count: usize) -> Self {
         let size = mem::size_of::<T>() * count;
         let align = mem::align_of::<T>();
         Self::new_size_align(size, align)
@@ -86,8 +86,14 @@ impl Layout {
     /// Get a copy of the layout that is expanded by the given layout
     /// 
     /// The added size is added to the element that it would represent has the correct alignment inside of the layout
-    pub fn expand(self, other: Self) -> Self {
-        let align = cmp::max(self.align(), other.align());
+    pub const fn expand(self, other: Self) -> Self {
+        let self_align = self.align();
+        let other_align = other.align();
+        let align = if self_align > other_align {
+            self_align
+        } else {
+            other_align
+        };
 
         let needed_align = other.align();
         // Make sure data is aligned for the next element
@@ -99,47 +105,52 @@ impl Layout {
     /// Get a copy of the layout that is expanded by the given layout. The given layout will be directly appneded and its alignment will be ignored
     /// 
     /// The added size is added to the element that it would represent has the correct alignment inside of the layout
-    pub fn expand_packed(self, other: Self) -> Self {
+    pub const fn expand_packed(self, other: Self) -> Self {
         let size = self.size() + other.size();
         Self::new_raw(size, self.alloc_id(), self.align())
     }
 
-    pub fn with_size_multiple_of(&self, factor: u64) -> Self {
+    pub const fn with_size_multiple_of(&self, factor: u64) -> Self {
         let raw = self.packed;
         let size = (self.size() as u64).next_multiple_of(factor) as usize;
         Self::new_raw(size, self.alloc_id(), self.align())
     }
 
     /// Get a copy of the layout that is at minimum aligned with the given alignment
-    pub fn with_min_align(&self, align: usize) -> Self {
+    pub const fn with_min_align(&self, align: usize) -> Self {
         assert!(align != 0             , "Alignment needs to be larger than 0");
         assert!(align.is_power_of_two(), "Alignment needs to be a power of 2");
 
-        let final_align = cmp::max(self.align(), align);
+        let self_align = self.align();
+        let align = if self_align > align {
+            self_align
+        } else {
+            align
+        };
         Self::new_raw(self.size(), self.alloc_id(), align)
     }
 
     /// Get the size of the allocation
     #[inline]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         (self.packed >> Self::SIZE_SHIFT) as usize
     }
 
     /// Get the pow2 of the alignment
     #[inline]
-    pub fn log2_align(&self) -> u8 {
+    pub const fn log2_align(&self) -> u8 {
         (self.packed & Self::ALIGN_MASK) as u8
     }
 
     /// Get the alignment of the allocation
     #[inline]
-    pub fn align(&self) -> usize {
+    pub const fn align(&self) -> usize {
         1usize << self.log2_align() 
     }
 
     /// Get the allocator id
     #[inline]
-    pub fn alloc_id(&self) -> u16 { ((self.packed & Self::ALLOC_ID_MASK) >> Self::ALLOC_ID_SHIFT) as u16 }
+    pub const fn alloc_id(&self) -> u16 { ((self.packed & Self::ALLOC_ID_MASK) >> Self::ALLOC_ID_SHIFT) as u16 }
 
     /// Set the allocator id
     /// 
@@ -150,7 +161,7 @@ impl Layout {
     }
 
     /// Get a copy of the layout with the allocator id set
-    pub fn with_alloc_id(&self, id: u16) -> Self {
+    pub const fn with_alloc_id(&self, id: u16) -> Self {
         let mut layout = *self;
         layout.packed &= !Self::ALLOC_ID_MASK; 
         layout.packed |= ((id as u64) << Self::ALLOC_ID_SHIFT) & Self::ALLOC_ID_MASK;

@@ -4,9 +4,7 @@ use core::{
     ffi::c_void
 };
 use onca_core::{
-    alloc::{UseAlloc},
-    collections::DynArray,
-    strings::String,
+    prelude::*,
     io,
 };
 use windows::{
@@ -49,9 +47,9 @@ use super::{high_low_to_u64, dword_to_flags, MAX_PATH, file};
 pub(crate) struct EntrySearchHandle(FindFileHandle);
 
 impl EntrySearchHandle {
-    pub(crate) fn new(path: &Path, alloc: UseAlloc) -> io::Result<(EntrySearchHandle, PathBuf)> {
+    pub(crate) fn new(path: &Path) -> io::Result<(EntrySearchHandle, PathBuf)> {
         unsafe{
-            let mut buf = path.to_path_buf(alloc);
+            let mut buf = path.to_path_buf();
             buf.pop();
             buf.push("/*");
             buf.null_terminate();
@@ -72,10 +70,10 @@ impl EntrySearchHandle {
                         }
                     }
 
-                    let mut path = path.to_path_buf(alloc);
+                    let mut path = path.to_path_buf();
                     let filename_len = find_data.cFileName.iter().position(|&c| c.0 == 0).unwrap_or(MAX_PATH);
                     let filename_slice = core::slice::from_raw_parts(find_data.cFileName.as_ptr() as *const u8, filename_len);
-                    path.push(PathBuf::from_utf8_lossy(filename_slice, alloc));
+                    path.push(PathBuf::from_utf8_lossy(filename_slice));
                     Ok((EntrySearchHandle(handle), path))
                 },
                 Err(err) => Err(io::Error::from_raw_os_error(err.code().0)),
@@ -84,12 +82,15 @@ impl EntrySearchHandle {
     }
 
     pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
         let mut find_data = WIN32_FIND_DATAA::default();
         if unsafe { FindNextFileA(self.0, &mut find_data).as_bool() } {
             let mut it = find_data.cFileName.split(|&c| c.0 == 0);
             let char_slice = it.next().unwrap();
             let utf8_slice = unsafe { core::slice::from_raw_parts(char_slice.as_ptr() as *const u8, char_slice.len()) };
-            let file_name = String::from_utf8_lossy(utf8_slice, UseAlloc::TlsTemp, FsMemTag::Path.to_mem_tag());
+            let file_name = String::from_utf8_lossy(utf8_slice);
             path.set_file_name(file_name);
             Some(path)
         } else {
@@ -109,7 +110,10 @@ impl Drop for EntrySearchHandle {
 
 pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
     unsafe {
-        let path = &path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
+        let path = &path.to_null_terminated_path_buf();
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
         let res = GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
@@ -192,6 +196,9 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
 
 fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
     unsafe {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
         // Get the SID of the current user, we will use this later to get the correct file permissions for the user
 
         // UNLEN definition: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsch/165836c1-89d7-4abb-840d-80cf2510aa3e
@@ -219,10 +226,10 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
             return Permission::None;
         }
 
-        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
+        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize);
         sid_buf.set_len(sid_len as usize);
 
-        let mut domain_buf = DynArray::<u8>::with_capacity(domain_len as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
+        let mut domain_buf = DynArray::<u8>::with_capacity(domain_len as usize);
         domain_buf.set_len(domain_len as usize);
 
         let res = LookupAccountNameA(
@@ -248,7 +255,7 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
             return Permission::None;
         }
         
-        let mut buf = DynArray::<u8>::with_capacity(needed as usize, UseAlloc::TlsTemp, FsMemTag::Temporary.to_mem_tag());
+        let mut buf = DynArray::<u8>::with_capacity(needed as usize);
         buf.set_len(needed as usize);
         let sec_desc_ptr = PSECURITY_DESCRIPTOR(buf.as_mut_ptr() as *mut c_void);
         let res = GetFileSecurityA(pcstr, requested_info, sec_desc_ptr, needed, &mut needed);
@@ -324,7 +331,10 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
 
 pub(crate) fn get_entry_file_type(path: &Path) -> FileType {
     unsafe {
-        let path = path.to_null_terminated_path_buf(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
+
+        let path = path.to_null_terminated_path_buf();
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
         let res = GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void);
