@@ -311,6 +311,7 @@ pub enum CoreMemTag {
     Allocator,
     TlsTempAlloc,
     Callbacks,
+    EventListeners,
 
     /// External predefined tags
     Terminal,
@@ -359,6 +360,12 @@ impl CoreMemTag {
     #[inline]
     pub fn callbacks() -> MemTag {
         CoreMemTag::Callbacks.create_tag()
+    }
+    
+    /// Create a callback mem tag
+    #[inline]
+    pub fn event_listeners() -> MemTag {
+        CoreMemTag::EventListeners.create_tag()
     }
     
     /// Create a terminal memtag

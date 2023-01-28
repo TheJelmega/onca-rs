@@ -1,15 +1,16 @@
+use crate::{
+    os, BorderStyle, Flags, PhysicalPosition, PhysicalSize, PixelPos, Size, WindowManager,
+    WindowSettings, LOG_CAT,
+};
 use core::fmt;
 use onca_core::{
-    prelude::*,
+    alloc::ScopedAlloc,
+    event_listener::{EventListenerArray, EventListenerRef, EventListener, self},
     mem::HeapPtr,
-    collections::{CallbackArray, CallbackHandle}, sync::Mutex, alloc::ScopedAlloc,
+    prelude::*,
+    sync::Mutex,
 };
 use onca_logging::log_warning;
-use crate::{
-    os, 
-    WindowSettings, WindowManager, Flags, BorderStyle, PhysicalSize, Size, PhysicalPosition, PixelPos,
-    LOG_CAT,
-};
 
 /// Window handle
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -137,25 +138,27 @@ pub enum AttentionType {
     /// Don't notify the user
     None,
     /// Inform the user something has changed to the window
-    /// 
+    ///
     /// On windows, this will flash the taskbar icon
     Informative,
     /// Inform the user about a critical situation
-    /// 
+    ///
     /// On windows, this will flash both the taskbar icon and the window itself
-    Critical
+    Critical,
 }
 
 // NOTE(jel): We currently aren't supporting menus, as we will have a custom window border (including min/max buttons), but we may need to look into it for an OS with a global menu bar (like MacOS)
 
+pub type WindowEventListener = dyn for<'a> EventListener<(WindowId, WindowEvent<'a>)>;
+
 pub struct Window {
-    pub(crate) os_handle  : OSWindowHandle,
-    pub(crate) os_data    : os::OSWindowData,
-    pub(crate) id         : WindowId,
-    pub(crate) settings   : WindowSettings,
-    pub(crate) manager    : *mut WindowManager,
-    pub(crate) callbacks  : Mutex<CallbackArray<dyn Fn(&mut WindowManager, WindowId, &WindowEvent) -> bool>>,
-    pub(crate) is_closing : bool,
+    pub(crate) os_handle: OSWindowHandle,
+    pub(crate) os_data: os::OSWindowData,
+    pub(crate) id: WindowId,
+    pub(crate) settings: WindowSettings,
+    pub(crate) manager: *mut WindowManager,
+    pub(crate) listeners: Mutex<EventListenerArray<WindowEventListener>>,
+    pub(crate) is_closing: bool,
 }
 
 impl Window {
@@ -422,57 +425,48 @@ impl Window {
     // Callbacks
 
     /// Register a window event callback.
-    /// 
+    ///
     /// The return of this function depends on the `WindowEvent` that was sent, check its documentation for more info
-    /// 
+    ///
     /// The callback receives the window handle and returns if the window is allowed to close, this should be `true` in most cases.
-    pub fn register_window_callback<F>(&mut self, callback: F) -> CallbackHandle
-    where
-        F: Fn(&mut WindowManager, WindowId, &WindowEvent) -> bool + 'static
-    {
-        self.callbacks.lock().push(callback)
+    pub fn register_window_callback<'a, F>(&mut self, listener: EventListenerRef<WindowEventListener>) {
+        self.listeners.lock().push(listener);
     }
 
     /// Unregister a window close callback
-    pub fn unregister_close_callback(&mut self, handle: CallbackHandle) {
-        self.callbacks.lock().remove(handle);
+    pub fn unregister_close_callback<'a>(&mut self, listener: &EventListenerRef<WindowEventListener>) {
+        self.listeners.lock().remove(listener);
     }
 
     /// Register a window close callback.
-    /// 
+    ///
     /// This is called when the window has been closed and destroyed (including all child windows).
-    /// 
+    ///
     /// The callback receives the window handle.
-    /// 
+    ///
     /// Note: The user cannot access any OS data at this time, as it has been destroyed.
 
     // Crate private
-    
-    pub(crate) fn create(manager: &mut WindowManager, settings: WindowSettings) -> Option<HeapPtr<Window>> {
+
+    pub(crate) fn create(
+        manager: &mut WindowManager,
+        settings: WindowSettings,
+    ) -> Option<HeapPtr<Window>> {
         os::window::create(manager, settings)
     }
 
     // Notifications
 
     /// Notify the window of an event
-    pub(crate) fn send_window_event(&mut self, event: WindowEvent) -> bool {
-        let mut notify_result = true;
-        let manager = unsafe { &mut *self.manager };
-        let callbacks = self.callbacks.lock();
-        for (_, callback) in &*callbacks {
-            notify_result &= callback(manager, self.id, &event);
-        }
-        notify_result
+    pub(crate) fn send_window_event(&mut self, event: WindowEvent) {
+        self.listeners.lock().notify(&(self.id, event));
     }
 
-    pub (crate) fn notify_destroyed(&mut self) {
-        let manager = unsafe { &mut *self.manager };
-        let callbacks = self.callbacks.lock();
-        for (_, callback) in &*callbacks {
-            callback(manager, self.id, &WindowEvent::Destroyed);
-        }
+    pub(crate) fn notify_destroyed(&mut self) {
+        self.listeners.lock().notify(&(self.id, WindowEvent::Destroyed));
 
         // SAFETY: Since we are the last place that a reference to the window is used, we can delete the memory it points to
+        let manager = unsafe { &mut *self.manager };
         manager.remove_window(self.id);
     }
 }

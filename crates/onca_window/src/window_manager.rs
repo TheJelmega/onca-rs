@@ -2,42 +2,42 @@ use onca_core::{
     prelude::*,
     mem::HeapPtr,
     alloc::{CoreMemTag, ScopedMemTag, get_active_alloc, ScopedAlloc},
-    collections::{CallbackArray, CallbackHandle},
-    sys::is_on_main_thread, sync::Mutex,
+    sys::is_on_main_thread, sync::Mutex, event_listener::{EventListenerArray, EventListenerRef, EventListener},
 };
 
 use crate::{os, Window, WindowId, WindowSettings};
 
 /// Window manager
 pub struct WindowManager {
-    os_data           : os::WindowManagerData,
-    windows           : DynArray<(WindowId, HeapPtr<Window>)>,
-    alloc             : UseAlloc,
-    cur_id            : u32,
-    created_callbacks : Mutex<CallbackArray<dyn Fn(&mut Window)>>,
+    os_data             : os::WindowManagerData,
+    windows             : DynArray<(WindowId, HeapPtr<Window>)>,
+    alloc               : UseAlloc,
+    cur_id              : u32,
+    created_callbacks   : Mutex<EventListenerArray<dyn EventListener<Window>>>,
     // Newly added callbacks that need to run during the next window manage tick
-    new_callbacks     : Mutex<DynArray<CallbackHandle>>,
+    new_callbacks       : Mutex<EventListenerArray<dyn EventListener<Window>>>,
 }
 
 impl WindowManager {
     /// Create a new window manager.
     /// 
     /// DPI awareness is set at creation and cannot be changed later
-    pub fn new() -> Self {
+    pub fn new() -> HeapPtr<Self> {
         assert!(is_on_main_thread(), "The window manager should be only be created on the main thread");
 
         let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
 
         let os_data = os::WindowManagerData::new();
 
-        Self {
+        HeapPtr::new(Self {
             os_data,
             windows: DynArray::new(),
             alloc: get_active_alloc(),
             cur_id: 0,
-            created_callbacks: Mutex::new(CallbackArray::new()),
-            new_callbacks: Mutex::new(DynArray::new()),
+            created_callbacks: Mutex::new(EventListenerArray::new()),
+            new_callbacks: Mutex::new(EventListenerArray::new()),
         }
+        })
     }
 
     /// Create a new window.
@@ -69,19 +69,9 @@ impl WindowManager {
 
         // Call all newly added creation callbacks to make sure the newly registed systems know about the existing windows
         {
-            let new_callbacks = self.new_callbacks.lock();
-            let callbacks = self.created_callbacks.lock();
-
-            for handle in &*new_callbacks {
-                let callback = callbacks.get(*handle);
-                match callback {
-                    Some(callback) => {
-                        for window in &mut self.windows {
-                            callback(&mut *window.1)
-                        }
-                    },
-                    None => {},
-                }
+            let mut new_callbacks = self.new_callbacks.lock();
+            for window in &self.windows {
+                new_callbacks.notify(&window.1);
             }
         }
 
@@ -125,18 +115,15 @@ impl WindowManager {
     /// The callback is called before it is added to the manager's list of windows.
     /// 
     /// If a callback is added and tehre are already windows that were created, the callback will be called during the next tick of the window manager.
-    pub fn register_window_created_callback<F>(&mut self, callback: F) -> CallbackHandle
-    where
-        F : Fn(&mut Window) + 'static
-    {
-        let handle = self.created_callbacks.lock().push(callback);
-        self.new_callbacks.lock().push(handle);
+    pub fn register_window_created_callback<F>(&self, listener: EventListenerRef<dyn EventListener<Window>>) {
+        let handle = self.created_callbacks.lock().push(listener.clone());
+        self.new_callbacks.lock().push(listener);
         handle
     }
 
     /// Unregister a window created callback.
-    pub fn unregister_window_created_callback(&mut self, handle: CallbackHandle) {
-        self.created_callbacks.lock().remove(handle);
+    pub fn unregister_window_created_callback(&self, listener: &EventListenerRef<dyn EventListener<Window>>) {
+        self.created_callbacks.lock().remove(listener);
     }
 
     /// Enumerate over all existing windows and execute a callback
@@ -168,10 +155,7 @@ impl WindowManager {
         }
     }
 
-    fn notify_window_created(&self, window: &mut Window) {
-        let callback = self.created_callbacks.lock();
-        for (_, callback) in &*callback {
-            callback(window);
-        }
+    fn notify_window_created(&self, window: &Window) {
+        self.created_callbacks.lock().notify(&window)
     }
 }

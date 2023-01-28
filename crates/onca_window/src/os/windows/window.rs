@@ -1,11 +1,15 @@
 use crate::*;
-use core::{ffi::c_void, mem};
+use core::{ffi::c_void, mem, ptr::null_mut};
+use std::cell::Cell;
 use onca_core::{
-    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag}, collections::CallbackArray, mem::HeapPtr, prelude::*, sync::Mutex,
-    sys::get_app_handle, utils::is_flag_set,
+    prelude::*,
+    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag}, 
+    mem::HeapPtr, 
+    sync::Mutex,
+    sys::get_app_handle,
+    utils::is_flag_set, event_listener::EventListenerArray,
 };
 use onca_logging::{log_debug, log_error, log_warning};
-use std::ptr::null_mut;
 use windows::{
     core::PCSTR,
     Win32::{
@@ -512,10 +516,10 @@ unsafe extern "system" fn wnd_proc(
         return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    let window = &mut *(window_ptr);
+    let window = &mut *window_ptr;
+    let manager = &mut *window.manager;
 
     const PROCESSED: LRESULT = LRESULT(0);
-
     match msg {
         WM_GETMINMAXINFO => {
             let minmaxinfo = &mut *(lparam.0 as *mut MINMAXINFO);
@@ -547,14 +551,14 @@ unsafe extern "system" fn wnd_proc(
                 const TOPMOST: isize = HWND_TOPMOST.0;
 
                 match window_pos.hwndInsertAfter.0 {
-                    TOP => _ = window.send_window_event(WindowEvent::BroughtToFront),
+                    TOP => window.send_window_event(WindowEvent::BroughtToFront),
                     NOTOPMOST => {
                         window.settings.flags.set(Flags::TopMost, false);
-                        _ = window.send_window_event(WindowEvent::TopMost(false))
+                        window.send_window_event(WindowEvent::TopMost(false))
                     },
                     TOPMOST => {
                         window.settings.flags.set(Flags::TopMost, true);
-                        _ = window.send_window_event(WindowEvent::TopMost(true))
+                        window.send_window_event(WindowEvent::TopMost(true))
                     },
                     _ => {}
                 }
@@ -777,9 +781,9 @@ unsafe extern "system" fn wnd_proc(
 
             window.settings.flags.set(Flags::Active, active != 0);
             match active as u32 {
-                WA_ACTIVE => _ = window.send_window_event(WindowEvent::Focused(minimized)),
-                WA_CLICKACTIVE => _ = window.send_window_event(WindowEvent::Focused(minimized)),
-                WA_INACTIVE => _ = window.send_window_event(WindowEvent::Unfocused),
+                WA_ACTIVE => window.send_window_event(WindowEvent::Focused(minimized)),
+                WA_CLICKACTIVE => window.send_window_event(WindowEvent::Focused(minimized)),
+                WA_INACTIVE => window.send_window_event(WindowEvent::Unfocused),
                 val => log_error!(
                     LOG_MSG_CAT,
                     wnd_proc,
@@ -824,8 +828,10 @@ unsafe extern "system" fn wnd_proc(
                 window.id
             );
 
-            let close = window.send_window_event(WindowEvent::CloseRequested);
-            if close {
+            let close = Cell::new(true);
+            let cancel = || close.set(false);
+            window.send_window_event(WindowEvent::CloseRequested{ cancel: &cancel });
+            if close.get() {
                 let res = DestroyWindow(hwnd).as_bool();
                 if res {
                     window.is_closing = true;
@@ -957,7 +963,7 @@ pub(crate) fn create(
             id: WindowId(0),
             settings,
             manager: manager as *mut WindowManager,
-            callbacks: Mutex::new(CallbackArray::new()),
+            listeners: Mutex::new(EventListenerArray::new()),
             is_closing: false,
         };
         let mut window_ptr = HeapPtr::new(window);
