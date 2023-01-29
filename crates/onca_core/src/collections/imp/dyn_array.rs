@@ -1342,7 +1342,7 @@ impl<T, B: DynArrayBuffer<T>> Drop for IntoIter<T, B> {
             fn drop(&mut self) {
                 unsafe {
                     // Dyn array buffer handles deallocation
-                    let _ = ManuallyDrop::take(&mut self.0.buf);
+                    let _ = mem::replace(&mut self.0.buf.buf, B::new());
                 }
             }
         }
