@@ -47,7 +47,7 @@ impl<T: ?Sized> HeapPtr<T> {
     /// 
     /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
     #[inline]
-    pub unsafe fn from_raw_components(ptr: NonNull<T>, layout: Layout, mem_tag: MemTag) -> Self {
+    pub unsafe fn from_raw_components(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
         HeapPtr { ptr: Allocation::from_raw(ptr, layout, mem_tag), _phantom: PhantomData }
     }
 

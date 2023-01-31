@@ -72,7 +72,7 @@ impl Allocator for PoolAllocator {
             let next = (*head).next;
 
             match self.head.compare_exchange_weak(head, next, Ordering::AcqRel, Ordering::Acquire) {
-                Ok(ptr) => return Some(Allocation::<_>::new_tagged(ptr.cast::<u8>(), layout.with_alloc_id(self.id), mem_tag)),
+                Ok(ptr) => return Some(Allocation::<_>::from_raw(ptr.cast::<u8>(), layout.with_alloc_id(self.id), mem_tag)),
                 Err(ptr) => head = ptr
             }
         }

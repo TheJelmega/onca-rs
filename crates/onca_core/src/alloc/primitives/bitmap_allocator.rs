@@ -120,7 +120,7 @@ impl Allocator for BitmapAllocator {
 
             let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size);
             let layout = layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id);
-            return Some(Allocation::<_>::new_tagged(ptr, layout, mem_tag));
+            return Some(Allocation::<_>::from_raw(ptr, layout, mem_tag));
         }
         None
     }

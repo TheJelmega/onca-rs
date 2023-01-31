@@ -41,7 +41,7 @@ impl Allocator for LinearAllocator {
             None
         } else {
             self.head = new_head;
-            Some(Allocation::<_>::new_tagged(aligned_ptr, layout.with_alloc_id(self.id), mem_tag))
+            Some(Allocation::<_>::from_raw(aligned_ptr, layout.with_alloc_id(self.id), mem_tag))
         }
     }
 

@@ -620,7 +620,7 @@ impl Repr {
 
     fn new_custom(p: HeapPtr<Custom>) -> Self {
        let (ptr, layout, mem_tag) = unsafe { HeapPtr::leak(p).into_raw() };
-       let ptr = ptr.as_ptr().cast::<u8>();
+       let ptr = ptr.cast::<u8>();
        /// Should only be possible if an allocator handed out a pointer with the wrong alignment
        debug_assert_eq!(ptr.addr() & Self::TAG_MASK, 0);
        // Note: Weknow `TAG_CUSTOM <= size_of::<Custom>` (static_asset at the end of the file), and both the start and end of the expression must be valid without address space wraparoung due to `HepPtr`'s semantics.
@@ -675,7 +675,7 @@ impl Repr {
         // Safety: We're a Repr, decode_repr is fine
         unsafe { 
             decode_repr(self.0.0, self.0.1, self.0.2, |c, layout, mem_tag| 
-                HeapPtr::from_raw_components(NonNull::new_unchecked(c), core::mem::transmute(layout), core::mem::transmute(mem_tag))) 
+                HeapPtr::from_raw_components(c, core::mem::transmute(layout), core::mem::transmute(mem_tag))) 
         }
     }
 }
@@ -686,7 +686,7 @@ impl Repr {
         // The `HeapPtr` is safe because we're being dropped
         unsafe {
             decode_repr(self.0.0, self.0.1, self.0.2, |c, layout, mem_tag| 
-                HeapPtr::from_raw_components(NonNull::new_unchecked(c), core::mem::transmute(layout), core::mem::transmute(mem_tag)));
+                HeapPtr::from_raw_components(c, core::mem::transmute(layout), core::mem::transmute(mem_tag)));
         }
     }
 }

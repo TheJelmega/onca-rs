@@ -58,7 +58,7 @@ unsafe impl alloc::alloc::Allocator for Alloc {
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
         let layout = unsafe { *self.layout.get() };
         let mem_tag = unsafe { *self.mem_tag.get() };
-        let alloc = Allocation::new_tagged(ptr.as_ptr(), layout, mem_tag);
+        let alloc = Allocation::from_raw(ptr.as_ptr(), layout, mem_tag);
         MEMORY_MANAGER.dealloc(alloc);
     }
 }

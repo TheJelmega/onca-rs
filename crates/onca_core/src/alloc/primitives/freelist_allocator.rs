@@ -158,7 +158,7 @@ impl Allocator for FreelistAllocator {
         if ptr == null_mut() {
             None
         } else {
-            Some(Allocation::<_>::new_tagged(ptr, layout.with_alloc_id(self.id), mem_tag))
+            Some(Allocation::<_>::from_raw(ptr, layout.with_alloc_id(self.id), mem_tag))
         }
     }
 

@@ -443,7 +443,7 @@ impl<T> DynArray<T> {
             let slice_len = me.capacity();
             let alloc = &mut me.0.buf.ptr;
             let ptr = slice::from_raw_parts_mut(alloc.ptr_mut(), slice_len);
-            HeapPtr::from_raw_components(NonNull::new_unchecked(ptr), alloc.layout(), alloc.mem_tag())
+            HeapPtr::from_raw_components(ptr, alloc.layout(), alloc.mem_tag())
         }
     }
 
