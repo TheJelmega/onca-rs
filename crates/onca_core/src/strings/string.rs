@@ -29,6 +29,9 @@ pub struct FromUtf8Error {
     error: Utf8Error
 }
 
+#[derive(Debug)]
+pub struct FromUtf16Error(());
+
 #[derive(PartialOrd, Eq, Ord)]
 pub struct String {
     arr : DynArray<u8>
@@ -100,6 +103,24 @@ impl String {
 
         res.null_terminate();
         res
+    }
+
+    /// Create a string from raw utf16 characters if the uthf 16 bytes are valid, otherwise return an error
+    pub fn from_utf16(arr: &[u16]) -> Result<String, FromUtf16Error> {
+        let mut ret = String::with_capacity(arr.len());
+        for c in decode_utf16(arr.iter().cloned()) {
+            if let Ok(c) = c {
+                ret.push(c);
+            } else {
+                return Err(FromUtf16Error(()));
+            }
+        }
+        Ok(ret)
+    }
+
+    /// Create a string fro mraw ut16 bytes, including invalid characters
+    pub fn from_utf16_lossy(arr: &[u16]) -> String {
+        decode_utf16(arr.iter().cloned()).map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
     }
 
     /// Convert a `str` into a `String` with a given allocator
@@ -1275,6 +1296,11 @@ impl FromStr for String {
 pub trait ToString {
     /// Converts the given value to a `String` with the default allocator
     fn to_string(&self) -> String;
+
+    /// Version of `to_string` for when `alloc/std::String::to_string()` is also a valid function
+    fn to_onca_string(&self) -> String {
+        self.to_string()
+    }
 }
 
 /// # Panics
