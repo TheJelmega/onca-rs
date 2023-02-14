@@ -11,9 +11,9 @@
         </Expand>
     </Type>
     <Type Name="onca_core::alloc::allocation::Allocation&lt;*&gt;">
-        <DisplayString>allocation{{ {ptr.pointer} }}</DisplayString>
+        <DisplayString>allocation{{ {ptr} }}</DisplayString>
         <Expand>
-            <Item Name="[data]">*ptr.pointer</Item>
+            <Item Name="[data]">*ptr</Item>
             <Item Name="[layout]">layout</Item>
         </Expand>
     </Type>
@@ -27,15 +27,15 @@
             <Item Name="[cap]" ExcludeView="simple">__0.buf.cap</Item>
             <ArrayItems>
                 <Size>__0.len</Size>
-                <ValuePointer>__0.buf.ptr.ptr.pointer</ValuePointer>
+                <ValuePointer>__0.buf.ptr.ptr</ValuePointer>
             </ArrayItems>
         </Expand>
     </Type>
 
     <!-- Strings-->
     <Type Name="onca_core::strings::string::String">
-        <DisplayString>{arr.__0.buf.ptr.ptr.pointer,s8}</DisplayString>
-        <StringView>arr.__0.buf.ptr.ptr.pointer,s8</StringView>
+        <DisplayString>{arr.__0.buf.ptr.ptr,s8}</DisplayString>
+        <StringView>arr.__0.buf.ptr.ptr,s8</StringView>
         <Expand>
             <ExpandedItem>arr</ExpandedItem>
         </Expand>
