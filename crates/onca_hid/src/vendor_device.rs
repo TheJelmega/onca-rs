@@ -4,7 +4,7 @@ use onca_core::prelude::*;
 
 use crate::hid_data::USB_VENDORS;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct UsbVendorId(u16);
 
 impl UsbVendorId {
@@ -23,7 +23,7 @@ impl fmt::Display for UsbVendorId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct UsbDeviceId(u16);
 
 impl UsbDeviceId {
@@ -94,13 +94,13 @@ impl fmt::Display for UsbDevice {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct VendorDevice {
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct VendorProduct {
     pub vendor : UsbVendorId,
     pub device : UsbDeviceId,
 }
 
-impl VendorDevice {
+impl VendorProduct {
     pub fn new(vendor: UsbVendorId, device: UsbDeviceId) -> Self {
         Self { vendor, device }
     }
@@ -127,7 +127,7 @@ impl VendorDevice {
     }
 }
 
-impl fmt::Display for VendorDevice {
+impl fmt::Display for VendorProduct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match UsbVendor::new(self.vendor) {
             Some(vendor) => {

@@ -167,7 +167,7 @@ r"//! Generated HID tables
 //! 
 //! Data retrieved from http://www.linux-usb.org/usb-ids.html version {version}
 
-use crate::{{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, HidUsagePageId, HidUsagePage, HidUsage, HidUsageId}};
+use crate::{{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, HidUsagePage, UsagePageId, HidUsage, UsageId}};
 "
     )).unwrap();
 
@@ -209,14 +209,14 @@ pub(crate) const HID_USAGE_PAGES : &[HidUsagePage] = &[
     )).unwrap();
 
     for page in &hid_usage_pages {
-        table_output.write_fmt(format_args!("\tHidUsagePage {{ id: HidUsagePageId::new(0x{:04X}), name: \"{}\", usages: ", page.id, page.name)).unwrap();
+        table_output.write_fmt(format_args!("\tHidUsagePage {{ id: UsagePageId::new(0x{:04X}), name: \"{}\", usages: ", page.id, page.name)).unwrap();
 
         if page.usages.is_empty() {
             table_output.write_fmt(format_args!("None }},\n")).unwrap();
         } else {
             table_output.write_fmt(format_args!("Some(&[\n")).unwrap();
             for usage in &page.usages {
-                table_output.write_fmt(format_args!("\t\tHidUsage {{ id: HidUsageId::new(0x{:04X}), name: \"{}\"}},\n", usage.id, usage.name)).unwrap();
+                table_output.write_fmt(format_args!("\t\tHidUsage {{ id: UsageId::new(0x{:04X}), name: \"{}\"}},\n", usage.id, usage.name)).unwrap();
             }
             table_output.write_fmt(format_args!("\t]) }},\n")).unwrap();
         }

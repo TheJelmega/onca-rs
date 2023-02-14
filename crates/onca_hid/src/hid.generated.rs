@@ -2,7 +2,7 @@
 //! 
 //! Data retrieved from http://www.linux-usb.org/usb-ids.html version 2023.01.16
 
-use crate::{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, UsagePageId, HidUsagePage, HidUsage, UsageId};
+use crate::{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, HidUsagePage, UsagePageId, HidUsage, UsageId};
 
 pub(crate) const USB_VENDORS: &[UsbVendor] = &[
 	UsbVendor { id: UsbVendorId::new(0x0001), name: "Fry's Electronics", devices: Some(&[

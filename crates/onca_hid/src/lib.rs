@@ -7,7 +7,7 @@ use core::{
 	ops::{self, RangeInclusive, RangeBounds},
 };
 
-use onca_core::time::Duration;
+use onca_core::{time::Duration, alloc::CoreMemTag};
 
 use onca_core::prelude::*;
 use onca_logging::{LogCategory, log_warning};
@@ -16,7 +16,7 @@ mod os;
 
 mod vendor_device;
 use os::OSDevice;
-pub use vendor_device::{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, VendorDevice};
+pub use vendor_device::{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, VendorProduct};
 
 mod hid_usages;
 pub use hid_usages::{UsagePageId, HidUsagePage, HidUsage, UsageId, Usage};
@@ -30,16 +30,16 @@ pub const LOG_HID_CAT : LogCategory = LogCategory::new("Hid");
 pub const MAX_HID_STRING_LEN : usize = 126;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct HidIdentifier {
+pub struct Identifier {
     /// Vendor and product
-    pub vendor_device : VendorDevice,
+    pub vendor_device : VendorProduct,
 	/// version
 	pub version       : u16,
     /// HID usage
     pub usage         : Usage,
 }
 
-impl fmt::Display for HidIdentifier {
+impl fmt::Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("HID({}, usage: {})",
             self.vendor_device,
@@ -47,7 +47,7 @@ impl fmt::Display for HidIdentifier {
     }
 }
 
-pub struct HidCapabilities {
+pub struct Capabilities {
 	pub input_report_byte_len    : u16,
 	pub output_report_byte_len   : u16,
 	pub feature_report_byte_len  : u16,
@@ -63,7 +63,7 @@ pub struct HidCapabilities {
 	pub num_feature_data_indices : u16,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceHandle(usize);
 
 impl DeviceHandle {
@@ -74,6 +74,12 @@ impl DeviceHandle {
 	pub fn is_valid(&self) -> bool {
 		self.0 != 0 && self.0 != usize::MAX
 	}
+}
+
+impl fmt::Debug for DeviceHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("DeviceHandle").field(&format_args!("{:X}",self.0)).finish()
+    }
 }
 
 pub(crate) enum PreparseDataInternal {
@@ -589,9 +595,9 @@ impl RawValue {
 pub struct Device {
 	os_dev        : OSDevice,
 	handle        : DeviceHandle,
-	identifier    : HidIdentifier,
+	identifier    : Identifier,
 	preparse_data : PreparseData,
-	capabilities  : HidCapabilities,
+	capabilities  : Capabilities,
 	button_caps   : [DynArray<ButtonCaps>; NUM_REPORT_TYPES],
 	value_caps    : [DynArray<ValueCaps>; NUM_REPORT_TYPES],
 	read_buffer   : DynArray<u8>,
@@ -601,6 +607,8 @@ pub struct Device {
 
 impl Device {
 	pub fn new_path(path: &str) -> Option<Self> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::open_device(path).and_then(|handle| Self::_new(handle, true))
 	}
 
@@ -608,11 +616,15 @@ impl Device {
 	/// 
 	/// If an invalid handle is passed, `None` will be returned.
 	pub fn new_handle(handle: DeviceHandle) -> Option<Self> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		Self::_new(handle, false)
 	}
 
 	/// Create a new HID device from raw data.
-	pub fn new_raw(handle: DeviceHandle, preparse_data: PreparseData, identifier: HidIdentifier) -> Option<Self> {
+	pub fn new_raw(handle: DeviceHandle, preparse_data: PreparseData, identifier: Identifier) -> Option<Self> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		Self::_new_raw(handle, preparse_data, identifier, false)
 	}
 
@@ -634,7 +646,7 @@ impl Device {
 		}
 	}
 
-	fn _new_raw(handle: DeviceHandle, preparse_data: PreparseData, identifier: HidIdentifier, owns_handle: bool) -> Option<Self> {
+	fn _new_raw(handle: DeviceHandle, preparse_data: PreparseData, identifier: Identifier, owns_handle: bool) -> Option<Self> {
 		let os_dev = match os::create_os_device(&handle) {
 		    Some(os_dev) => os_dev,
 		    None => return None,
@@ -658,7 +670,7 @@ impl Device {
 		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, read_buffer: DynArray::new(), owns_handle, read_pending: false })
 	}
 
-	pub fn identifier(&self) -> &HidIdentifier {
+	pub fn identifier(&self) -> &Identifier {
 		&self.identifier
 	}
 
@@ -668,6 +680,8 @@ impl Device {
 	/// 
 	/// If the vendor string could not be retrieved, `None` is returned
 	pub fn get_vendor_string(&self) -> Option<String> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		match os::get_vendor_string(self.handle) {
 		    Some(s) => Some(s),
 			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
@@ -679,6 +693,8 @@ impl Device {
 	/// 
 	/// This should normally match the string which can be found using `UsbDevice::new(...).get_device(...).name`.
 	pub fn get_product_string(&self) -> Option<String> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		match os::get_product_string(self.handle) {
 		    Some(s) => Some(s),
 			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
@@ -688,11 +704,15 @@ impl Device {
 
 	/// Get the serial number string.
 	pub fn get_serial_number_string(&self) -> Option<String> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::get_serial_number_string(self.handle)
 	}
 
 	/// Get an indexed string.
 	pub fn get_indexed_string(&self, index: usize) -> Option<String> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::get_indexed_string(self.handle, index)
 	}
 
@@ -711,7 +731,7 @@ impl Device {
 	}
 
 	/// Get the device HID capabilities
-	pub fn get_capabilities(&self) -> &HidCapabilities {
+	pub fn get_capabilities(&self) -> &Capabilities {
 		&self.capabilities
 	}
 
@@ -767,17 +787,23 @@ impl Device {
 	
 	/// Get the HID collections for the device
 	pub fn get_top_level_collection(&self) -> Option<TopLevelCollection<'_>> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::get_top_level_collection(&self)
 	}
 
 	/// Create an output report
 	pub fn create_output_report(&self, report_id: u8) -> Option<OutputReport<'_>> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(OutputReport { data: ReportData::Blob(blob), device: self })
 	}
 
 	/// Create a feature report
 	pub fn create_feature_report(&self, report_id: u8) -> Option<FeatureReport<'_>> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(FeatureReport { data: ReportData::Blob(blob), device: self })
 	}
@@ -793,6 +819,8 @@ impl Device {
 	/// 
 	/// If the read is successfull, `Ok(None)` can return, meaning that the io operation is still pending
 	pub fn read_input_report(&mut self, timeout: Duration) -> Result<Option<InputReport>, ()> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::read_input_report(self, timeout)
 	}
 
@@ -807,6 +835,8 @@ impl Device {
 
 	/// Get the feature report from the device
 	pub fn get_feature_report(&mut self) -> Option<FeatureReport> {
+		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
+
 		os::get_feature_report(self)
 	}
 

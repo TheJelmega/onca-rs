@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::hid_data::HID_USAGE_PAGES;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct UsagePageId(u16);
 
 impl UsagePageId {
@@ -21,7 +21,7 @@ impl fmt::Debug for UsagePageId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct UsageId(u16);
 
 impl UsageId {
@@ -93,7 +93,7 @@ impl fmt::Display for HidUsage {
 }
 
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Usage {
     pub page  : UsagePageId,
     pub usage : UsageId,

@@ -130,7 +130,7 @@ pub fn free_preparse_data(preparse_data: &mut PreparseData) {
 // DEVICE
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Option<HidIdentifier> {
+pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Option<Identifier> {
     unsafe {
         let handle = HANDLE(handle.0 as isize);
 
@@ -151,8 +151,8 @@ pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Opt
             },
         }
 
-        Some(HidIdentifier {
-            vendor_device: VendorDevice::from_u16(attribs.VendorID,attribs.ProductID),
+        Some(Identifier {
+            vendor_device: VendorProduct::from_u16(attribs.VendorID,attribs.ProductID),
             version: attribs.VersionNumber,
             usage: Usage::from_u16(caps.UsagePage, caps.Usage),
         })
@@ -266,7 +266,7 @@ pub fn flush_input_queue(handle: DeviceHandle) {
     }
 }
 
-pub fn get_capabilities(preparse_data: &PreparseData) -> Option<HidCapabilities> {
+pub fn get_capabilities(preparse_data: &PreparseData) -> Option<Capabilities> {
     unsafe {
         let mut caps = HIDP_CAPS::default();
         let res = HidP_GetCaps(preparse_data.get_address() as isize, &mut caps);
@@ -278,7 +278,7 @@ pub fn get_capabilities(preparse_data: &PreparseData) -> Option<HidCapabilities>
             },
         }
 
-        Some(HidCapabilities {
+        Some(Capabilities {
             input_report_byte_len: caps.InputReportByteLength,
             output_report_byte_len: caps.OutputReportByteLength,
             feature_report_byte_len: caps.FeatureReportByteLength,
@@ -296,7 +296,7 @@ pub fn get_capabilities(preparse_data: &PreparseData) -> Option<HidCapabilities>
     }
 }
 
-pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &HidCapabilities) -> Option<[DynArray<ButtonCaps>; NUM_REPORT_TYPES]> {
+pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[DynArray<ButtonCaps>; NUM_REPORT_TYPES]> {
     unsafe {
         let preparse_data = preparse_data.get_address() as isize;
 
@@ -332,8 +332,12 @@ pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &HidCapabilit
 }
 
 unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<DynArray<ButtonCaps>> {
+    let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
     let mut win_caps = DynArray::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
+    
+    drop(scoped_alloc);
 
     let res = HidP_GetButtonCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, preparse_data);
     if let Err(err) = res {
@@ -382,7 +386,7 @@ unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_da
     Some(caps)
 }
 
-pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &HidCapabilities) -> Option<[DynArray<ValueCaps>; NUM_REPORT_TYPES]> {
+pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[DynArray<ValueCaps>; NUM_REPORT_TYPES]> {
     unsafe {
         let preparse_data = preparse_data.get_address() as isize;
 
@@ -418,8 +422,12 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &HidCapabiliti
 }
 
 unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<DynArray<ValueCaps>> {
+    let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
     let mut win_caps = DynArray::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
+
+    drop(scoped_alloc);
 
     let res = HidP_GetValueCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, preparse_data);
     if let Err(err) = res {
@@ -479,9 +487,13 @@ pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollectio
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
 
+        let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
         let num_collection_nodes = dev.capabilities.num_collection_nodes;
         let mut win_nodes = DynArray::with_capacity(num_collection_nodes as usize);
         win_nodes.set_len(num_collection_nodes as usize);
+
+        drop(scoped_alloc);
 
         let mut len = num_collection_nodes as u32;
         let err = HidP_GetLinkCollectionNodes(win_nodes.as_mut_ptr(), &mut len, preparse_data);
@@ -839,9 +851,13 @@ pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<
         // Safety: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
         let report_data = &mut *(report as *const _ as *mut [u8]);
 
+        let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+
         let mut data_len = HidP_MaxDataListLength(win_report_type, preparse_data);
         let mut data = DynArray::with_capacity(data_len as usize);
         
+        drop(scoped_alloc);
+
         let res = HidP_GetData(win_report_type, data.as_mut_ptr(), &mut data_len, preparse_data, report_data);
         match res {
             Ok(_) => {

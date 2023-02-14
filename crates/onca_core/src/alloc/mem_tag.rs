@@ -317,6 +317,7 @@ pub enum CoreMemTag {
     Terminal,
     Logging,
     Window,
+    Hid,
 
     /// Uncommon
     #[cfg(test)]
@@ -384,6 +385,12 @@ impl CoreMemTag {
     #[inline]
     pub fn window() -> MemTag {
         CoreMemTag::Window.create_tag()
+    }
+
+    /// Create an hid memtag
+    #[inline]
+    pub fn hid() -> MemTag {
+        CoreMemTag::Hid.create_tag()
     }
 
     /// Create a test memtag
