@@ -18,12 +18,12 @@ impl<T: Numeric> Vec4<T> {
 
     /// Check if the 4d vector represents a 3d vector (z-coord == 0)
     pub fn represents_3d_vector(self) -> bool {
-        self.x == T::zero()
+        self.w == T::zero()
     }
 
     /// Check if the 4d vector represents a 3d point (z-coord == 1)
     pub fn represents_3d_point(self) -> bool {
-        self.x == T::one()
+        self.w == T::one()
     }
 
     /// Get the minimum component of the vector
@@ -87,11 +87,6 @@ impl<T: Numeric + Display> Display for Vec4<T> {
 
 // Swizzles
 impl<T: Numeric> Vec4<T> {
-    const X : u8 = 0;
-    const Y : u8 = 1;
-    const Z : u8 = 2;
-    const W : u8 = 3;
-
     /// Swizzle the components of the vector into a `Vec2`
     pub fn swizzle2(self, x: u8, y: u8) -> Vec2<T> {
         debug_assert!(x < 4);

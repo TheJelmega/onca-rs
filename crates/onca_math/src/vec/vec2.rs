@@ -1,7 +1,6 @@
 use std::{ops::{Mul, MulAssign}, fmt::Display};
 use crate::*;
 
-
 impl<T: Numeric> Vec2<T> {
     /// Extend a `Vec2` to a `Vec3`
     #[inline]
@@ -157,9 +156,6 @@ impl<T: Numeric + Display> Display for Vec2<T> {
 
 // Swizzles
 impl<T: Numeric> Vec2<T> {
-    const X : u8 = 0;
-    const Y : u8 = 1;
-
     /// Swizzle the components of the vector
     pub fn swizzle(self, x: u8, y: u8) -> Self {
         debug_assert!(x < 2);

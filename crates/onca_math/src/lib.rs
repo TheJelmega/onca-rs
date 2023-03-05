@@ -54,3 +54,14 @@ mod intersections;
 pub use intersections::*;
 
 pub mod pixel;
+
+/// Calculate the smoothstep interpolant from a linear interpolant
+pub fn smoothstep_interpolant<T: Numeric>(interpolant: T) -> T {
+    if interpolant <= T::zero() {
+        T::zero()
+    } else if interpolant >= T::one() {
+        T::one()
+    } else {
+        interpolant * interpolant * (T::from_i32(3) - T::from_i32(2) * interpolant)
+    }
+}

@@ -2,7 +2,10 @@ use core::{
     mem,
     ops::*,
 };
-use crate::numeric::*;
+use crate::{
+    numeric::*,
+    smoothstep_interpolant,
+};
 
 
 mod vec2;
@@ -130,6 +133,11 @@ macro_rules! generic_vec {
             /// Linearly interpolate between 2 vectors using `val`
             pub fn lerp(self, other: Self, val: T) -> Self {
                 self + (other - self) * val
+            }
+
+            /// Smoothstep between 2 vectors using `val`
+            pub fn smoothstep(self, other: Self, val: T) -> Self {
+                self.lerp(other, smoothstep_interpolant(val))
             }
 
             /// Snap each component to the nearest multiple of `step_size`
@@ -685,12 +693,24 @@ macro_rules! generic_vec {
         
         //------------------------------------------------------------------------------------------------------------------------------
 
-        
+        impl<T: Numeric, U: Numeric> NumericCast<$name<U>> for $name<T>
+        where
+            T : NumericCast<U>
+        {
+            fn cast(self) -> $name<U> {
+                $name{ $($field: self.$field.cast()),+ }
+            }
+        }
     };
 }
 generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, x, y }
 generic_vec!{ doc = "3D Vector (row-major order)"; Vec3, 3, x, y, z }
 generic_vec!{ doc = "4D Vector (row-major order)"; Vec4, 4, x, y, z, w }
+
+pub const SWIZZLE_X : u8 = 0;
+pub const SWIZZLE_Y : u8 = 1;
+pub const SWIZZLE_Z : u8 = 2;
+pub const SWIZZLE_W : u8 = 3;
 
 macro_rules! create_swizzle {
     {@2d $fun:ident, $a:ident, $b:ident} => {

@@ -269,7 +269,7 @@ macro_rules! impl_approx_zero {
 impl_approx_zero!{i8, i16, i32, i64, u8, u16, u32, u64, f32, f64}
 
 /// Define a type that can be cast to another type
-pub trait NumericCast<U: Numeric> : NumericBase {
+pub trait NumericCast<U> {
     fn cast(self) -> U;
 }
 
