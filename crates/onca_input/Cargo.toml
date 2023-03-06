@@ -1,0 +1,24 @@
+[package]
+name = "onca_input"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+onca_core_macros = { path = "../onca_core_macros" }
+onca_core = { path = "../onca_core" }
+onca_logging = { path = "../onca_logging" }
+onca_math = { path = "../onca_math" }
+onca_window = { path = "../onca_window" }
+onca_hid = { path = "../onca_hid" }
+cfg-if = "1.0.0"
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.43.0", features = [
+    "Win32_Foundation",
+    "Win32_System_WindowsProgramming",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_UI_TextServices"
+] }
+onca_windows_utils = { path = "../onca_windows_utils" }

@@ -170,20 +170,17 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         }
 
         unsafe {
-            {
-                let ptr = self.as_mut_ptr().add(index);
-                let new_len = self.len - 1;
+            let ptr = self.as_mut_ptr().add(index);
 
-                if index < self.len {
-                    // Shift everyting to make sapce. (Duplicating the `index`th element into two consecutive places.)
-                    ptr::copy(ptr, ptr.add(1), len - index);
-                } else if index > self.len {
-                    panic!("insert index (is {index}) should be <= len (is {len})");
-                }
-
-                // Write it in, overwriting the first copy of the `index`th element
-                ptr::write(ptr, element);
+            if index < self.len {
+                // Shift everyting to make sapce. (Duplicating the `index`th element into two consecutive places.)
+                ptr::copy(ptr, ptr.add(1), len - index);
+            } else if index > self.len {
+                panic!("insert index (is {index}) should be <= len (is {len})");
             }
+
+            // Write it in, overwriting the first copy of the `index`th element
+            ptr::write(ptr, element);
             self.len += 1;
         }
     }

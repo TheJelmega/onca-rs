@@ -459,6 +459,8 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
             (index..=index).into()
         };
 
+        let bit_mask = (u32::MAX >> (32 - cap.BitSize)) as i32;
+
         caps.push(ValueCaps {
             usage_page: UsagePageId::new(cap.UsagePage),
             report_id: cap.ReportID,
@@ -467,8 +469,8 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
             has_null: cap.HasNull.as_bool(),
             unit_exp: cap.UnitsExp,
             units: cap.Units,
-            logical_range: (cap.LogicalMin..=cap.LogicalMax).into(),
-            physical_range: (cap.PhysicalMin..=cap.PhysicalMax).into(),
+            logical_range: ((cap.LogicalMin & bit_mask)..=(cap.LogicalMax & bit_mask)).into(),
+            physical_range: ((cap.PhysicalMin & bit_mask)..=(cap.PhysicalMax & bit_mask)).into(),
             bit_size: cap.BitSize,
             report_count: cap.ReportCount,
             usage,

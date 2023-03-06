@@ -139,6 +139,10 @@ impl MemoryManager {
 
     /// Deallocate memory
     pub fn dealloc<T: ?Sized>(&self, ptr: Allocation<T>) {
+        if ptr.layout().size() == 0 {
+            return;
+        }
+
         if let Some(alloc) = self.get_allocator(UseAlloc::Id(ptr.layout().alloc_id())) {
             unsafe {
                 (*alloc).dealloc(ptr.cast())

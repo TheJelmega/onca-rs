@@ -9,6 +9,9 @@ use crate::{
     alloc::{CoreMemTag, ScopedMemTag, MemTag, Layout}
 };
 
+pub type DynEventListenerRef<Event> = EventListenerRef<dyn EventListener<Event>>;
+pub type DynEventListenerArray<Event> = EventListenerArray<dyn EventListener<Event>>;
+
 /// Event listener
 /// 
 /// Will execute on_event when an event is send to the listener.

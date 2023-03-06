@@ -21,9 +21,9 @@ use windows::{
         System::Ole::RegisterDragDrop,
         UI::{
             HiDpi::GetDpiForWindow,
-            Input::KeyboardAndMouse::{EnableWindow, ReleaseCapture},
+            Input::KeyboardAndMouse::{EnableWindow, ReleaseCapture, TRACKMOUSEEVENT, TME_LEAVE, TrackMouseEvent},
             Shell::{DragFinish, DragQueryFileA, DragQueryPoint, HDROP},
-            WindowsAndMessaging::*,
+            WindowsAndMessaging::*, Controls::WM_MOUSELEAVE,
         },
     },
 };
@@ -918,6 +918,42 @@ unsafe extern "system" fn wnd_proc(
             }
             DragFinish(hdrop);
 
+            PROCESSED
+        },
+        WM_MOUSEMOVE => {
+            if !window.settings().is_mouse_in_window() {
+                log_debug!(LOG_MSG_CAT, wnd_proc, "mouse has entered window {}", window.id);
+                window.settings.flags.set(Flags::MouseInWindow, true);
+
+                let mut track_mouse_event = TRACKMOUSEEVENT::default();
+                track_mouse_event.cbSize = mem::size_of::<TRACKMOUSEEVENT>() as u32;
+                track_mouse_event.dwFlags = TME_LEAVE;
+                track_mouse_event.hwndTrack = window.os_handle().hwnd();
+
+                let res = TrackMouseEvent(&mut track_mouse_event).as_bool();
+                if !res {
+                    log_error!(LOG_MSG_CAT, wnd_proc, "Failed to setup mouse leave event");
+                }
+
+                window.send_window_event(WindowEvent::MouseEnter);
+            }
+            PROCESSED
+        },
+        WM_MOUSELEAVE => {
+            log_debug!(LOG_MSG_CAT, wnd_proc, "mouse has left window {}", window.id);
+            window.settings.flags.set(Flags::MouseInWindow, false);
+            window.send_window_event(WindowEvent::MouseLeave);
+            PROCESSED
+        },
+        WM_INPUT => {
+            let ptr = &(wparam, lparam) as *const _ as *const u8;
+            manager.process_raw_input(RawInputEvent::Input(ptr));
+            // Make sure to pass it to DefWindowProc, as we need it to handle messages like WM_MOUSEMOVE
+            DefWindowProcA(hwnd, msg, wparam, lparam)
+        },
+        WM_INPUT_DEVICE_CHANGE => {
+            let ptr = &(wparam, lparam) as *const _ as *const u8;
+            manager.process_raw_input(RawInputEvent::DeviceChanged(ptr));
             PROCESSED
         }
         _ => DefWindowProcA(hwnd, msg, wparam, lparam),

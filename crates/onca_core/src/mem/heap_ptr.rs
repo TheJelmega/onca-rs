@@ -5,16 +5,14 @@ use core::{
     cmp::*,
     hash::{Hash, Hasher},
     iter::*,
-    marker::PhantomData,
-    mem::{MaybeUninit, ManuallyDrop},
-    ops::{Deref, DerefMut},
+    marker::{PhantomData, Unsize},
+    mem::{MaybeUninit, ManuallyDrop, size_of},
+    ops::{Deref, DerefMut, CoerceUnsized},
     pin::*,
-    ptr::{drop_in_place, null},
+    ptr::{drop_in_place, null, NonNull},
 };
 use std::{
-    ops::{CoerceUnsized},
-    marker::Unsize,
-    ptr::NonNull
+    
 };
 use crate::{
     alloc::{Allocation, Layout, UseAlloc, MemTag, ScopedAlloc, ScopedMemTag},
@@ -129,7 +127,11 @@ impl<T> HeapPtr<T> {
 
     /// Try to create a new `HeapPtr<T>` with an uninitialized value, using the given allocator
     pub fn try_new_uninit() -> Option<HeapPtr<MaybeUninit<T>>> {
-        let uninit = MEMORY_MANAGER.alloc::<MaybeUninit<T>>(AllocInitState::Uninitialized);
+        let uninit = if size_of::<MaybeUninit<T>>() == 0 {
+            Some(unsafe { Allocation::const_null() })
+        } else {
+            MEMORY_MANAGER.alloc::<MaybeUninit<T>>(AllocInitState::Uninitialized)
+        };
         match uninit {
             None => None,
             Some(ptr) => Some(HeapPtr::<MaybeUninit<T>>{ ptr: ptr.cast(), _phantom: PhantomData })

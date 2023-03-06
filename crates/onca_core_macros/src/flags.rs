@@ -33,6 +33,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 	let mut vals = Vec::<syn::Expr>::new();
 	let mut attrs = Vec::<Vec::<Attribute>>::new();
 	let mut i : u128 = 1;
+	let mut has_zero = false;
 	for it in body_data.variants.into_iter()
 	{
 		idents.push(it.ident);
@@ -42,15 +43,24 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 			Some((_, expr)) =>
 			{
 				let res = gen_bits_val_expr(expr, &flag_name, &base_type);
-				let bits_val = match res {
+				let (bits_val, int) = match res {
     			    Ok(bits_val) => bits_val,
     			    Err(toks) => return toks,
     			};
 				vals.push(construct_flag(flag_name.clone(), bits_val));
+
+				if let Some(int) = int {
+					if int == 0 {
+						has_zero = true;
+					}
+					i = int << 1;
+				}
 			},
 			None =>
 			{
-				if i != 0 && !i.is_power_of_two() {
+				if i == 0 {
+					i = 1;
+				} else if !i.is_power_of_two() {
 					return quote!( compile_error!("Previous enum value needs to be a power of 2"); );
 				}
 
@@ -63,6 +73,14 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 		};
 	}
 	
+	let non_variant = if has_zero {
+		quote!()
+	} else {
+		quote!(
+			/// Value representing that no flag is set.
+			#vis const None : #flag_name = #flag_name::none();
+		)
+	};
 
 	quote!(
 
@@ -73,8 +91,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 		}
 		#[allow(non_upper_case_globals)]
 		impl #flag_name {
-			/// Value representing that no flag is set.
-			#vis const None : #flag_name = #flag_name::none();
+			#non_variant
 			
 			#(#(#attrs)* #vis const #idents : #flag_name = #vals;)*
 
@@ -181,7 +198,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 
 		impl Default for #flag_name {
 			fn default() -> #flag_name {
-				#flag_name::None
+				#flag_name::none()
 			}
 		}
 
@@ -246,16 +263,22 @@ fn int_to_lit_expr(val: u128, base_type: Type) -> Expr {
 		attrs: Default::default(),
 	});
 
-	cast_to_base_type(lit_expr, base_type)
+	cast_to_base_type(lit_expr, base_type).0
 }
 
-fn cast_to_base_type(expr: Expr, base_type: Type) -> Expr {
-	Expr::Cast(ExprCast {
+fn cast_to_base_type(expr: Expr, base_type: Type) -> (Expr, Option<u128>) {
+	let int = if let Expr::Lit(ExprLit{ lit: Lit::Int(lit), .. }) = &expr {
+		Some(lit.base10_parse().unwrap())
+	} else {
+		None
+	};
+
+	(Expr::Cast(ExprCast {
 		expr: Box::new(expr),
 		as_token: Default::default(),
 		ty: Box::new(base_type),
 		attrs: Default::default(),
-	})
+	}), int)
 }
 
 fn get_bits_from_expr(expr: Expr) -> Expr {
@@ -292,7 +315,7 @@ fn construct_flag(flag_name: Ident, bits_val: Expr) -> Expr {
 	})
 }
 
-fn gen_bits_val_expr(expr: Expr, flag_name: &Ident, base_type: &Type) -> core::result::Result<Expr, TokenStream> {
+fn gen_bits_val_expr(expr: Expr, flag_name: &Ident, base_type: &Type) -> core::result::Result<(Expr, Option<u128>), TokenStream> {
 	match expr {
 		lit_expr @ Expr::Lit(ExprLit{ lit: Lit::Int(_), .. }) => {
 			Ok(cast_to_base_type(lit_expr, base_type.clone()))
@@ -300,12 +323,12 @@ fn gen_bits_val_expr(expr: Expr, flag_name: &Ident, base_type: &Type) -> core::r
 		Expr::Path(path) => {
 			let res = create_expr_from_path(path.path);
 			match res {
-			   Ok(path_expr) => Ok(get_bits_from_expr(path_expr)),
+			   Ok(path_expr) => Ok((get_bits_from_expr(path_expr), None)),
 			   Err(err) => Err(quote!( compile_error!(#err); )),
 			}
 		},
 		Expr::Binary(bin_expr) => {
-			create_ored_expr(bin_expr, flag_name, base_type)
+			create_ored_expr(bin_expr, flag_name, base_type).map(|expr| (expr, None))
 		}
 		_ => Err(quote!( compile_error!("Only integer literals or single paths are supported"); )),
 	}
@@ -322,9 +345,9 @@ fn create_ored_expr(bin_expr: ExprBinary, flag_name: &Ident, base_type: &Type) -
 		let right_expr = gen_bits_val_expr(*right, flag_name, base_type)?;
 
 		Ok(Expr::Binary(ExprBinary{ 
-			left: Box::new(left_expr),
+			left: Box::new(left_expr.0),
 			op: BinOp::BitOr(Default::default()),
-			right: Box::new(right_expr),
+			right: Box::new(right_expr.0),
 			attrs: Default::default() 
 		}))
 	} else {

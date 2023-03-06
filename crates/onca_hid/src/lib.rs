@@ -338,13 +338,13 @@ impl<'a> InputReport<'a> {
 	}
 
 	/// Get the raw value(s) for the given usage
-	pub fn get_raw_value(&self, usage: Usage, collection_id: u16) -> Option<RawValue> {
-		os::get_raw_value(self.device, usage, collection_id, ReportType::Input, self.data.get_data())
+	pub fn get_raw_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<RawValue> {
+		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the scaled value and its logical range for the given usage
-	pub fn get_scaled_value(&self, usage: Usage, collection_id: u16) -> Option<i32> {
-		os::get_scaled_value(self.device, usage, collection_id, ReportType::Input, self.data.get_data())
+	pub fn get_scaled_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<i32> {
+		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
 	/// Get data from the report, this will return all buttons that are on and all values
@@ -432,13 +432,13 @@ impl FeatureReport<'_> {
 	}
 
 	/// Get the raw value(s) for the given usage
-	pub fn get_raw_value(&self, usage: Usage, collection_id: u16) -> Option<RawValue> {
-		os::get_raw_value(self.device, usage, collection_id, ReportType::Input, self.data.get_data())
+	pub fn get_raw_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<RawValue> {
+		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the scaled value and its logical range for the given usage
-	pub fn get_scaled_value(&self, usage: Usage, collection_id: u16) -> Option<i32> {
-		os::get_scaled_value(self.device, usage, collection_id, ReportType::Input, self.data.get_data())
+	pub fn get_scaled_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<i32> {
+		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
 	/// Get data from the report, this will return all buttons that are on and all values
@@ -532,9 +532,9 @@ pub struct ValueCaps {
 	pub unit_exp       : u32,
 	/// Unit type
 	pub units          : u32,
-	/// Logical value range
+	/// Logical value range (raw value range)
 	pub logical_range  : ValueRange<i32>,
-	/// Physical value range
+	/// Physical value range (after scaling)
 	pub physical_range : ValueRange<i32>,
 	/// Bit size of each field
 	pub bit_size       : u16,
@@ -550,6 +550,13 @@ pub struct ValueCaps {
 	pub data_index     : ValueRange<u16>,
 	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value
 	pub is_absolute    : bool,
+}
+
+impl ValueCaps {
+	/// Get the maximum value of the raw value (raw value in in range `0..=max`)
+	pub fn get_raw_value_max(&self) -> u32 {
+		(1u64 << self.bit_size as u64) as u32
+	}
 }
 
 /// Raw unscaled HID value
@@ -670,6 +677,12 @@ impl Device {
 		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, read_buffer: DynArray::new(), owns_handle, read_pending: false })
 	}
 
+	/// Get the device handle
+	pub fn handle(&self) -> DeviceHandle {
+		self.handle
+	}
+
+	/// Get the device identifier
 	pub fn identifier(&self) -> &Identifier {
 		&self.identifier
 	}
@@ -741,11 +754,8 @@ impl Device {
 	}
 
 	/// Get the button capabilities for a specific usage page and an optional collection id
-	pub fn get_button_caps_for_page(&self, report_type: ReportType, page: UsagePageId, collection_id: Option<u16>) -> Option<&ButtonCaps> {
-		let collection_id = match collection_id {
-		    Some(id) => id,
-		    None => 0,
-		};
+	pub fn get_button_capabilities_for_page(&self, report_type: ReportType, page: UsagePageId, collection_id: Option<u16>) -> Option<&ButtonCaps> {
+		let collection_id = collection_id.unwrap_or_default();
 
 		let mut ret = None;
 		for caps in &self.button_caps[report_type as usize] {
@@ -766,11 +776,8 @@ impl Device {
 	}
 
 	/// Get the value capabilities for a specific usage and an optional collection id
-	pub fn get_value_caps_for_usage(&self, report_type: ReportType, usage: Usage, collection_id: Option<u16>) -> Option<&ValueCaps> {
-		let collection_id = match collection_id {
-		    Some(id) => id,
-		    None => 0,
-		};
+	pub fn get_value_capabilities_for_usage(&self, report_type: ReportType, usage: Usage, collection_id: Option<u16>) -> Option<&ValueCaps> {
+		let collection_id = collection_id.unwrap_or_default();
 
 		let mut ret = None;
 		for caps in &self.value_caps[report_type as usize] {

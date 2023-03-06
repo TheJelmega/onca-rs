@@ -100,11 +100,11 @@ pub struct Usage {
 }
 
 impl Usage {
-    pub fn new(page: UsagePageId, usage: UsageId) -> Self {
+    pub const fn new(page: UsagePageId, usage: UsageId) -> Self {
         Self { page, usage }
     }
 
-    pub fn from_u16(page: u16, usage: u16) -> Self {
+    pub const fn from_u16(page: u16, usage: u16) -> Self {
         Self::new(UsagePageId(page), UsageId(usage))
     }
 }

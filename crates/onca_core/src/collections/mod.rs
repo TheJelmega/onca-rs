@@ -12,6 +12,8 @@ mod vec_deque;
 mod hash_map;
 mod hash_set;
 
+mod bitset;
+
 
 pub use static_dyn_array::*;
 pub use dyn_array::*;
@@ -23,6 +25,8 @@ pub use linked_list::*;
 pub use vec_deque::*;
 pub use hash_map::*;
 pub use hash_set::*;
+
+pub use bitset::*;
 
 use core::ops::Range;
 

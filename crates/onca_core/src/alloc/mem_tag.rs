@@ -318,6 +318,7 @@ pub enum CoreMemTag {
     Logging,
     Window,
     Hid,
+    Input,
 
     /// Uncommon
     #[cfg(test)]
@@ -391,6 +392,12 @@ impl CoreMemTag {
     #[inline]
     pub fn hid() -> MemTag {
         CoreMemTag::Hid.create_tag()
+    }
+
+    /// Create an input memtag
+    #[inline]
+    pub fn input() -> MemTag {
+        CoreMemTag::Input.create_tag()
     }
 
     /// Create a test memtag

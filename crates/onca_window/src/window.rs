@@ -26,7 +26,7 @@ impl fmt::Display for WindowId {
 pub type OSWindowHandle = os::OSWindowHandle;
 
 /// Window event
-/// 
+///
 /// Unless explicitly told, the return value of the callback will be ignored.
 pub enum WindowEvent<'a> {
     /// The window has been moved.
@@ -34,19 +34,19 @@ pub enum WindowEvent<'a> {
     /// The window has been resized.
     Resized(PhysicalSize),
     /// The DPI of the window has changed.
-    /// 
+    ///
     /// The event reports the new dpi value and the scaling factor to go from the old DPI to the new DPI.
     DpiChanged(u16, f32),
     /// The window has been maximized.
-    /// 
+    ///
     /// This event will be followed by a `Resized` event.
     Maximized,
     /// The window has been minimized.
-    /// 
+    ///
     /// This event will be followed by a `Resized` event.
     Minimized,
     /// The window has been restored after being maximized ofr minimized.
-    /// 
+    ///
     /// This event will be followed by a `Resized` event.
     Restored,
     /// The window has been made visible.
@@ -54,17 +54,17 @@ pub enum WindowEvent<'a> {
     /// The window has been hidden.
     Hidden,
     /// The window is starting to be moved or resized.
-    /// 
+    ///
     /// e.g. can be used to pause rendering until the window has stopped being moved/resized.
     BeginMoveResize,
     /// The window has ended being moved or resized.
-    /// 
+    ///
     /// This is called after the `Moved` and `Resized` events have been sent.
-    /// 
+    ///
     /// e.g. can be used to pause rendering until the window has stopped being moved/resized.
     EndMoveResize,
     /// The window has gained focus.
-    /// 
+    ///
     /// The event also signals if the window is activated when minimized.
     Focused(bool),
     /// The window has been unfocused.
@@ -80,37 +80,46 @@ pub enum WindowEvent<'a> {
     /// The window has been brought to front.
     BroughtToFront,
     /// The window has been made topmost or is not topmost anymore.
-    /// 
+    ///
     /// The event signals if the window has been made topmost.
     TopMost(bool),
     /// The display the window is on has changed resolution.
-    /// 
+    ///
     /// The event reports the new resolution and bpp (bits per pixel) in the following order: (width, height, bpp).
     DisplayResolutionChanges(u16, u16, u8),
     /// Hovering files have entered the window.
-    /// 
+    ///
     /// This event provides the window coordinates where the file is hovering (in the client area) and a path to the hovering file.
     HoverFileStarted(u16, u16, &'a str),
     /// Update the location where files are hovering above the window.
-    /// 
+    ///
     /// This event provides the window coordinates where the file is hovering (in the client area).
     HoverFileTick(u16, u16),
     /// A files has been dropped in the window.
-    /// 
+    ///
     /// This event provides the window coordinates where the file was dropped (in the client area) and a path to the dropped file.
     DroppedFile(u16, u16, &'a str),
     /// All files that were being hovered over the window are not hovering anymore.
     HoverFileHoverEnded,
     /// The window is requested to be closed and is checking callbacks to see if it is allowed to close.
-    /// 
+    ///
     /// If `false` is returned, all subsequent callbacks will still be processed, and the event will notify the callback that the closing was interruped.
-    CloseRequested,
+    CloseRequested{ cancel: &'a dyn Fn() },
     /// The window has been closed, but not yet destroyed
     Closed,
     /// The window has been closed and destroyed.
-    /// 
+    ///
     /// The user cannot access any OS data at this time, as it has been destroyed.
     Destroyed,
+
+    /// The mouse has entered the window.
+    ///
+    /// This event will be followed up with a `MouseMove` event containing the location where the mouse has entered.
+    MouseEnter,
+    /// The mouse has left the window.
+    ///
+    /// This event will be preceeded with a `MouseMove` event containing the location where the mouse has left.
+    MouseLeave,
 }
 
 /// Direction into which to resize the window
@@ -429,12 +438,12 @@ impl Window {
     /// The return of this function depends on the `WindowEvent` that was sent, check its documentation for more info
     ///
     /// The callback receives the window handle and returns if the window is allowed to close, this should be `true` in most cases.
-    pub fn register_window_callback<'a, F>(&mut self, listener: EventListenerRef<WindowEventListener>) {
+    pub fn register_window_listener<'a, F>(&mut self, listener: EventListenerRef<WindowEventListener>) {
         self.listeners.lock().push(listener);
     }
 
     /// Unregister a window close callback
-    pub fn unregister_close_callback<'a>(&mut self, listener: &EventListenerRef<WindowEventListener>) {
+    pub fn unregister_close_listener<'a>(&mut self, listener: &EventListenerRef<WindowEventListener>) {
         self.listeners.lock().remove(listener);
     }
 

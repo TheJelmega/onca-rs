@@ -31,8 +31,10 @@
 
 #![feature(local_key_cell_methods)]
 
+
 // General
 #![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
 #![feature(specialization, rustc_attrs)]
 // NOTE: as `min_specialization` doesn't work for a minor use-case, we use full specialization here, all code added that needs `specialization` and not just `minspecialization` should be mentioned below:
 //     - crate::collections::imp::generic_dyn_array: `impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for GenericDynArray<T, B> {`, as `B` needs to be the same, but does not care about the specialization

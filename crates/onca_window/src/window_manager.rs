@@ -7,6 +7,19 @@ use onca_core::{
 
 use crate::{os, Window, WindowId, WindowSettings};
 
+/// Raw input data
+/// 
+/// The data passed is OS specific, this is meant for the input system and not for regular use.
+#[derive(Clone, Copy, Debug)]
+pub enum RawInputEvent {
+    /// Input
+    Input(*const u8),
+    /// Raw input
+    /// 
+    /// The data passed is OS specific, this is meant for the input system and not for regular use.
+    DeviceChanged(*const u8),
+}
+
 /// Window manager
 pub struct WindowManager {
     os_data             : os::WindowManagerData,
@@ -16,6 +29,7 @@ pub struct WindowManager {
     created_callbacks   : Mutex<EventListenerArray<dyn EventListener<Window>>>,
     // Newly added callbacks that need to run during the next window manage tick
     new_callbacks       : Mutex<EventListenerArray<dyn EventListener<Window>>>,
+    raw_input_callbacks : Mutex<EventListenerArray<dyn EventListener<RawInputEvent>>>,
 }
 
 impl WindowManager {
@@ -36,7 +50,7 @@ impl WindowManager {
             cur_id: 0,
             created_callbacks: Mutex::new(EventListenerArray::new()),
             new_callbacks: Mutex::new(EventListenerArray::new()),
-        }
+            raw_input_callbacks: Mutex::new(EventListenerArray::new()),
         })
     }
 
@@ -114,16 +128,38 @@ impl WindowManager {
     /// This callback is meant to allow the registration of callbacks on a window after it is created.
     /// The callback is called before it is added to the manager's list of windows.
     /// 
-    /// If a callback is added and tehre are already windows that were created, the callback will be called during the next tick of the window manager.
-    pub fn register_window_created_callback<F>(&self, listener: EventListenerRef<dyn EventListener<Window>>) {
+    /// If a callback is added and there are already windows that were created, the callback will be called during the next tick of the window manager.
+    /// 
+    /// This function is thread-safe and can be called from any thread
+    pub fn register_window_created_listener(&self, listener: EventListenerRef<dyn EventListener<Window>>) {
         let handle = self.created_callbacks.lock().push(listener.clone());
         self.new_callbacks.lock().push(listener);
         handle
     }
 
     /// Unregister a window created callback.
-    pub fn unregister_window_created_callback(&self, listener: &EventListenerRef<dyn EventListener<Window>>) {
+    /// 
+    /// This function is thread-safe and can be called from any thread
+    pub fn unregister_window_created_listener(&self, listener: &EventListenerRef<dyn EventListener<Window>>) {
         self.created_callbacks.lock().remove(listener);
+    }
+
+    /// Register a raw input listener
+    /// 
+    /// This function is meant for the input system, as it send OS-specific data.
+    /// When custom listeners are added, be aware that future changes could break the implementation of the listener.
+    /// 
+    /// This function is thread-safe and can be called from any thread
+    pub fn register_raw_input_listener(&self, listener: EventListenerRef<dyn EventListener<RawInputEvent>>)
+    {
+        self.raw_input_callbacks.lock().push(listener);
+    }
+
+    /// Unregister a message hook
+    /// 
+    /// This function is thread-safe and can be called from any thread
+    pub fn unregister_raw_input_listener(&self, listener: &EventListenerRef<dyn EventListener<RawInputEvent>>) {
+        self.raw_input_callbacks.lock().remove(listener);
     }
 
     /// Enumerate over all existing windows and execute a callback
@@ -153,6 +189,10 @@ impl WindowManager {
             Ok(idx) => { self.windows.remove(idx); },
             Err(_) => {},
         }
+    }
+
+    pub(crate) fn process_raw_input(&mut self, raw_input: RawInputEvent) {
+        self.raw_input_callbacks.lock().notify(&raw_input);
     }
 
     fn notify_window_created(&self, window: &Window) {

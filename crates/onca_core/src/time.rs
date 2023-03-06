@@ -26,3 +26,35 @@ impl Display for TimeStamp {
 pub fn get_timestamp() -> TimeStamp {
     os::time::get_timestamp()
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct DeltaTime {
+    dt       : f32,
+    dilation : f32,
+}
+
+impl DeltaTime {
+    pub fn new(dt: f32) -> Self {
+        Self { dt, dilation: 1f32 }
+    }
+
+    pub fn with_dilation(dt: f32, dilation: f32) -> Self {
+        DeltaTime { dt, dilation }
+    }
+
+    pub fn get_dt(&self) -> f32 {
+        self.dt
+    }
+
+    pub fn get_dilation(&self) -> f32 {
+        self.dilation
+    }
+
+    pub fn get(&self, use_dilation: bool) -> f32 {
+        if use_dilation {
+            self.dt * self.dilation
+        } else {
+            self.dt
+        }
+    }
+}
