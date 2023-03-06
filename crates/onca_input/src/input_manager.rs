@@ -8,7 +8,7 @@ use onca_core::{
     collections::HashMap,
     sync::{Mutex, RwLock},
     alloc::CoreMemTag,
-    event_listener::{EventListener, DynEventListenerRef},
+    event_listener::EventListener,
     time::DeltaTime,
     sys,
 };
@@ -278,7 +278,7 @@ impl InputManager {
     /// Rebind an input with a given name and a callback to control the rebind
     /// 
     /// An identifier for the mapping context can be optionally supplied, limiting the rebind only to the given context, and not to all bindings with the given rebind name.
-    pub fn rebind<F>(&mut self, user_idx: u8, binding_name: &str, mapping_context_identifier: Option<&str>, rebind_callback: F)
+    pub fn rebind<F>(&mut self, binding_name: &str, mapping_context_identifier: Option<&str>, rebind_callback: F)
     where
         F : Fn(InputAxisId) -> RebindResult + 'static
     {

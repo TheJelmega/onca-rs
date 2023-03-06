@@ -9,7 +9,7 @@ use onca_core::{
     sync::{Mutex, RwLock}
 };
 use onca_hid as hid;
-use onca_logging::{log_info, log_verbose};
+use onca_logging::log_verbose;
 use onca_math::{f32v2, Zero, MathConsts};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
