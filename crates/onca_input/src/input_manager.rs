@@ -166,6 +166,9 @@ impl InputManager {
         // Try to register all devices we can
         ptr.init_devices();
 
+        // Make sure that there is 1 user
+        ptr.users.write().resize_with(1, || User::new());
+
         ptr
     }
 
@@ -264,7 +267,7 @@ impl InputManager {
     }
 
     /// Remove all mappings with a priority below the given `priority` from a given user
-    pub fn add_mapping_context_below_priority_from_user(&self, user_idx: u8, priority: u16) {
+    pub fn remove_mapping_context_below_priority_from_user(&self, user_idx: u8, priority: u16) {
         let user_idx = user_idx as usize;
         let mut users = self.users.write();
         if user_idx >= users.len() {
@@ -287,6 +290,7 @@ impl InputManager {
             return;
         }
 
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         self.rebind_context = Some(RebindContext {
             binding_name: binding_name.to_onca_string(),
             context_name: mapping_context_identifier.map(|s| s.to_onca_string()),
@@ -297,6 +301,9 @@ impl InputManager {
     pub fn tick(&mut self, dt: DeltaTime) {
         assert!(sys::is_on_main_thread(), "The input manager should only be ticked on the main thread");
 
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        
         // Update devices
         let mut rebind_axes = DynArray::new();
         let mut callback = |input: InputAxisId| if self.rebind_context.is_none() { rebind_axes.push(input) };
@@ -312,7 +319,7 @@ impl InputManager {
         for axis in rebind_axes {
             self.notify_rebind(axis);
         }
-        
+
         let device_store = self.device_store.read();
         let mut users = self.users.write();
         if users.len() != 1 {

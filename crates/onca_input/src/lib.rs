@@ -28,16 +28,16 @@ use onca_math::{f32v2, f32v3};
 pub const LOG_INPUT_CAT : LogCategory = LogCategory::new("Input");
 pub const LOG_EVENT_CAT : LogCategory = LogCategory::new_with_sub("Input", "Event processing");
 
-/// Input axis/action value type
+/// Input axis type
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ValueType {
-    /// Digital (bool)
+pub enum AxisType {
+    /// Digital axis (on or off)
     Digital,
-    /// Axis1D (f32)
-    Axis1D,
-    /// Axis2D (f32v2)
+    /// Axis (range depends on input device)
+    Axis,
+    /// 2D axis (range depends on input device)
     Axis2D,
-    /// Axis3D (f32v3)
+    /// 3D axis (range depends on input device)
     Axis3D,
 }
 
@@ -55,31 +55,31 @@ pub enum AxisValue {
 }
 
 impl AxisValue {
-    pub fn convert_to(&self, val_type: ValueType) -> AxisValue {
+    pub fn convert_to(&self, val_type: AxisType) -> AxisValue {
         match self {
             AxisValue::Digital(val) => match val_type {
-                ValueType::Digital => AxisValue::Digital(*val),
-                ValueType::Axis1D  => AxisValue::Axis(*val as i32 as f32),
-                ValueType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val as i32 as f32, 0f32)),
-                ValueType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val as i32 as f32, 0f32, 0f32)),
+                AxisType::Digital => AxisValue::Digital(*val),
+                AxisType::Axis  => AxisValue::Axis(*val as i32 as f32),
+                AxisType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val as i32 as f32, 0f32)),
+                AxisType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val as i32 as f32, 0f32, 0f32)),
             },
             AxisValue::Axis(val) => match val_type {
-                ValueType::Digital => AxisValue::Digital(*val != 0f32),
-                ValueType::Axis1D  => AxisValue::Axis(*val),
-                ValueType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val, 0f32)),
-                ValueType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val, 0f32, 0f32)),
+                AxisType::Digital => AxisValue::Digital(*val != 0f32),
+                AxisType::Axis  => AxisValue::Axis(*val),
+                AxisType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val, 0f32)),
+                AxisType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val, 0f32, 0f32)),
             },
             AxisValue::Axis2D(val) => match val_type {
-                ValueType::Digital => AxisValue::Digital(val.x != 0f32),
-                ValueType::Axis1D  => AxisValue::Axis(val.x),
-                ValueType::Axis2D  => AxisValue::Axis2D(*val),
-                ValueType::Axis3D  => AxisValue::Axis3D(val.extend(0f32)),
+                AxisType::Digital => AxisValue::Digital(val.x != 0f32),
+                AxisType::Axis  => AxisValue::Axis(val.x),
+                AxisType::Axis2D  => AxisValue::Axis2D(*val),
+                AxisType::Axis3D  => AxisValue::Axis3D(val.extend(0f32)),
             },
             AxisValue::Axis3D(val) => match val_type {
-                ValueType::Digital => AxisValue::Digital(val.x != 0f32),
-                ValueType::Axis1D  => AxisValue::Axis(val.x),
-                ValueType::Axis2D  => AxisValue::Axis2D(val.xy()),
-                ValueType::Axis3D  => AxisValue::Axis3D(*val),
+                AxisType::Digital => AxisValue::Digital(val.x != 0f32),
+                AxisType::Axis  => AxisValue::Axis(val.x),
+                AxisType::Axis2D  => AxisValue::Axis2D(val.xy()),
+                AxisType::Axis3D  => AxisValue::Axis3D(*val),
             },
         }
     }

@@ -2,7 +2,7 @@ use core::{
     mem,
     ffi::c_void,
 };
-use onca_core::prelude::*;
+use onca_core::{prelude::*, alloc::CoreMemTag};
 use onca_hid as hid;
 use windows::Win32::{
     UI::{
@@ -11,7 +11,9 @@ use windows::Win32::{
     },
     Foundation::{WPARAM, LPARAM, GetLastError, HANDLE, HWND}
 };
-use onca_logging::{log_warning, log_error, log_verbose};
+use onca_logging::{log_warning, log_error};
+#[cfg(feature = "raw_input_logging")]
+use onca_logging::log_verbose;
 use crate::{
     input_devices::DeviceInfo,
     InputManager, LOG_EVENT_CAT, LOG_INPUT_CAT,
@@ -40,6 +42,8 @@ impl OSInput {
     }
 
     pub unsafe fn process_window_event(manager: &mut InputManager, event: &onca_window::RawInputEvent) {
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+        
         match *event {
             onca_window::RawInputEvent::Input(raw_ptr) => {
                 let (wparam, lparam) = unsafe { *(raw_ptr as *const (WPARAM, LPARAM)) };
@@ -124,6 +128,8 @@ impl OSInput {
                         
                         let raw_report = core::slice::from_raw_parts(rawinput.data.hid.bRawData.as_ptr(), rawinput.data.hid.dwSizeHid as usize);
                         manager.handle_hid_input(handle, raw_report);
+
+                        #[cfg(feature = "raw_input_logging")]
                         log_verbose!(LOG_EVENT_CAT, "HID event (should be gamepad) with {} elements, data: {raw_report:?}", rawinput.data.hid.dwCount);
                     },
                     invalid => log_error!(LOG_EVENT_CAT, OSInput::process_window_event, "Received an invalid RAWINPUT type: {invalid}"),

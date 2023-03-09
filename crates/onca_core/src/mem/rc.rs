@@ -138,6 +138,13 @@ impl<T: ?Sized> Rc<T> {
         this.ptr.ptr() == other.ptr.ptr()
     }
 
+    
+    /// Check if an `Rc` and a `Weak` contain the same pointer
+    pub fn weak_ptr_eq(this: &Self, weak: &Weak<T>) -> bool {
+        this.ptr.ptr() == weak.ptr.ptr()
+    }
+
+
     #[inline]
     fn is_unique(this: &Self) -> bool {
         Self::strong_count(this) == 1 && Self::weak_count(this) == 0

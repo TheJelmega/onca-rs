@@ -2,13 +2,16 @@
 
 use core::fmt;
 
-use crate::{InputDevice, LOG_INPUT_CAT, InputAxisDefinition, AxisValue, AxisType, DeviceType, GamepadSubType, InputAxisId};
+use crate::{InputDevice, InputAxisDefinition, AxisValue, AxisType, DeviceType, GamepadSubType, InputAxisId};
+#[cfg(feature = "raw_input_logging")]
+use crate::LOG_INPUT_CAT;
 use onca_core::{
     prelude::*,
     collections::BitSet,
     sync::{Mutex, RwLock}
 };
 use onca_hid as hid;
+#[cfg(feature = "raw_input_logging")]
 use onca_logging::log_verbose;
 use onca_math::{f32v2, Zero, MathConsts};
 
@@ -312,29 +315,29 @@ pub struct Gamepad {
 
 impl Gamepad {
     // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    const GAMEPAD_LEFT_THUMB_AXIS         : &str = "Gamepad Left Thumbstick 2D-Axis";
-    const GAMEPAD_LEFT_THUMB_X_AXIS       : &str = "Gamepad Left Thumbstick X-Axis";
-    const GAMEPAD_LEFT_THUMB_Y_AXIS       : &str = "Gamepad Left Thumbstick Y-Axis";
-    const GAMEPAD_LEFT_THUMB_BUTTON_AXIS  : &str = "Gamepad Left Thumbstick Button";
-    const GAMEPAD_RIGHT_THUMB_AXIS        : &str = "Gamepad Right Thumbstick 2D-Axis";
-    const GAMEPAD_RIGHT_THUMB_X_AXIS      : &str = "Gamepad Right Thumbstick X-Axis";
-    const GAMEPAD_RIGHT_THUMB_Y_AXIS      : &str = "Gamepad Right Thumbstick Y-Axis";
-    const GAMEPAD_RIGHT_THUMB_BUTTON_AXIS : &str = "Gamepad Right Thumbstick Button";
-    const GAMEPAD_DPAD_DIR_AXIS           : &str = "Gamepad D-Pad Direction";
-    const GAMEPAD_DPAD_UP_AXIS            : &str = "Gamepad D-Pad Up";
-    const GAMEPAD_DPAD_DOWN_AXIS          : &str = "Gamepad D-Pad Down";
-    const GAMEPAD_DPAD_LEFT_AXIS          : &str = "Gamepad D-Pad Left";
-    const GAMEPAD_DPAD_RIGHT_AXIS         : &str = "Gamepad D-Pad Right";
-    const GAMEPAD_FACE_BOTTOM_AXIS        : &str = "Gamepad Face Button Bottom";
-    const GAMEPAD_FACE_RIGHT_AXIS         : &str = "Gamepad Face Button Right";
-    const GAMEPAD_FACE_LEFT_AXIS          : &str = "Gamepad Face Button Left";
-    const GAMEPAD_FACE_UP_AXIS            : &str = "Gamepad Face Button Top";
-    const GAMEPAD_LEFT_SPECIAL_AXIS       : &str = "Gamepad Left Special";
-    const GAMEPAD_RIGHT_SPECIAL_AXIS      : &str = "Gamepad Right Special";
-    const GAMEPAD_LEFT_BUMPER_AXIS        : &str = "Gamepad Left Bumper";
-    const GAMEPAD_RIGHT_BUMPER_AXIS       : &str = "Gamepad Right Bumper";
-    const GAMEPAD_LEFT_TRIGGER_AXIS       : &str = "Gamepad Left Trigger";
-    const GAMEPAD_RIGHT_TRIGGER_AXIS      : &str = "Gamepad Right Trigger";
+    pub const LEFT_THUMB         : &str = "Gamepad Left Thumbstick 2D-Axis";
+    pub const LEFT_THUMB_X       : &str = "Gamepad Left Thumbstick X-Axis";
+    pub const LEFT_THUMB_Y       : &str = "Gamepad Left Thumbstick Y-Axis";
+    pub const LEFT_THUMB_BUTTON  : &str = "Gamepad Left Thumbstick Button";
+    pub const RIGHT_THUMB        : &str = "Gamepad Right Thumbstick 2D-Axis";
+    pub const RIGHT_THUMB_X      : &str = "Gamepad Right Thumbstick X-Axis";
+    pub const RIGHT_THUMB_Y      : &str = "Gamepad Right Thumbstick Y-Axis";
+    pub const RIGHT_THUMB_BUTTON : &str = "Gamepad Right Thumbstick Button";
+    pub const DPAD_DIR           : &str = "Gamepad D-Pad Direction";
+    pub const DPAD_UP            : &str = "Gamepad D-Pad Up";
+    pub const DPAD_DOWN          : &str = "Gamepad D-Pad Down";
+    pub const DPAD_LEFT          : &str = "Gamepad D-Pad Left";
+    pub const DPAD_RIGHT         : &str = "Gamepad D-Pad Right";
+    pub const FACE_BOTTOM        : &str = "Gamepad Face Button Bottom";
+    pub const FACE_RIGHT         : &str = "Gamepad Face Button Right";
+    pub const FACE_LEFT          : &str = "Gamepad Face Button Left";
+    pub const FACE_UP            : &str = "Gamepad Face Button Top";
+    pub const LEFT_SPECIAL       : &str = "Gamepad Left Special";
+    pub const RIGHT_SPECIAL      : &str = "Gamepad Right Special";
+    pub const LEFT_BUMPER        : &str = "Gamepad Left Bumper";
+    pub const RIGHT_BUMPER       : &str = "Gamepad Right Bumper";
+    pub const LEFT_TRIGGER       : &str = "Gamepad Left Trigger";
+    pub const RIGHT_TRIGGER      : &str = "Gamepad Right Trigger";
 
     pub fn new() -> Option<Gamepad> {
         Some(Self {
@@ -461,13 +464,13 @@ impl InputDevice for Gamepad {
         
         let left_trigger_val = left_trigger.update(dt);
         if left_trigger_val > 0f32 {
-            notify_rebind(InputAxisId::new(Self::GAMEPAD_LEFT_TRIGGER_AXIS.to_onca_string()));
+            notify_rebind(InputAxisId::new(Self::LEFT_TRIGGER.to_onca_string()));
         }
         state.left_trigger = left_trigger_val;
 
         let right_trigger_val = right_trigger.update(dt);
         if left_trigger_val > 0f32 {
-            notify_rebind(InputAxisId::new(Self::GAMEPAD_RIGHT_TRIGGER_AXIS.to_onca_string()));
+            notify_rebind(InputAxisId::new(Self::RIGHT_TRIGGER.to_onca_string()));
         }
         state.right_trigger = right_trigger_val;
         
@@ -480,16 +483,16 @@ impl InputDevice for Gamepad {
             *dpad_time = (*dpad_time - dt).max(0f32);
 
             if dpad.is_top_down() {
-                notify_rebind(InputAxisId::new(Self::GAMEPAD_DPAD_UP_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::DPAD_UP.to_onca_string()));
             }
             else if dpad.is_bottom_down() {
-                notify_rebind(InputAxisId::new(Self::GAMEPAD_DPAD_DOWN_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::DPAD_DOWN.to_onca_string()));
             }
             if dpad.is_left_down() {
-                notify_rebind(InputAxisId::new(Self::GAMEPAD_DPAD_LEFT_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::DPAD_LEFT.to_onca_string()));
             }
             else if dpad.is_right_down() {
-                notify_rebind(InputAxisId::new(Self::GAMEPAD_DPAD_RIGHT_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::DPAD_RIGHT.to_onca_string()));
             }
         }
     }
@@ -507,6 +510,7 @@ impl InputDevice for Gamepad {
                         self.press_button(button, f32::MAX);
                     }
 
+                    #[cfg(feature = "raw_input_logging")]
                     if let Some(button_enum) = GamepadButton::from_idx(button_idx) {
                         log_verbose!(LOG_INPUT_CAT, "Pressed gamepad button '{button_enum:?}'");
                     }
@@ -536,6 +540,8 @@ impl InputDevice for Gamepad {
             let y = normalized_y * 2f32 - 1f32;
 
             self.move_stick(false, f32v2{ x, y }, f32::MAX, GamepadReleaseCurve::Instant);
+
+            #[cfg(feature = "raw_input_logging")]
             log_verbose!(LOG_INPUT_CAT, "Left tick moved to {}", f32v2{ x, y });
         }
 
@@ -552,7 +558,9 @@ impl InputDevice for Gamepad {
             let x = normalized_x * 2f32 - 1f32;
             let y = normalized_y * 2f32 - 1f32;
 
-            self.move_stick(false, f32v2{ x, y }, f32::MAX, GamepadReleaseCurve::Instant);
+            self.move_stick(true, f32v2{ x, y }, f32::MAX, GamepadReleaseCurve::Instant);
+
+            #[cfg(feature = "raw_input_logging")]
             log_verbose!(LOG_INPUT_CAT, "Right tick moved to {}", f32v2{ x, y });
         }
 
@@ -560,6 +568,7 @@ impl InputDevice for Gamepad {
         if let Some(val) = input_report.get_raw_value(DPAD_USAGE, None) {
             let dir = DPadDirection::from_idx(val.first() as u8);
             self.move_dpad(dir, f32::MAX);
+            #[cfg(feature = "raw_input_logging")]
             log_verbose!(LOG_INPUT_CAT, "DPad moved to {dir}");
         }
 
@@ -586,58 +595,58 @@ impl InputDevice for Gamepad {
 
     fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
         match axis_path.as_str() {
-            Self::GAMEPAD_LEFT_THUMB_AXIS         => Some(AxisValue::Axis2D(self.state.read().left_stick)),
-            Self::GAMEPAD_LEFT_THUMB_X_AXIS       => Some(AxisValue::Axis(self.state.read().left_stick.x)),
-            Self::GAMEPAD_LEFT_THUMB_Y_AXIS       => Some(AxisValue::Axis(self.state.read().left_stick.y)),
-            Self::GAMEPAD_RIGHT_THUMB_AXIS        => Some(AxisValue::Axis2D(self.state.read().right_stick)),
-            Self::GAMEPAD_RIGHT_THUMB_X_AXIS      => Some(AxisValue::Axis(self.state.read().right_stick.x)),
-            Self::GAMEPAD_RIGHT_THUMB_Y_AXIS      => Some(AxisValue::Axis(self.state.read().right_stick.y)),
-            Self::GAMEPAD_DPAD_DIR_AXIS           => Some(AxisValue::Axis2D(self.state.read().dpad.get_direction())),
-            Self::GAMEPAD_DPAD_UP_AXIS            => Some(AxisValue::Digital(self.state.read().dpad.is_top_down())),
-            Self::GAMEPAD_DPAD_DOWN_AXIS          => Some(AxisValue::Digital(self.state.read().dpad.is_bottom_down())),
-            Self::GAMEPAD_DPAD_LEFT_AXIS          => Some(AxisValue::Digital(self.state.read().dpad.is_left_down())),
-            Self::GAMEPAD_DPAD_RIGHT_AXIS         => Some(AxisValue::Digital(self.state.read().dpad.is_right_down())),
-            Self::GAMEPAD_FACE_BOTTOM_AXIS        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonBottom as usize))),
-            Self::GAMEPAD_FACE_RIGHT_AXIS         => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonRight as usize))),
-            Self::GAMEPAD_FACE_LEFT_AXIS          => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonLeft as usize))),
-            Self::GAMEPAD_FACE_UP_AXIS            => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonTop as usize))),
-            Self::GAMEPAD_LEFT_BUMPER_AXIS        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftBumper as usize))),
-            Self::GAMEPAD_RIGHT_BUMPER_AXIS       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightBumper as usize))),
-            Self::GAMEPAD_LEFT_SPECIAL_AXIS       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftSpecial as usize))),
-            Self::GAMEPAD_RIGHT_SPECIAL_AXIS      => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightSpecial as usize))),
-            Self::GAMEPAD_LEFT_THUMB_BUTTON_AXIS  => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftJoystick as usize))),
-            Self::GAMEPAD_RIGHT_THUMB_BUTTON_AXIS => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightJoystick as usize))),
-            Self::GAMEPAD_LEFT_TRIGGER_AXIS       => Some(AxisValue::Axis(self.state.read().left_trigger)),
-            Self::GAMEPAD_RIGHT_TRIGGER_AXIS      => Some(AxisValue::Axis(self.state.read().right_trigger)),
+            Self::LEFT_THUMB         => Some(AxisValue::Axis2D(self.state.read().left_stick)),
+            Self::LEFT_THUMB_X       => Some(AxisValue::Axis(self.state.read().left_stick.x)),
+            Self::LEFT_THUMB_Y       => Some(AxisValue::Axis(self.state.read().left_stick.y)),
+            Self::RIGHT_THUMB        => Some(AxisValue::Axis2D(self.state.read().right_stick)),
+            Self::RIGHT_THUMB_X      => Some(AxisValue::Axis(self.state.read().right_stick.x)),
+            Self::RIGHT_THUMB_Y      => Some(AxisValue::Axis(self.state.read().right_stick.y)),
+            Self::DPAD_DIR           => Some(AxisValue::Axis2D(self.state.read().dpad.get_direction())),
+            Self::DPAD_UP            => Some(AxisValue::Digital(self.state.read().dpad.is_top_down())),
+            Self::DPAD_DOWN          => Some(AxisValue::Digital(self.state.read().dpad.is_bottom_down())),
+            Self::DPAD_LEFT          => Some(AxisValue::Digital(self.state.read().dpad.is_left_down())),
+            Self::DPAD_RIGHT         => Some(AxisValue::Digital(self.state.read().dpad.is_right_down())),
+            Self::FACE_BOTTOM        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonBottom as usize))),
+            Self::FACE_RIGHT         => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonRight as usize))),
+            Self::FACE_LEFT          => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonLeft as usize))),
+            Self::FACE_UP            => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceButtonTop as usize))),
+            Self::LEFT_BUMPER        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftBumper as usize))),
+            Self::RIGHT_BUMPER       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightBumper as usize))),
+            Self::LEFT_SPECIAL       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftSpecial as usize))),
+            Self::RIGHT_SPECIAL      => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightSpecial as usize))),
+            Self::LEFT_THUMB_BUTTON  => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftJoystick as usize))),
+            Self::RIGHT_THUMB_BUTTON => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightJoystick as usize))),
+            Self::LEFT_TRIGGER       => Some(AxisValue::Axis(self.state.read().left_trigger)),
+            Self::RIGHT_TRIGGER      => Some(AxisValue::Axis(self.state.read().right_trigger)),
             _ => None
         }
     }
 
     fn get_axes(&self) -> &[InputAxisDefinition] {
         &[
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_THUMB_AXIS        , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_THUMB_X_AXIS      , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_THUMB_Y_AXIS      , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_THUMB_AXIS       , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_THUMB_X_AXIS     , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_THUMB_Y_AXIS     , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_DPAD_DIR_AXIS          , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_DPAD_UP_AXIS           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_DPAD_DOWN_AXIS         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_DPAD_LEFT_AXIS         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_DPAD_RIGHT_AXIS        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_FACE_BOTTOM_AXIS       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_FACE_RIGHT_AXIS        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_FACE_LEFT_AXIS         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_FACE_UP_AXIS           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_SPECIAL_AXIS     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_BUMPER_AXIS      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_SPECIAL_AXIS      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_BUMPER_AXIS       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_THUMB_BUTTON_AXIS , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_THUMB_BUTTON_AXIS, axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_LEFT_TRIGGER_AXIS      , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GAMEPAD_RIGHT_TRIGGER_AXIS     , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB        , axis_type: AxisType::Axis2D , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_X      , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_Y      , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB       , axis_type: AxisType::Axis2D , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_X     , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_Y     , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_DIR          , axis_type: AxisType::Axis2D , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_UP           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_DOWN         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_LEFT         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_RIGHT        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_BOTTOM       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_RIGHT        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_LEFT         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_UP           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_SPECIAL     , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_BUMPER      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_SPECIAL      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_BUMPER       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_BUTTON , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_BUTTON, axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_TRIGGER      , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_TRIGGER     , axis_type: AxisType::Axis   , can_rebind: true },
         ]
     }
 

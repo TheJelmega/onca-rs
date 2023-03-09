@@ -150,20 +150,20 @@ pub struct Mouse {
 
 impl Mouse {
     // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    const MOUSE_XY_AXIS            : &str = "Mouse XY 2D-Axis";
-    const MOUSE_X_AXIS             : &str = "Mouse X";
-    const MOUSE_Y_AXIS             : &str = "Mouse Y";
-    const MOUSE_WHEEL_AXIS         : &str = "Mouse Wheel Axis";
-    const MOUSE_WHEEL_UP_AXIS      : &str = "Mouse Wheel Up";
-    const MOUSE_WHEEL_DOWN_AXIS    : &str = "Mouse Wheel Down";
-    const MOUSE_HWHEEL_AXIS        : &str = "Mouse Wheel Horizontal Axis";
-    const MOUSE_HWHEEL_LEFT_AXIS   : &str = "Mouse Mouse Wheel Left";
-    const MOUSE_HWHEEL_RIGHT_AXIS  : &str = "Mouse Wheel Right";
-    const MOUSE_LEFT_BUTTON_AXIS   : &str = "Mouse Left Button";
-    const MOUSE_MIDDLE_BUTTON_AXIS : &str = "Mouse Middle Button";
-    const MOUSE_RIGHT_BUTTON_AXIS  : &str = "Mouse Right Button";
-    const MOUSE_SIDE0_BUTTON_AXIS  : &str = "Mouse Side Button0";
-    const MOUSE_SIDE1_BUTTON_AXIS  : &str = "Mouse Side Button1";
+    pub const XY            : &str = "Mouse XY 2D-Axis";
+    pub const X             : &str = "Mouse X";
+    pub const Y             : &str = "Mouse Y";
+    pub const WHEEL         : &str = "Mouse Wheel Axis";
+    pub const WHEEL_UP      : &str = "Mouse Wheel Up";
+    pub const WHEEL_DOWN    : &str = "Mouse Wheel Down";
+    pub const HWHEEL        : &str = "Mouse Wheel Horizontal Axis";
+    pub const HWHEEL_LEFT   : &str = "Mouse Mouse Wheel Left";
+    pub const HWHEEL_RIGHT  : &str = "Mouse Wheel Right";
+    pub const LEFT_BUTTON   : &str = "Mouse Left Button";
+    pub const MIDDLE_BUTTON : &str = "Mouse Middle Button";
+    pub const RIGHT_BUTTON  : &str = "Mouse Right Button";
+    pub const SIDE0_BUTTON  : &str = "Mouse Side Button0";
+    pub const SIDE1_BUTTON  : &str = "Mouse Side Button1";
 
 
     /// Create a new mouse.
@@ -237,34 +237,36 @@ impl InputDevice for Mouse {
         state.delta = *mouse_pos - state.position;
         state.position = *mouse_pos;
 
-        //if !state.delta.is_zero() {
-        //    log_verbose!(LOG_INPUT_CAT, "Mouse moved to position {} and delta {}", state.position, state.delta);
-        //}
-
-
-        if !scroll.x.is_zero() {
-            log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", scroll.x);
+        #[cfg(feature = "mouse_pos_logging")]
+        if !state.delta.is_zero() {
+            log_verbose!(LOG_INPUT_CAT, "Mouse moved to position {} and delta {}", state.position, state.delta);
         }
-        if !scroll.y.is_zero() {
-            log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", scroll.y);
+        #[cfg(feature = "raw_input_logging")]
+        {
+            if !scroll.x.is_zero() {
+                log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", scroll.x);
+            }
+            if !scroll.y.is_zero() {
+                log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", scroll.y);
+            }
         }
 
         state.scroll += *scroll;
         if !scroll.is_zero() {
             if scroll.x > 0f32 {
-                notify_rebind(InputAxisId::new(Self::MOUSE_WHEEL_AXIS.to_onca_string()));
-                notify_rebind(InputAxisId::new(Self::MOUSE_WHEEL_UP_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::WHEEL.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::WHEEL_UP.to_onca_string()));
             } else if scroll.x < 0f32 {
-                notify_rebind(InputAxisId::new(Self::MOUSE_WHEEL_AXIS.to_onca_string()));
-                notify_rebind(InputAxisId::new(Self::MOUSE_WHEEL_DOWN_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::WHEEL.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::WHEEL_DOWN.to_onca_string()));
             }
 
             if scroll.y > 0f32 {
-                notify_rebind(InputAxisId::new(Self::MOUSE_HWHEEL_AXIS.to_onca_string()));
-                notify_rebind(InputAxisId::new(Self::MOUSE_HWHEEL_LEFT_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::HWHEEL.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::HWHEEL_LEFT.to_onca_string()));
             } else if scroll.y < 0f32 {
-                notify_rebind(InputAxisId::new(Self::MOUSE_HWHEEL_AXIS.to_onca_string()));
-                notify_rebind(InputAxisId::new(Self::MOUSE_HWHEEL_RIGHT_AXIS.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::HWHEEL.to_onca_string()));
+                notify_rebind(InputAxisId::new(Self::HWHEEL_RIGHT.to_onca_string()));
             }
         }
 
@@ -303,6 +305,7 @@ impl InputDevice for Mouse {
             let button = unsafe { MouseButton::from_idx(idx).unwrap_unchecked() };
             if !state.is_released(button) && *timer == 0f32 {
                 state.release(idx);
+                #[cfg(feature = "raw_input_logging")]
                 log_verbose!(LOG_INPUT_CAT, "{} has been released", button);
             }
         }
@@ -315,40 +318,40 @@ impl InputDevice for Mouse {
 
     fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
         match axis_path.as_str() {
-            Self::MOUSE_XY_AXIS            => Some(AxisValue::Axis2D( self.get_mouse_position().cast())),
-            Self::MOUSE_X_AXIS             => Some(AxisValue::Axis(   self.get_mouse_position().x as f32)),
-            Self::MOUSE_Y_AXIS             => Some(AxisValue::Axis(   self.get_mouse_position().y as f32)),
-            Self::MOUSE_WHEEL_AXIS         => Some(AxisValue::Axis(   self.get_mouse_wheel().y)),
-            Self::MOUSE_WHEEL_UP_AXIS      => Some(AxisValue::Axis(   self.get_mouse_wheel().y.max(0f32))),
-            Self::MOUSE_WHEEL_DOWN_AXIS    => Some(AxisValue::Axis(  -self.get_mouse_wheel().y.min(0f32))),
-            Self::MOUSE_HWHEEL_AXIS        => Some(AxisValue::Axis(   self.get_mouse_wheel().x)),
-            Self::MOUSE_HWHEEL_LEFT_AXIS   => Some(AxisValue::Axis(   self.get_mouse_wheel().x.max(0f32))),
-            Self::MOUSE_HWHEEL_RIGHT_AXIS  => Some(AxisValue::Axis(  -self.get_mouse_wheel().x.min(0f32))),
-            Self::MOUSE_LEFT_BUTTON_AXIS   => Some(AxisValue::Digital(self.get_button_state(MouseButton::Left).is_down())),
-            Self::MOUSE_MIDDLE_BUTTON_AXIS => Some(AxisValue::Digital(self.get_button_state(MouseButton::Middle).is_down())),
-            Self::MOUSE_RIGHT_BUTTON_AXIS  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Right).is_down())),
-            Self::MOUSE_SIDE0_BUTTON_AXIS  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Side0).is_down())),
-            Self::MOUSE_SIDE1_BUTTON_AXIS  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Side1).is_down())),
+            Self::XY            => Some(AxisValue::Axis2D( self.get_mouse_position().cast())),
+            Self::X             => Some(AxisValue::Axis(   self.get_mouse_position().x as f32)),
+            Self::Y             => Some(AxisValue::Axis(   self.get_mouse_position().y as f32)),
+            Self::WHEEL         => Some(AxisValue::Axis(   self.get_mouse_wheel().y)),
+            Self::WHEEL_UP      => Some(AxisValue::Axis(   self.get_mouse_wheel().y.max(0f32))),
+            Self::WHEEL_DOWN    => Some(AxisValue::Axis(  -self.get_mouse_wheel().y.min(0f32))),
+            Self::HWHEEL        => Some(AxisValue::Axis(   self.get_mouse_wheel().x)),
+            Self::HWHEEL_LEFT   => Some(AxisValue::Axis(   self.get_mouse_wheel().x.max(0f32))),
+            Self::HWHEEL_RIGHT  => Some(AxisValue::Axis(  -self.get_mouse_wheel().x.min(0f32))),
+            Self::LEFT_BUTTON   => Some(AxisValue::Digital(self.get_button_state(MouseButton::Left).is_down())),
+            Self::MIDDLE_BUTTON => Some(AxisValue::Digital(self.get_button_state(MouseButton::Middle).is_down())),
+            Self::RIGHT_BUTTON  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Right).is_down())),
+            Self::SIDE0_BUTTON  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Side0).is_down())),
+            Self::SIDE1_BUTTON  => Some(AxisValue::Digital(self.get_button_state(MouseButton::Side1).is_down())),
             _ => None
         }
     }
 
     fn get_axes(&self) -> &[InputAxisDefinition] {
         &[
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_XY_AXIS            , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_X_AXIS             , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_Y_AXIS             , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_WHEEL_AXIS         , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_WHEEL_UP_AXIS      , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_WHEEL_DOWN_AXIS    , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_HWHEEL_AXIS        , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_HWHEEL_LEFT_AXIS   , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_HWHEEL_RIGHT_AXIS  , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_LEFT_BUTTON_AXIS   , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_MIDDLE_BUTTON_AXIS , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_RIGHT_BUTTON_AXIS  , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_SIDE0_BUTTON_AXIS  , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MOUSE_SIDE1_BUTTON_AXIS  , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::XY            , axis_type: AxisType::Axis2D , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::X             , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::Y             , axis_type: AxisType::Axis   , can_rebind: false },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::WHEEL         , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::WHEEL_UP      , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::WHEEL_DOWN    , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::HWHEEL        , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::HWHEEL_LEFT   , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::HWHEEL_RIGHT  , axis_type: AxisType::Axis   , can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::LEFT_BUTTON   , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::MIDDLE_BUTTON , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::RIGHT_BUTTON  , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::SIDE0_BUTTON  , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Mouse, path: Self::SIDE1_BUTTON  , axis_type: AxisType::Digital, can_rebind: true },
         ]
     }
 

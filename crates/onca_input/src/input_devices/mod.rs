@@ -1,7 +1,7 @@
 use core::fmt;
 use onca_core::prelude::*;
 use onca_hid as hid;
-use crate::{os, AxisValue};
+use crate::{os, AxisValue, AxisType};
 
 mod keyboard;
 pub use keyboard::{KeyCode, Keyboard, KeyState};
@@ -19,18 +19,6 @@ pub enum DeviceHandle {
     Mouse,
     Keyboard,
     Hid(hid::DeviceHandle)
-}
-
-/// Input axis type
-pub enum AxisType {
-    /// Digital axis (on or off)
-    Digital,
-    /// Axis (range depends on input device)
-    Axis,
-    /// 2D axis (range depends on input device)
-    Axis2D,
-    /// 3D axis (range depends on input device)
-    Axis3D,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

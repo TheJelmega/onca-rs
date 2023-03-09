@@ -5,7 +5,9 @@ use onca_core::{
     sync::{Mutex, RwLock},
     event_listener::DynEventListenerRef
 };
-use onca_logging::{log_warning, log_verbose};
+use onca_logging::log_warning;
+#[cfg(any(feature = "raw_input_logging", feature = "mouse_pos_logging"))]
+use onca_logging::log_verbose;
 
 use crate::{os, LOG_INPUT_CAT, InputAxisDefinition, AxisType, AxisValue, DeviceType, InputAxisId};
 
@@ -249,6 +251,132 @@ pub enum KeyCode {
 pub const NUM_KEYS : usize = KeyCode::Section as usize + 1;
 pub const NUM_KEY_BITS : usize = NUM_KEYS.next_power_of_two();
 
+mod keycode_name {
+    pub const ANY             : &str = "Any Key"          ;
+    pub const SHIFT           : &str = "Shift"            ;
+    pub const LSHIFT          : &str = "Left Shift"       ;
+    pub const RSHIFT          : &str = "Right Shift"      ;
+    pub const CTRL            : &str = "Ctrl"             ;
+    pub const LCTR            : &str = "Left Ctrl"        ;
+    pub const RCTR            : &str = "Right Ctrl"       ;
+    pub const ALT             : &str = "Alt"              ;
+    pub const LALT            : &str = "Left Alt"         ;
+    pub const RALT            : &str = "Right Alt"        ;
+    pub const LCOMMAND        : &str = "Left Command"     ;
+    pub const RCOMMAND        : &str = "Right Command"    ;
+    pub const MENU            : &str = "Menu"             ;
+    pub const SPACE           : &str = "Space"            ;
+    pub const BACKSPACE       : &str = "Backspace"        ;
+    pub const TAB             : &str = "Tab"              ;
+    pub const ENTER           : &str = "Enter"            ;
+    pub const ESCAPE          : &str = "Escape"           ;
+    pub const DELETE          : &str = "Delete"           ;
+    pub const INSERT          : &str = "Insert"           ;
+    pub const HOME            : &str = "Home"             ;
+    pub const END             : &str = "End"              ;
+    pub const PG_DOWN         : &str = "Page Down"        ;
+    pub const PG_UP           : &str = "Page Up"          ;
+    pub const PRINT_SCREEN    : &str = "Print Screen"     ;
+    pub const CAPS_LOCK       : &str = "Caps Lock"        ;
+    pub const NUM_LOCK        : &str = "Num Lock"         ;
+    pub const SCROLL_LOCK     : &str = "Scroll Lock"      ;
+    pub const UP              : &str = "Up Arrow"         ;
+    pub const DOWN            : &str = "Down Arrow"       ;
+    pub const LEFT            : &str = "Left Arrow"       ;
+    pub const RIGHT           : &str = "Right Arrow"      ;
+    pub const BREAK           : &str = "Break"            ;
+    pub const CLEAR           : &str = "Clear"            ;
+    pub const F1              : &str = "F1"               ;
+    pub const F2              : &str = "F2"               ;
+    pub const F3              : &str = "F3"               ;
+    pub const F4              : &str = "F4"               ;
+    pub const F5              : &str = "F5"               ;
+    pub const F6              : &str = "F6"               ;
+    pub const F7              : &str = "F7"               ;
+    pub const F8              : &str = "F8"               ;
+    pub const F9              : &str = "F9"               ;
+    pub const F10             : &str = "F10"              ;
+    pub const F11             : &str = "F11"              ;
+    pub const F12             : &str = "F12"              ;
+    pub const NUMPAD0         : &str = "Num 0"            ;
+    pub const NUMPAD1         : &str = "Num 1"            ;
+    pub const NUMPAD2         : &str = "Num 2"            ;
+    pub const NUMPAD3         : &str = "Num 3"            ;
+    pub const NUMPAD4         : &str = "Num 4"            ;
+    pub const NUMPAD5         : &str = "Num 5"            ;
+    pub const NUMPAD6         : &str = "Num 6"            ;
+    pub const NUMPAD7         : &str = "Num 7"            ;
+    pub const NUMPAD8         : &str = "Num 8"            ;
+    pub const NUMPAD9         : &str = "Num 9"            ;
+    pub const NUMPAD_MULTIPY  : &str = "Num *"            ;
+    pub const NUMPAD_ADD      : &str = "Num +"            ;
+    pub const NUMPAD_SUBTRACT : &str = "Num -"            ;
+    pub const NUMPAD_DECIMAL  : &str = "Num ."            ;
+    pub const NUMPAD_DIVIDE   : &str = "Num /"            ;
+    pub const A               : &str = "A"                ;
+    pub const B               : &str = "B"                ;
+    pub const C               : &str = "C"                ;
+    pub const D               : &str = "D"                ;
+    pub const E               : &str = "E"                ;
+    pub const F               : &str = "F"                ;
+    pub const G               : &str = "G"                ;
+    pub const H               : &str = "H"                ;
+    pub const I               : &str = "I"                ;
+    pub const J               : &str = "J"                ;
+    pub const K               : &str = "K"                ;
+    pub const L               : &str = "L"                ;
+    pub const M               : &str = "M"                ;
+    pub const N               : &str = "N"                ;
+    pub const O               : &str = "O"                ;
+    pub const P               : &str = "P"                ;
+    pub const Q               : &str = "Q"                ;
+    pub const R               : &str = "R"                ;
+    pub const S               : &str = "S"                ;
+    pub const T               : &str = "T"                ;
+    pub const U               : &str = "U"                ;
+    pub const V               : &str = "V"                ;
+    pub const W               : &str = "W"                ;
+    pub const X               : &str = "X"                ;
+    pub const Y               : &str = "Y"                ;
+    pub const Z               : &str = "Z"                ;
+    pub const N0              : &str = "0"                ;
+    pub const N1              : &str = "1"                ;
+    pub const N2              : &str = "2"                ;
+    pub const N3              : &str = "3"                ;
+    pub const N4              : &str = "4"                ;
+    pub const N5              : &str = "5"                ;
+    pub const N6              : &str = "6"                ;
+    pub const N7              : &str = "7"                ;
+    pub const N8              : &str = "8"                ;
+    pub const N9              : &str = "9"                ;
+    pub const SEMICOLON       : &str = "Semicolon"        ;
+    pub const EQUALS          : &str = "Equals"           ;
+    pub const COMMA           : &str = "Comma"            ;
+    pub const HYPHEN          : &str = "Hyphen"           ;
+    pub const UNDERSCORE      : &str = "Underscore"       ;
+    pub const PERIOD          : &str = "Period"           ;
+    pub const SLASH           : &str = "Slash"            ;
+    pub const BACKTICK        : &str = "Backtick"         ;
+    pub const LBRACKET        : &str = "Left Bracket"     ;
+    pub const RBRACKET        : &str = "Right Bracket"    ;
+    pub const BACKSLASH       : &str = "Backslash"        ;
+    pub const APOSTROPHE      : &str = "Apostrophe"       ;
+    pub const QUOTE           : &str = "Quote"            ;
+    pub const LPAREN          : &str = "Left Parentheses" ;
+    pub const RPAREN          : &str = "Right Parentheses";
+    pub const AMPERSAND       : &str = "Ampersand"        ;
+    pub const ASTERISK        : &str = "Asterisk"         ;
+    pub const CARET           : &str = "Caret"            ;
+    pub const DOLLAR          : &str = "Dollar"           ;
+    pub const EXCLAMATION     : &str = "Exclamation"      ;
+    pub const COLON           : &str = "Colon"            ;
+    pub const EACUTE          : &str = "é"                ;
+    pub const EGRAVE          : &str = "è"                ;
+    pub const AGRAVE          : &str = "à"                ;
+    pub const CCEDILLA        : &str = "ç"                ;
+    pub const SECTION         : &str = "§"                ;
+}
+    
 impl KeyCode {
     pub fn is_character_key(self) -> bool {
         char::from(self) != '�'
@@ -406,7 +534,139 @@ impl KeyCode {
             _ => None
         }
     }
-}
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            KeyCode::Any            => keycode_name::ANY            ,
+            KeyCode::Shift          => keycode_name::SHIFT          ,
+            KeyCode::LShift         => keycode_name::LSHIFT         ,
+            KeyCode::RShift         => keycode_name::RSHIFT         ,
+            KeyCode::Ctrl           => keycode_name::CTRL           ,
+            KeyCode::LCtr           => keycode_name::LCTR           ,
+            KeyCode::RCtr           => keycode_name::RCTR           ,
+            KeyCode::Alt            => keycode_name::ALT            ,
+            KeyCode::LAlt           => keycode_name::LALT           ,
+            KeyCode::RAlt           => keycode_name::RALT           ,
+            KeyCode::LCommand       => keycode_name::LCOMMAND       ,
+            KeyCode::RCommand       => keycode_name::RCOMMAND       ,
+            KeyCode::Menu           => keycode_name::MENU           ,
+            KeyCode::Space          => keycode_name::SPACE          ,
+            KeyCode::Backspace      => keycode_name::BACKSPACE      ,
+            KeyCode::Tab            => keycode_name::TAB            ,
+            KeyCode::Enter          => keycode_name::ENTER          ,
+            KeyCode::Escape         => keycode_name::ESCAPE         ,
+            KeyCode::Delete         => keycode_name::DELETE         ,
+            KeyCode::Insert         => keycode_name::INSERT         ,
+            KeyCode::Home           => keycode_name::HOME           ,
+            KeyCode::End            => keycode_name::END            ,
+            KeyCode::PgDown         => keycode_name::PG_DOWN        ,
+            KeyCode::PgUp           => keycode_name::PG_UP          ,
+            KeyCode::PrintScreen    => keycode_name::PRINT_SCREEN   ,
+            KeyCode::CapsLock       => keycode_name::CAPS_LOCK      ,
+            KeyCode::NumLock        => keycode_name::NUM_LOCK       ,
+            KeyCode::ScrollLock     => keycode_name::SCROLL_LOCK    ,
+            KeyCode::Up             => keycode_name::UP             ,
+            KeyCode::Down           => keycode_name::DOWN           ,
+            KeyCode::Left           => keycode_name::LEFT           ,
+            KeyCode::Right          => keycode_name::RIGHT          ,
+            KeyCode::Break          => keycode_name::BREAK          ,
+            KeyCode::Clear          => keycode_name::CLEAR          ,
+            KeyCode::F1             => keycode_name::F1             ,
+            KeyCode::F2             => keycode_name::F2             ,
+            KeyCode::F3             => keycode_name::F3             ,
+            KeyCode::F4             => keycode_name::F4             ,
+            KeyCode::F5             => keycode_name::F5             ,
+            KeyCode::F6             => keycode_name::F6             ,
+            KeyCode::F7             => keycode_name::F7             ,
+            KeyCode::F8             => keycode_name::F8             ,
+            KeyCode::F9             => keycode_name::F9             ,
+            KeyCode::F10            => keycode_name::F10            ,
+            KeyCode::F11            => keycode_name::F11            ,
+            KeyCode::F12            => keycode_name::F12            ,
+            KeyCode::Numpad0        => keycode_name::NUMPAD0        ,
+            KeyCode::Numpad1        => keycode_name::NUMPAD1        ,
+            KeyCode::Numpad2        => keycode_name::NUMPAD2        ,
+            KeyCode::Numpad3        => keycode_name::NUMPAD3        ,
+            KeyCode::Numpad4        => keycode_name::NUMPAD4        ,
+            KeyCode::Numpad5        => keycode_name::NUMPAD5        ,
+            KeyCode::Numpad6        => keycode_name::NUMPAD6        ,
+            KeyCode::Numpad7        => keycode_name::NUMPAD7        ,
+            KeyCode::Numpad8        => keycode_name::NUMPAD8        ,
+            KeyCode::Numpad9        => keycode_name::NUMPAD9        ,
+            KeyCode::NumpadMultipy  => keycode_name::NUMPAD_MULTIPY ,
+            KeyCode::NumpadAdd      => keycode_name::NUMPAD_ADD     ,
+            KeyCode::NumpadSubtract => keycode_name::NUMPAD_SUBTRACT,
+            KeyCode::NumpadDecimal  => keycode_name::NUMPAD_DECIMAL ,
+            KeyCode::NumpadDivide   => keycode_name::NUMPAD_DIVIDE  ,
+            KeyCode::A              => keycode_name::A              ,
+            KeyCode::B              => keycode_name::B              ,
+            KeyCode::C              => keycode_name::C              ,
+            KeyCode::D              => keycode_name::D              ,
+            KeyCode::E              => keycode_name::E              ,
+            KeyCode::F              => keycode_name::F              ,
+            KeyCode::G              => keycode_name::G              ,
+            KeyCode::H              => keycode_name::H              ,
+            KeyCode::I              => keycode_name::I              ,
+            KeyCode::J              => keycode_name::J              ,
+            KeyCode::K              => keycode_name::K              ,
+            KeyCode::L              => keycode_name::L              ,
+            KeyCode::M              => keycode_name::M              ,
+            KeyCode::N              => keycode_name::N              ,
+            KeyCode::O              => keycode_name::O              ,
+            KeyCode::P              => keycode_name::P              ,
+            KeyCode::Q              => keycode_name::Q              ,
+            KeyCode::R              => keycode_name::R              ,
+            KeyCode::S              => keycode_name::S              ,
+            KeyCode::T              => keycode_name::T              ,
+            KeyCode::U              => keycode_name::U              ,
+            KeyCode::V              => keycode_name::V              ,
+            KeyCode::W              => keycode_name::W              ,
+            KeyCode::X              => keycode_name::X              ,
+            KeyCode::Y              => keycode_name::Y              ,
+            KeyCode::Z              => keycode_name::Z              ,
+            KeyCode::N0             => keycode_name::N0             ,
+            KeyCode::N1             => keycode_name::N1             ,
+            KeyCode::N2             => keycode_name::N2             ,
+            KeyCode::N3             => keycode_name::N3             ,
+            KeyCode::N4             => keycode_name::N4             ,
+            KeyCode::N5             => keycode_name::N5             ,
+            KeyCode::N6             => keycode_name::N6             ,
+            KeyCode::N7             => keycode_name::N7             ,
+            KeyCode::N8             => keycode_name::N8             ,
+            KeyCode::N9             => keycode_name::N9             ,
+            KeyCode::Semicolon      => keycode_name::SEMICOLON      ,
+            KeyCode::Equals         => keycode_name::EQUALS         ,
+            KeyCode::Comma          => keycode_name::COMMA          ,
+            KeyCode::Hyphen         => keycode_name::HYPHEN         ,
+            KeyCode::Underscore     => keycode_name::UNDERSCORE     ,
+            KeyCode::Period         => keycode_name::PERIOD         ,
+            KeyCode::Slash          => keycode_name::SLASH          ,
+            KeyCode::Backtick       => keycode_name::BACKTICK       ,
+            KeyCode::LBracket       => keycode_name::LBRACKET       ,
+            KeyCode::RBracket       => keycode_name::RBRACKET       ,
+            KeyCode::Backslash      => keycode_name::BACKSLASH      ,
+            KeyCode::Apostrophe     => keycode_name::APOSTROPHE     ,
+            KeyCode::Quote          => keycode_name::QUOTE          ,
+            KeyCode::LParen         => keycode_name::LPAREN         ,
+            KeyCode::RParen         => keycode_name::RPAREN         ,
+            KeyCode::Ampersand      => keycode_name::AMPERSAND      ,
+            KeyCode::Asterisk       => keycode_name::ASTERISK       ,
+            KeyCode::Caret          => keycode_name::CARET          ,
+            KeyCode::Dollar         => keycode_name::DOLLAR         ,
+            KeyCode::Exclamation    => keycode_name::EXCLAMATION    ,
+            KeyCode::Colon          => keycode_name::COLON          ,
+            KeyCode::EAcute         => keycode_name::EACUTE         ,
+            KeyCode::EGrave         => keycode_name::EGRAVE         ,
+            KeyCode::AGrave         => keycode_name::AGRAVE         ,
+            KeyCode::CCedilla       => keycode_name::CCEDILLA       ,
+            KeyCode::Section        => keycode_name::SECTION        ,
+        }
+    }
+
+    pub fn to_input_axis(self) -> InputAxisId {
+        InputAxisId::new(self.as_str().to_onca_string())
+    }
+}             
 
 impl From<KeyCode> for char {
     fn from(key: KeyCode) -> Self {
@@ -729,9 +989,9 @@ impl KeyboardState {
         }
     }
 
-    pub fn is_released(&self, key: KeyCode) -> bool {
+    pub fn is_down(&self, key: KeyCode) -> bool {
         let idx = key as usize;
-        self.released.get(idx)
+        self.down.get(idx)
     }
 }
 
@@ -855,9 +1115,11 @@ impl InputDevice for Keyboard {
                 if change.pressed {
                     state.press(change.key);
                     self.key_timers[key_idx] = change.time;
+                    #[cfg(feature = "raw_input_logging")]
                     log_verbose!(LOG_INPUT_CAT, "{} has been pressed", change.key);
                 } else {
                     state.release(change.key);
+                    #[cfg(feature = "raw_input_logging")]
                     log_verbose!(LOG_INPUT_CAT, "{} has been released", change.key);
                 }
                 processed_buttons.enable(key_idx);
@@ -867,6 +1129,7 @@ impl InputDevice for Keyboard {
                 // Process input
                 if self.has_text_intercept() && change.key.is_text_input_key() {
                     if change.key.is_character_key() {
+                        #[cfg(feature = "raw_input_logging")]
                         log_verbose!(LOG_INPUT_CAT, "Key {} produces a text input `Char` event ({:?}).", change.key, change.chars);
                         for ch in change.chars {
                             if ch == '\0' {
@@ -876,6 +1139,7 @@ impl InputDevice for Keyboard {
                             self.text_input.push(KeyboardTextInput::Char(ch));
                         }
                     } else {
+                        #[cfg(feature = "raw_input_logging")]
                         log_verbose!(LOG_INPUT_CAT, "Key {} produces a text input `Key` event.", change.key);
                         self.text_input.push(KeyboardTextInput::Key(change.key))
                     }
@@ -892,12 +1156,13 @@ impl InputDevice for Keyboard {
         // Handle timers
         for (idx, timer) in self.key_timers.iter_mut().enumerate() {
             if idx != 0 {
-                *timer = (*timer - dt).min(0f32);
+                *timer = (*timer - dt).max(0f32);
 
                 // SAFETY: `idx` is guaranteed to represent a valid mouse button
                 let key = unsafe { KeyCode::from_idx(idx).unwrap_unchecked() };
-                if !state.is_released(key) && *timer == 0f32 {
+                if state.is_down(key) && *timer == 0f32 {
                     state.release(key);
+                    #[cfg(feature = "raw_input_logging")]
                     log_verbose!(LOG_INPUT_CAT, "{} has been released", key);
                 }
             }
@@ -920,7 +1185,6 @@ impl InputDevice for Keyboard {
                                 if ch == '\0' {
                                     break;
                                 }
-    
                                 self.text_input.push(KeyboardTextInput::Char(ch));
                             }
                         } else {
@@ -947,127 +1211,129 @@ impl InputDevice for Keyboard {
 
     fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
         let keycode = match axis_path.as_str() {
-            "Any Key"           => KeyCode::Any,
-            "Shift"             => KeyCode::Shift,
-            "Left Shift"        => KeyCode::LShift,
-            "Right Shift"       => KeyCode::RShift,
-            "Ctrl"              => KeyCode::Ctrl,
-            "Left Ctrl"         => KeyCode::LCtr,
-            "Right Ctrl"        => KeyCode::RCtr,
-            "Alt"               => KeyCode::Alt,
-            "Left Alt"          => KeyCode::LAlt,
-            "Right Alt"         => KeyCode::RAlt,
-            "Left Command"      => KeyCode::LCommand,
-            "Right Command"     => KeyCode::RCommand,
-            "Menu"              => KeyCode::Menu,
-            "Space"             => KeyCode::Space,
-            "Backspace"         => KeyCode::Backspace,
-            "Tab"               => KeyCode::Tab,
-            "Enter"             => KeyCode::Enter,
-            "Escape"            => KeyCode::Escape,
-            "Delete"            => KeyCode::Delete,
-            "Insert"            => KeyCode::Insert,
-            "Home"              => KeyCode::Home,
-            "End"               => KeyCode::End,
-            "Page Down"         => KeyCode::PgDown,
-            "Page Up"           => KeyCode::PgUp,
-            "Print Screen"      => KeyCode::PrintScreen,
-            "Caps Lock"         => KeyCode::CapsLock,
-            "Num Lock"          => KeyCode::NumLock,
-            "Scroll Lock"       => KeyCode::ScrollLock,
-            "Up Arrow"          => KeyCode::Up,
-            "Down Arrow"        => KeyCode::Down,
-            "Left Arrow"        => KeyCode::Left,
-            "Right Arrow"       => KeyCode::Right,
-            "Break"             => KeyCode::Break,
-            "Clear"             => KeyCode::Clear,
-            "F1"                => KeyCode::F1,
-            "F2"                => KeyCode::F2,
-            "F3"                => KeyCode::F3,
-            "F4"                => KeyCode::F4,
-            "F5"                => KeyCode::F5,
-            "F6"                => KeyCode::F6,
-            "F7"                => KeyCode::F7,
-            "F8"                => KeyCode::F8,
-            "F9"                => KeyCode::F9,
-            "F10"               => KeyCode::F10,
-            "F11"               => KeyCode::F11,
-            "F12"               => KeyCode::F12,
-            "Num 0"             => KeyCode::Numpad0,
-            "Num 1"             => KeyCode::Numpad1,
-            "Num 2"             => KeyCode::Numpad2,
-            "Num 3"             => KeyCode::Numpad3,
-            "Num 4"             => KeyCode::Numpad4,
-            "Num 5"             => KeyCode::Numpad5,
-            "Num 6"             => KeyCode::Numpad6,
-            "Num 7"             => KeyCode::Numpad7,
-            "Num 8"             => KeyCode::Numpad8,
-            "Num 9"             => KeyCode::Numpad9,
-            "Num *"             => KeyCode::NumpadMultipy,
-            "Num +"             => KeyCode::NumpadAdd,
-            "Num -"             => KeyCode::NumpadSubtract,
-            "Num ."             => KeyCode::NumpadDecimal,
-            "Num /"             => KeyCode::NumpadDivide,
-            "A"                 => KeyCode::A,
-            "B"                 => KeyCode::B,
-            "C"                 => KeyCode::C,
-            "D"                 => KeyCode::D,
-            "E"                 => KeyCode::E,
-            "F"                 => KeyCode::F,
-            "G"                 => KeyCode::G,
-            "H"                 => KeyCode::H,
-            "I"                 => KeyCode::I,
-            "J"                 => KeyCode::J,
-            "K"                 => KeyCode::K,
-            "L"                 => KeyCode::L,
-            "M"                 => KeyCode::M,
-            "N"                 => KeyCode::N,
-            "O"                 => KeyCode::O,
-            "P"                 => KeyCode::P,
-            "Q"                 => KeyCode::Q,
-            "R"                 => KeyCode::R,
-            "S"                 => KeyCode::S,
-            "T"                 => KeyCode::T,
-            "U"                 => KeyCode::U,
-            "V"                 => KeyCode::V,
-            "W"                 => KeyCode::W,
-            "X"                 => KeyCode::X,
-            "Y"                 => KeyCode::Y,
-            "Z"                 => KeyCode::Z,
-            "0"                 => KeyCode::N0,
-            "1"                 => KeyCode::N1,
-            "2"                 => KeyCode::N2,
-            "3"                 => KeyCode::N3,
-            "4"                 => KeyCode::N4,
-            "5"                 => KeyCode::N5,
-            "6"                 => KeyCode::N6,
-            "7"                 => KeyCode::N7,
-            "8"                 => KeyCode::N8,
-            "9"                 => KeyCode::N9,
-            "Semicolon"         => KeyCode::Semicolon,
-            "Equals"            => KeyCode::Equals,
-            "Comma"             => KeyCode::Comma,
-            "Hyphen"            => KeyCode::Hyphen,
-            "Period"            => KeyCode::Period,
-            "Slash"             => KeyCode::Slash,
-            "Backtick"          => KeyCode::Backtick,
-            "Left Bracket"      => KeyCode::LBracket,
-            "Right Bracket"     => KeyCode::RBracket,
-            "Backslash"         => KeyCode::Backslash,
-            "Apostrophe"        => KeyCode::Apostrophe,
-            "Quote"             => KeyCode::Quote,
-            "Left Parentheses"  => KeyCode::LParen,
-            "Right Parentheses" => KeyCode::RParen,
-            "Ampersand"         => KeyCode::Ampersand,
-            "Caret"             => KeyCode::Caret,
-            "Dollar"            => KeyCode::Dollar,
-            "Exclamation"       => KeyCode::Exclamation,
-            "Colon"             => KeyCode::Colon,
-            "é"                 => KeyCode::EAcute,
-            "è"                 => KeyCode::EGrave,
-            "à"                 => KeyCode::AGrave,
-            "ç"                 => KeyCode::CCedilla,
-            "§"                 => KeyCode::Section,
+            keycode_name::ANY             => KeyCode::Any,
+            keycode_name::SHIFT           => KeyCode::Shift,
+            keycode_name::LSHIFT          => KeyCode::LShift,
+            keycode_name::RSHIFT          => KeyCode::RShift,
+            keycode_name::CTRL            => KeyCode::Ctrl,
+            keycode_name::LCTR            => KeyCode::LCtr,
+            keycode_name::RCTR            => KeyCode::RCtr,
+            keycode_name::ALT             => KeyCode::Alt,
+            keycode_name::LALT            => KeyCode::LAlt,
+            keycode_name::RALT            => KeyCode::RAlt,
+            keycode_name::LCOMMAND        => KeyCode::LCommand,
+            keycode_name::RCOMMAND        => KeyCode::RCommand,
+            keycode_name::MENU            => KeyCode::Menu,
+            keycode_name::SPACE           => KeyCode::Space,
+            keycode_name::BACKSPACE       => KeyCode::Backspace,
+            keycode_name::TAB             => KeyCode::Tab,
+            keycode_name::ENTER           => KeyCode::Enter,
+            keycode_name::ESCAPE          => KeyCode::Escape,
+            keycode_name::DELETE          => KeyCode::Delete,
+            keycode_name::INSERT          => KeyCode::Insert,
+            keycode_name::HOME            => KeyCode::Home,
+            keycode_name::END             => KeyCode::End,
+            keycode_name::PG_DOWN         => KeyCode::PgDown,
+            keycode_name::PG_UP           => KeyCode::PgUp,
+            keycode_name::PRINT_SCREEN    => KeyCode::PrintScreen,
+            keycode_name::CAPS_LOCK       => KeyCode::CapsLock,
+            keycode_name::NUM_LOCK        => KeyCode::NumLock,
+            keycode_name::SCROLL_LOCK     => KeyCode::ScrollLock,
+            keycode_name::UP              => KeyCode::Up,
+            keycode_name::DOWN            => KeyCode::Down,
+            keycode_name::LEFT            => KeyCode::Left,
+            keycode_name::RIGHT           => KeyCode::Right,
+            keycode_name::BREAK           => KeyCode::Break,
+            keycode_name::CLEAR           => KeyCode::Clear,
+            keycode_name::F1              => KeyCode::F1,
+            keycode_name::F2              => KeyCode::F2,
+            keycode_name::F3              => KeyCode::F3,
+            keycode_name::F4              => KeyCode::F4,
+            keycode_name::F5              => KeyCode::F5,
+            keycode_name::F6              => KeyCode::F6,
+            keycode_name::F7              => KeyCode::F7,
+            keycode_name::F8              => KeyCode::F8,
+            keycode_name::F9              => KeyCode::F9,
+            keycode_name::F10             => KeyCode::F10,
+            keycode_name::F11             => KeyCode::F11,
+            keycode_name::F12             => KeyCode::F12,
+            keycode_name::NUMPAD0         => KeyCode::Numpad0,
+            keycode_name::NUMPAD1         => KeyCode::Numpad1,
+            keycode_name::NUMPAD2         => KeyCode::Numpad2,
+            keycode_name::NUMPAD3         => KeyCode::Numpad3,
+            keycode_name::NUMPAD4         => KeyCode::Numpad4,
+            keycode_name::NUMPAD5         => KeyCode::Numpad5,
+            keycode_name::NUMPAD6         => KeyCode::Numpad6,
+            keycode_name::NUMPAD7         => KeyCode::Numpad7,
+            keycode_name::NUMPAD8         => KeyCode::Numpad8,
+            keycode_name::NUMPAD9         => KeyCode::Numpad9,
+            keycode_name::NUMPAD_MULTIPY  => KeyCode::NumpadMultipy,
+            keycode_name::NUMPAD_ADD      => KeyCode::NumpadAdd,
+            keycode_name::NUMPAD_SUBTRACT => KeyCode::NumpadSubtract,
+            keycode_name::NUMPAD_DECIMAL  => KeyCode::NumpadDecimal,
+            keycode_name::NUMPAD_DIVIDE   => KeyCode::NumpadDivide,
+            keycode_name::A               => KeyCode::A,
+            keycode_name::B               => KeyCode::B,
+            keycode_name::C               => KeyCode::C,
+            keycode_name::D               => KeyCode::D,
+            keycode_name::E               => KeyCode::E,
+            keycode_name::F               => KeyCode::F,
+            keycode_name::G               => KeyCode::G,
+            keycode_name::H               => KeyCode::H,
+            keycode_name::I               => KeyCode::I,
+            keycode_name::J               => KeyCode::J,
+            keycode_name::K               => KeyCode::K,
+            keycode_name::L               => KeyCode::L,
+            keycode_name::M               => KeyCode::M,
+            keycode_name::N               => KeyCode::N,
+            keycode_name::O               => KeyCode::O,
+            keycode_name::P               => KeyCode::P,
+            keycode_name::Q               => KeyCode::Q,
+            keycode_name::R               => KeyCode::R,
+            keycode_name::S               => KeyCode::S,
+            keycode_name::T               => KeyCode::T,
+            keycode_name::U               => KeyCode::U,
+            keycode_name::V               => KeyCode::V,
+            keycode_name::W               => KeyCode::W,
+            keycode_name::X               => KeyCode::X,
+            keycode_name::Y               => KeyCode::Y,
+            keycode_name::Z               => KeyCode::Z,
+            keycode_name::N0              => KeyCode::N0,
+            keycode_name::N1              => KeyCode::N1,
+            keycode_name::N2              => KeyCode::N2,
+            keycode_name::N3              => KeyCode::N3,
+            keycode_name::N4              => KeyCode::N4,
+            keycode_name::N5              => KeyCode::N5,
+            keycode_name::N6              => KeyCode::N6,
+            keycode_name::N7              => KeyCode::N7,
+            keycode_name::N8              => KeyCode::N8,
+            keycode_name::N9              => KeyCode::N9,
+            keycode_name::SEMICOLON       => KeyCode::Semicolon,
+            keycode_name::EQUALS          => KeyCode::Equals,
+            keycode_name::COMMA           => KeyCode::Comma,
+            keycode_name::HYPHEN          => KeyCode::Hyphen,
+            keycode_name::UNDERSCORE      => KeyCode::Underscore,
+            keycode_name::PERIOD          => KeyCode::Period,
+            keycode_name::SLASH           => KeyCode::Slash,
+            keycode_name::BACKTICK        => KeyCode::Backtick,
+            keycode_name::LBRACKET        => KeyCode::LBracket,
+            keycode_name::RBRACKET        => KeyCode::RBracket,
+            keycode_name::BACKSLASH       => KeyCode::Backslash,
+            keycode_name::APOSTROPHE      => KeyCode::Apostrophe,
+            keycode_name::QUOTE           => KeyCode::Quote,
+            keycode_name::LPAREN          => KeyCode::LParen,
+            keycode_name::RPAREN          => KeyCode::RParen,
+            keycode_name::AMPERSAND       => KeyCode::Ampersand,
+            keycode_name::ASTERISK        => KeyCode::Asterisk,
+            keycode_name::CARET           => KeyCode::Caret,
+            keycode_name::DOLLAR          => KeyCode::Dollar,
+            keycode_name::EXCLAMATION     => KeyCode::Exclamation,
+            keycode_name::COLON           => KeyCode::Colon,
+            keycode_name::EACUTE          => KeyCode::EAcute,
+            keycode_name::EGRAVE          => KeyCode::EGrave,
+            keycode_name::AGRAVE          => KeyCode::AGrave,
+            keycode_name::CCEDILLA        => KeyCode::CCedilla,
+            keycode_name::SECTION         => KeyCode::Section,
             _ => return None
         };
         Some(AxisValue::Digital(self.get_key_state(keycode).is_down()))
@@ -1075,127 +1341,129 @@ impl InputDevice for Keyboard {
 
     fn get_axes(&self) -> &[InputAxisDefinition] {
         &[
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Any Key"          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Shift"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Shift"       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Shift"      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Ctrl"             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Ctrl"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Ctrl"       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Alt"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Alt"         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Alt"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Command"     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Command"    , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Menu"             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Space"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Backspace"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Tab"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Enter"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Escape"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Delete"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Insert"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Home"             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "End"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Page Down"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Page Up"          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Print Screen"     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Caps Lock"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num Lock"         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Scroll Lock"      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Up Arrow"         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Down Arrow"       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Arrow"       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Arrow"      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Break"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Clear"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F1"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F2"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F3"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F4"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F5"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F6"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F7"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F8"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F9"               , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F10"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F11"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F12"              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 0"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 1"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 2"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 3"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 4"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 5"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 6"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 7"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 8"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num 9"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num *"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num +"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num -"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num ."            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Num /"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "A"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "B"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "C"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "D"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "E"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "F"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "G"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "H"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "I"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "J"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "K"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "L"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "M"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "N"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "O"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "P"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Q"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "R"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "S"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "T"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "U"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "V"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "W"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "X"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Y"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Z"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "0"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "1"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "2"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "3"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "4"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "5"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "6"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "7"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "8"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "9"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Semicolon"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Equals"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Comma"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Hyphen"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Period"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Slash"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Backtick"         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Bracket"     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Bracket"    , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Backslash"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Apostrophe"       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Quote"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Left Parentheses" , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Right Parentheses", axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Ampersand"        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Caret"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Dollar"           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Exclamation"      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "Colon"            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "é"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "è"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "à"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "ç"                , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: "§"                , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ANY            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SHIFT          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LSHIFT         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RSHIFT         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CTRL           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LCTR           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RCTR           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ALT            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LALT           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RALT           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LCOMMAND       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RCOMMAND       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::MENU           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SPACE          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKSPACE      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::TAB            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ENTER          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ESCAPE         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DELETE         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::INSERT         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::HOME           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::END            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PG_DOWN        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PG_UP          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PRINT_SCREEN   , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CAPS_LOCK      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUM_LOCK       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SCROLL_LOCK    , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::UP             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DOWN           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LEFT           , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RIGHT          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BREAK          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CLEAR          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F1             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F2             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F3             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F4             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F5             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F6             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F7             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F8             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F9             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F10            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F11            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F12            , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD0        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD1        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD2        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD3        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD4        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD5        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD6        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD7        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD8        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD9        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_MULTIPY , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_ADD     , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_SUBTRACT, axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_DECIMAL , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_DIVIDE  , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::A              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::B              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::C              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::D              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::E              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::G              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::H              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::I              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::J              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::K              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::L              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::M              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::O              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::P              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Q              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::R              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::S              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::T              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::U              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::V              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::W              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::X              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Y              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Z              , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N0             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N1             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N2             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N3             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N4             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N5             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N6             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N7             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N8             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N9             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SEMICOLON      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EQUALS         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::COMMA          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::HYPHEN         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::UNDERSCORE     , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PERIOD         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SLASH          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKTICK       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LBRACKET       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RBRACKET       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKSLASH      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::APOSTROPHE     , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::QUOTE          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LPAREN         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RPAREN         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::AMPERSAND      , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ASTERISK       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CARET          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DOLLAR         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EXCLAMATION    , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::COLON          , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EACUTE         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EGRAVE         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::AGRAVE         , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CCEDILLA       , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SECTION        , axis_type: AxisType::Digital, can_rebind: true },
         ]
     }
 

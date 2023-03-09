@@ -4,7 +4,7 @@ use onca_core::{
     prelude::*,
     time::DeltaTime,
     sync::Mutex,
-    event_listener::*,
+    event_listener::*, alloc::CoreMemTag,
 };
 use onca_core_macros::flags;
 use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z};
@@ -74,7 +74,7 @@ pub enum Modifier {
 }
 
 impl Modifier {
-    pub fn apply(&mut self, value: AxisValue, dt: DeltaTime) -> AxisValue {
+    fn apply(&mut self, value: AxisValue, dt: DeltaTime) -> AxisValue {
         match self {
             Modifier::Deadzone { lower_bound, upper_bound, deadzone_type } => Self::apply_deadzone(value, *lower_bound, *upper_bound, *deadzone_type),
             Modifier::Negate(x, y, z) => Self::apply_negate(value, *x, *y, *z),
@@ -82,7 +82,6 @@ impl Modifier {
             Modifier::TimeScale(use_dilation) => Self::apply_time_scale(value, dt, *use_dilation),
             Modifier::Custom(custom) => custom.apply(value),
             Modifier::Swizzle(swizzle) => Self::apply_swizzle(value, *swizzle),
-            
         }
     }
 
@@ -194,7 +193,7 @@ pub trait CustomTrigger {
 }
 
 /// Trigger type
-pub enum TriggerData {
+pub enum Trigger {
     /// Trigger when the value passes the given threshold.
     Down(f32),
     /// Trigger when the value passes the given threshold for the first time.
@@ -243,11 +242,13 @@ pub enum TriggerData {
         /// Actuation treshold.
         threshold              : f32
     },
+    /// Chorded trigger (other action needs to be triggered)
+    Chord(AWeak<Mutex<Action>>),
     /// Custom trigger
     Custom(HeapPtr<dyn CustomTrigger>)
 }
 
-impl Clone for TriggerData {
+impl Clone for Trigger {
     fn clone(&self) -> Self {
         match self {
             Self::Down(arg0) => Self::Down(arg0.clone()),
@@ -257,6 +258,7 @@ impl Clone for TriggerData {
             Self::HoldAndRelease { hold_time, time_dilation, threshold } => Self::HoldAndRelease { hold_time: hold_time.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
             Self::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => Self::Pulse { trigger_on_start: trigger_on_start.clone(), interval: interval.clone(), trigger_limit: trigger_limit.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
             Self::Tap { release_time_threshold, time_dilation, threshold } => Self::Tap { release_time_threshold: release_time_threshold.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
+            Self::Chord(action) => Self::Chord(action.clone()),
             Self::Custom(arg0) => Self::Custom(arg0.clone_trigger()),
         }
     }
@@ -387,6 +389,17 @@ pub struct TriggerContext {
     misc        : u32,
 }
 
+impl Default for TriggerContext {
+    fn default() -> Self {
+        Self {
+            prev_value: AxisValue::Digital(false),
+            prev_result: TriggerResult::Idle,
+            timer: 0f32,
+            misc: 0
+        }
+    }
+}
+
 /// Trigger kind
 pub enum TriggerType {
     /// Any explicit trigger needs to be triggered for the action to happen
@@ -399,49 +412,51 @@ pub enum TriggerType {
 
 /// Trigger
 #[derive(Clone)]
-pub struct Trigger {
-    trigger_data : TriggerData,
+pub struct TriggerData {
+    trigger : Trigger,
     context      : TriggerContext,
 }
 
-impl Trigger {
+impl TriggerData {
     /// Checks if the trigger has been triggered
-    pub fn check(&mut self, value: AxisValue, dt: DeltaTime) -> TriggerResult {
-        let res = match &mut self.trigger_data {
-            TriggerData::Down(threshold) => Self::check_down(value, *threshold),
-            TriggerData::Pressed(threshold) => Self::check_pressed(self.context.prev_value, value, *threshold),
-            TriggerData::Released(threshold) => Self::check_released(self.context.prev_value, value, *threshold),
-            TriggerData::Hold { hold_time, one_shot, time_dilation: time_dialation, threshold } => Self::check_hold(&mut self.context, value, dt, *hold_time, *one_shot, *time_dialation, *threshold),
-            TriggerData::HoldAndRelease { hold_time, time_dilation: time_dialation, threshold } => Self::check_hold_and_release(&mut self.context, value, dt, *hold_time, *time_dialation, *threshold),
-            TriggerData::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => 
+    fn check(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext) -> TriggerResult {
+        let res = match &mut self.trigger {
+            Trigger::Down(threshold) => Self::check_down(value, *threshold),
+            Trigger::Pressed(threshold) => Self::check_pressed(self.context.prev_value, value, *threshold),
+            Trigger::Released(threshold) => Self::check_released(self.context.prev_value, value, *threshold),
+            Trigger::Hold { hold_time, one_shot, time_dilation: time_dialation, threshold } => Self::check_hold(&mut self.context, value, dt, *hold_time, *one_shot, *time_dialation, *threshold),
+            Trigger::HoldAndRelease { hold_time, time_dilation: time_dialation, threshold } => Self::check_hold_and_release(&mut self.context, value, dt, *hold_time, *time_dialation, *threshold),
+            Trigger::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => 
                 Self::check_pulse(&mut self.context, value, dt, *trigger_on_start, *interval, *trigger_limit, *time_dilation, *threshold),
-            TriggerData::Tap { release_time_threshold, time_dilation, threshold } => Self::check_tap(&mut self.context, value, dt, *release_time_threshold, *time_dilation, *threshold),
-            TriggerData::Custom(custom) => custom.check(value, &mut self.context),
+            Trigger::Tap { release_time_threshold, time_dilation, threshold } => Self::check_tap(&mut self.context, value, dt, *release_time_threshold, *time_dilation, *threshold),
+            Trigger::Chord(chorded_action) => if context.triggered_actions.iter().find(|action| Arc::weak_ptr_eq(&action, chorded_action)).is_some() { TriggerResult::Triggered } else { TriggerResult::Idle },
+            Trigger::Custom(custom) => custom.check(value, &mut self.context),
         };
         self.context.prev_value = value;
         self.context.prev_result = res;
         res
     }
 
-    pub fn trigger_type(&self) -> TriggerType {
-        match &self.trigger_data {
-            TriggerData::Down(_) => TriggerType::Explicit,
-            TriggerData::Pressed(_) => TriggerType::Explicit,
-            TriggerData::Released(_) => TriggerType::Explicit,
-            TriggerData::Hold { .. } => TriggerType::Explicit,
-            TriggerData::HoldAndRelease { .. } => TriggerType::Explicit,
-            TriggerData::Pulse { .. } => TriggerType::Explicit,
-            TriggerData::Tap { .. } => TriggerType::Explicit,
-            TriggerData::Custom(custom) => custom.trigger_type(),
+    fn trigger_type(&self) -> TriggerType {
+        match &self.trigger {
+            Trigger::Down(_)               => TriggerType::Explicit,
+            Trigger::Pressed(_)            => TriggerType::Explicit,
+            Trigger::Released(_)           => TriggerType::Explicit,
+            Trigger::Hold { .. }           => TriggerType::Explicit,
+            Trigger::HoldAndRelease { .. } => TriggerType::Explicit,
+            Trigger::Pulse { .. }          => TriggerType::Explicit,
+            Trigger::Tap { .. }            => TriggerType::Explicit,
+            Trigger::Chord(_)              => TriggerType::Implicit,
+            Trigger::Custom(custom)        => custom.trigger_type(),
         }
     }
 
     fn check_down(value: AxisValue, threshold: f32) -> TriggerResult {
         match value {
             AxisValue::Digital(val) => if val { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis(val) => if val > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis2D(val) => if val.x > threshold || val.y > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis3D(val) => if val.x > threshold || val.y > threshold || val.z > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis(val)    => if val > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis2D(val)  => if val.x > threshold || val.y > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis3D(val)  => if val.x > threshold || val.y > threshold || val.z > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
         }
     }
 
@@ -449,18 +464,16 @@ impl Trigger {
         Self::check_down(value, threshold) == TriggerResult::Triggered
     }
 
-    fn check_pressed(value: AxisValue, prev_value: AxisValue, threshold: f32) -> TriggerResult {
-        if !Self::is_down(prev_value, threshold) && Self::is_down(value, threshold)
-        {
+    fn check_pressed(prev_value: AxisValue, value: AxisValue, threshold: f32) -> TriggerResult {
+        if !Self::is_down(prev_value, threshold) && Self::is_down(value, threshold) {
             TriggerResult::Triggered
         } else {
             TriggerResult::Idle
         }
     }
 
-    fn check_released(value: AxisValue, prev_value: AxisValue, threshold: f32) -> TriggerResult {
-        if Self::is_down(prev_value, threshold) && !Self::is_down(value, threshold)
-        {
+    fn check_released(prev_value: AxisValue, value: AxisValue, threshold: f32) -> TriggerResult {
+        if Self::is_down(prev_value, threshold) && !Self::is_down(value, threshold) {
             TriggerResult::Triggered
         } else {
             TriggerResult::Idle
@@ -519,6 +532,7 @@ impl Trigger {
             }
 
             if ctx.prev_result == TriggerResult::Idle && trigger_on_start {
+                ctx.misc += 1;
                 TriggerResult::Triggered
             } else {
                 TriggerResult::Ongoing
@@ -533,16 +547,24 @@ impl Trigger {
     fn check_tap(ctx: &mut TriggerContext, value: AxisValue, dt: DeltaTime, release_time_threshold: f32, time_dilation: bool, threshold: f32) -> TriggerResult {
         if Self::is_down(value, threshold) {
             ctx.timer += dt.get(time_dilation);
+            ctx.misc = 1;
             TriggerResult::Ongoing
         } else {
-            let res = if ctx.timer <= release_time_threshold {
+            let res = if ctx.misc == 1 && ctx.timer <= release_time_threshold {
                 TriggerResult::Triggered
             } else {
                 TriggerResult::Idle
             };
             ctx.timer = 0f32;
+            ctx.misc = 0;
             res
         }
+    }
+}
+
+impl From<Trigger> for TriggerData {
+    fn from(trigger: Trigger) -> Self {
+        Self { trigger, context: TriggerContext::default() }
     }
 }
 
@@ -567,7 +589,7 @@ pub struct Action {
     /// 
     /// These triggers are used to instantiate the mapping specific triggers and are not use themselves
     // TODO: Have these associated to the action only when in its asset?
-    pub triggers            : DynArray<Trigger>,
+    pub triggers            : DynArray<TriggerData>,
     /// Modifiers that apply to all mappings for this action. (Modifiers will be applied after the mapping specific modifiers have been applied)
     /// 
     /// These modifiers are used to instantiate the mapping specific triggers and are not use themselves
@@ -578,8 +600,33 @@ pub struct Action {
 }
 
 impl Action {
+    pub fn new(consume_input: bool, trigger_when_paused: bool, axis_type: AxisType) -> Self {
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+        Self {
+            description: (),
+            consume_input,
+            trigger_when_paused,
+            axis_type,
+            triggers: DynArray::new(),
+            modifiers: DynArray::new(),
+            listeners: DynEventListenerArray::new()
+        }
+    }
+
+    pub fn add_trigger(&mut self, trigger: Trigger) {
+        self.triggers.push(trigger.into());
+    }
+
+    pub fn add_modifier(&mut self, modifier: Modifier) {
+        self.modifiers.push(modifier);
+    }
+
+    pub fn add_listener(&mut self, listener: DynEventListenerRef<(TriggerState, AxisValue, u8)>) {
+        self.listeners.push(listener);
+    }
+
     pub fn dispatch(&mut self, trigger_res: TriggerState, value: AxisValue, user_idx: u8) {
-        self.listeners.notify(&(trigger_res, value, user_idx));
+        self.listeners.notify(&(trigger_res, value.convert_to(self.axis_type), user_idx));
     }
 }
 
@@ -601,7 +648,7 @@ pub struct Binding {
     /// Input axis that the binding is bound to.
     pub input_axis     : InputAxisId,
     /// Binding specific triggers
-    pub triggers       : DynArray<Trigger>,
+    pub triggers       : DynArray<TriggerData>,
     /// Binding specific modifiers
     pub modifiers      : DynArray<Modifier>,
     /// Binding rebind options
@@ -609,16 +656,34 @@ pub struct Binding {
 }
 
 impl Binding {
-    pub fn apply_modifiers(&mut self, value: &mut AxisValue, dt: DeltaTime) {
+    pub fn new(input_axis: InputAxisId) -> Self {
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+        Self {
+            input_axis,
+            triggers: DynArray::new(),
+            modifiers: DynArray::new(),
+            rebind_options: None
+        }
+    }
+
+    pub fn add_trigger(&mut self, trigger: Trigger) {
+        self.triggers.push(trigger.into());
+    }
+
+    pub fn add_modifier(&mut self, modifier: Modifier) {
+        self.modifiers.push(modifier);
+    }
+
+    pub(crate) fn apply_modifiers(&mut self, value: &mut AxisValue, dt: DeltaTime) {
         for modifier in &mut self.modifiers {
             *value = modifier.apply(*value, dt);
         }
     }
 
-    pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, final_res: &mut FinalTriggerResult) {
+    pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext, final_res: &mut FinalTriggerResult) {
         for trigger in &mut self.triggers {
             let trigger_type = trigger.trigger_type();
-            let res = trigger.check(value, dt);
+            let res = trigger.check(value, dt, context);
             final_res.update(trigger_type, res);
         }
     }
@@ -629,24 +694,47 @@ pub struct Mapping {
     /// Input action associated with this binding
     pub action    : Arc<Mutex<Action>>,
     /// Instance of the action triggers that will actually be used
-    pub triggers  : DynArray<Trigger>,
+    pub triggers  : DynArray<TriggerData>,
     /// Instance of the action triggers that will actually be used
     pub modifiers : DynArray<Modifier>,
     /// Input 
-    pub bindings  : DynArray<HeapPtr<Binding>>,
+    pub bindings  : DynArray<Binding>,
 }
 
 impl Mapping {
-    pub fn apply_modifiers(&mut self, value: &mut AxisValue, dt: DeltaTime) {
+    pub fn new(action: Arc<Mutex<Action>>) -> Self {
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+
+        let (triggers, modifiers) = {
+            let action = action.lock();
+            (action.triggers.clone(), action.modifiers.clone())
+        };
+
+        Self { action, triggers, modifiers, bindings: DynArray::new() }
+    }
+
+    pub fn set_action(&mut self, action: Arc<Mutex<Action>>) {
+        self.action = action;
+
+        let action = self.action.lock();
+        self.triggers = action.triggers.clone();
+        self.modifiers = action.modifiers.clone();
+    }
+
+    pub fn add_binding(&mut self, binding: Binding) {
+        self.bindings.push(binding);
+    }
+
+    pub(crate) fn apply_modifiers(&mut self, value: &mut AxisValue, dt: DeltaTime) {
         for modifier in &mut self.modifiers {
             *value = modifier.apply(*value, dt);
         }
     }
 
-    pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, final_res: &mut FinalTriggerResult) {
+    pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext, final_res: &mut FinalTriggerResult) {
         for trigger in &mut self.triggers {
             let trigger_type = trigger.trigger_type();
-            let res = trigger.check(value, dt);
+            let res = trigger.check(value, dt, context);
             final_res.update(trigger_type, res);
         }
     }
@@ -672,7 +760,7 @@ impl Mapping {
 
             let mut binding_value = get_input(user, &binding.input_axis);
             binding.apply_modifiers(&mut binding_value, dt);
-            binding.process_triggers(binding_value, dt, &mut trigger_res);
+            binding.process_triggers(binding_value, dt, context, &mut trigger_res);
 
             value = value + binding_value;
 
@@ -682,12 +770,17 @@ impl Mapping {
         }
 
         self.apply_modifiers(&mut value, dt);
-        self.process_triggers(value, dt, &mut trigger_res);
+        self.process_triggers(value, dt, context, &mut trigger_res);
 
         let result = trigger_res.to_result();
         let prev_res = user.get_previous_action_trigger_result(&self.action);
-
-        self.action.lock().dispatch(TriggerState::from_results(prev_res, result), value, user_idx);
+        context.trigger_states.push((Arc::downgrade(&self.action), result));
+        
+        let trigger_state = TriggerState::from_results(prev_res, result);
+        // Only notify if the state is not idle
+        if trigger_state != TriggerState::Idle {
+            self.action.lock().dispatch(trigger_state, value, user_idx);
+        }
         context.processed_actions.push(self.action.clone());
 
         if result == TriggerResult::Triggered {
@@ -704,16 +797,6 @@ impl Mapping {
     }
 }
 
-impl Mapping {
-    pub fn set_action(&mut self, action: Arc<Mutex<Action>>) {
-        self.action = action;
-
-        let action = self.action.lock();
-        self.triggers = action.triggers.clone();
-        self.modifiers = action.modifiers.clone();
-    }
-}
-
 #[derive(Clone)]
 pub struct MappingContext {
     /// Localized description of this mapping context
@@ -727,6 +810,15 @@ pub struct MappingContext {
 }
 
 impl MappingContext {
+    pub fn new(identifier: String) -> Self {
+        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
+        Self { description: (), identifier, mappings: DynArray::new() }
+    }
+
+    pub fn add_mapping(&mut self, mapping: Mapping) {
+        self.mappings.push(mapping);
+    }
+
     pub(crate) fn rebind(&mut self, binding_name: &str, input: InputAxisId) {
         for mapping in &mut self.mappings {
             mapping.rebind(binding_name, input.clone());
