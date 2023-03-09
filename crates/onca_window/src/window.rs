@@ -5,7 +5,7 @@ use crate::{
 use core::fmt;
 use onca_core::{
     alloc::ScopedAlloc,
-    event_listener::{EventListenerArray, EventListenerRef, EventListener, self},
+    event_listener::{EventListenerArray, EventListenerRef, EventListener},
     mem::HeapPtr,
     prelude::*,
     sync::Mutex,
