@@ -41,8 +41,16 @@
         </Expand>
     </Type>
 
+    <Type Name="onca_core::stirng::interned_string::StringId">
+        <DisplayString>StringId({id})</DisplayString>
+        <Expand>
+            <Item Name="Id">id</Item>
+        </Expand>
+    </Type>
+
     <Type Name="onca_core::strings::interned_string::InternedString">
-        <DisplayString>{id}</DisplayString>
+        <DisplayString>{id}: {cached,s8}</DisplayString>
+        <StringView>cached,s8</StringView>
         <Expand>
             <Item Name="Id">id</Item>
         </Expand>

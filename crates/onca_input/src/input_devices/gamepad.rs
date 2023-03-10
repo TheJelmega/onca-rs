@@ -339,29 +339,29 @@ impl Gamepad {
     pub const LEFT_TRIGGER_STR           : &str = "Gamepad Left Trigger";
     pub const RIGHT_TRIGGER_STR          : &str = "Gamepad Right Trigger";
 
-    pub const LEFT_THUMB         : InputAxisId = InputAxisId::const_new(Self::LEFT_THUMB_STR        );
-    pub const LEFT_THUMB_X       : InputAxisId = InputAxisId::const_new(Self::LEFT_THUMB_X_STR      );
-    pub const LEFT_THUMB_Y       : InputAxisId = InputAxisId::const_new(Self::LEFT_THUMB_Y_STR      );
-    pub const LEFT_THUMB_BUTTON  : InputAxisId = InputAxisId::const_new(Self::LEFT_THUMB_BUTTON_STR );
-    pub const RIGHT_THUMB        : InputAxisId = InputAxisId::const_new(Self::RIGHT_THUMB_STR       );
-    pub const RIGHT_THUMB_X      : InputAxisId = InputAxisId::const_new(Self::RIGHT_THUMB_X_STR     );
-    pub const RIGHT_THUMB_Y      : InputAxisId = InputAxisId::const_new(Self::RIGHT_THUMB_Y_STR     );
-    pub const RIGHT_THUMB_BUTTON : InputAxisId = InputAxisId::const_new(Self::RIGHT_THUMB_BUTTON_STR);
-    pub const DPAD_DIR           : InputAxisId = InputAxisId::const_new(Self::DPAD_DIR_STR          );
-    pub const DPAD_UP            : InputAxisId = InputAxisId::const_new(Self::DPAD_UP_STR           );
-    pub const DPAD_DOWN          : InputAxisId = InputAxisId::const_new(Self::DPAD_DOWN_STR         );
-    pub const DPAD_LEFT          : InputAxisId = InputAxisId::const_new(Self::DPAD_LEFT_STR         );
-    pub const DPAD_RIGHT         : InputAxisId = InputAxisId::const_new(Self::DPAD_RIGHT_STR        );
-    pub const FACE_BOTTOM        : InputAxisId = InputAxisId::const_new(Self::FACE_BOTTOM_STR       );
-    pub const FACE_RIGHT         : InputAxisId = InputAxisId::const_new(Self::FACE_RIGHT_STR        );
-    pub const FACE_LEFT          : InputAxisId = InputAxisId::const_new(Self::FACE_LEFT_STR         );
-    pub const FACE_UP            : InputAxisId = InputAxisId::const_new(Self::FACE_UP_STR           );
-    pub const LEFT_SPECIAL       : InputAxisId = InputAxisId::const_new(Self::LEFT_SPECIAL_STR      );
-    pub const RIGHT_SPECIAL      : InputAxisId = InputAxisId::const_new(Self::RIGHT_SPECIAL_STR     );
-    pub const LEFT_BUMPER        : InputAxisId = InputAxisId::const_new(Self::LEFT_BUMPER_STR       );
-    pub const RIGHT_BUMPER       : InputAxisId = InputAxisId::const_new(Self::RIGHT_BUMPER_STR      );
-    pub const LEFT_TRIGGER       : InputAxisId = InputAxisId::const_new(Self::LEFT_TRIGGER_STR      );
-    pub const RIGHT_TRIGGER      : InputAxisId = InputAxisId::const_new(Self::RIGHT_TRIGGER_STR     );
+    pub const LEFT_THUMB         : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_STR        );
+    pub const LEFT_THUMB_X       : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_X_STR      );
+    pub const LEFT_THUMB_Y       : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_Y_STR      );
+    pub const LEFT_THUMB_BUTTON  : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_BUTTON_STR );
+    pub const RIGHT_THUMB        : InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_STR       );
+    pub const RIGHT_THUMB_X      : InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_X_STR     );
+    pub const RIGHT_THUMB_Y      : InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_Y_STR     );
+    pub const RIGHT_THUMB_BUTTON : InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_BUTTON_STR);
+    pub const DPAD_DIR           : InputAxisId = InputAxisId::new(Self::DPAD_DIR_STR          );
+    pub const DPAD_UP            : InputAxisId = InputAxisId::new(Self::DPAD_UP_STR           );
+    pub const DPAD_DOWN          : InputAxisId = InputAxisId::new(Self::DPAD_DOWN_STR         );
+    pub const DPAD_LEFT          : InputAxisId = InputAxisId::new(Self::DPAD_LEFT_STR         );
+    pub const DPAD_RIGHT         : InputAxisId = InputAxisId::new(Self::DPAD_RIGHT_STR        );
+    pub const FACE_BOTTOM        : InputAxisId = InputAxisId::new(Self::FACE_BOTTOM_STR       );
+    pub const FACE_RIGHT         : InputAxisId = InputAxisId::new(Self::FACE_RIGHT_STR        );
+    pub const FACE_LEFT          : InputAxisId = InputAxisId::new(Self::FACE_LEFT_STR         );
+    pub const FACE_UP            : InputAxisId = InputAxisId::new(Self::FACE_UP_STR           );
+    pub const LEFT_SPECIAL       : InputAxisId = InputAxisId::new(Self::LEFT_SPECIAL_STR      );
+    pub const RIGHT_SPECIAL      : InputAxisId = InputAxisId::new(Self::RIGHT_SPECIAL_STR     );
+    pub const LEFT_BUMPER        : InputAxisId = InputAxisId::new(Self::LEFT_BUMPER_STR       );
+    pub const RIGHT_BUMPER       : InputAxisId = InputAxisId::new(Self::RIGHT_BUMPER_STR      );
+    pub const LEFT_TRIGGER       : InputAxisId = InputAxisId::new(Self::LEFT_TRIGGER_STR      );
+    pub const RIGHT_TRIGGER      : InputAxisId = InputAxisId::new(Self::RIGHT_TRIGGER_STR     );
 
     pub fn new() -> Option<Gamepad> {
         Some(Self {

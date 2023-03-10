@@ -20,20 +20,15 @@ impl StringId {
 
 /// Interned string
 /// 
-/// String cannot be displayed in debugger, as it only points to a string, it isn't a string itself
+/// When in debug, the `InternedString` has an internal cached pointer to show the current text in the debugger (may not be the correct lenght)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct InternedString {
     id : StringId,
+    #[cfg(debug_assertions)]
+    cached : *const u8
 }
 
 impl InternedString {
-    /// Create a constant interned string
-    /// 
-    /// When in debug, the interned string will not have any debug value cached
-    pub const fn const_new(s: &str) -> Self {
-        Self { id: StringId::new(s) }
-    }
-
     /// Create an interned string
     pub fn new(s: &str) -> Self {
         let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
@@ -41,14 +36,24 @@ impl InternedString {
         let id = StringId::new(s);
         let _cached = INTERNED_STRING_MANAGER.register_string(s, id);
 
-        Self { id }
+        Self {
+            id,
+            #[cfg(debug_assertions)]
+            cached: _cached,
+        }
     }
 
     /// Create an interned string
     /// 
     /// When in debug, no value will be cached if the string has not yet been added to the interned string manager
     pub fn from_raw_id(id: StringId) -> Self {
-        Self { id }
+        #[cfg(debug_assertions)]
+        let cached = INTERNED_STRING_MANAGER.get_cached(id);
+        Self {
+            id,
+            #[cfg(debug_assertions)]
+            cached
+        }
     }
 
     /// Get the string that is stored in the InternedString
@@ -121,6 +126,11 @@ impl InternedStringManager {
         let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
         let strings = self.strings.lock();
         strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_onca_string()))
+    }
+
+    fn get_cached(&self, id: StringId) -> *const u8 {
+        let strings = self.strings.lock();
+        strings.as_ref().map_or(null(), |data| data.get(&id).map_or(null(), |s| s.as_ptr()))
     }
 }
 

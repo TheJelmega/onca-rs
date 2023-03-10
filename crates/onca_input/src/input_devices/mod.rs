@@ -80,23 +80,19 @@ impl DeviceType {
 /// Input axis id
 // TODO: Interned string
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct InputAxisId(InternedString);
+pub struct InputAxisId(StringId);
 
 impl InputAxisId {
-    pub const fn const_new(path: &str) -> Self {
-        Self(InternedString::const_new(path))
-    }
-
-    pub fn new(path: &str) -> Self {
-        Self(InternedString::new(path))
+    pub const fn new(path: &str) -> Self {
+        Self(StringId::new(path))
     }
 
     pub fn id(&self) -> StringId {
-        self.0.id()
+        self.0
     }
 
     pub fn as_string(&self) -> String {
-        self.0.get()
+        InternedString::from_raw_id(self.0).get()
     }
 }
 

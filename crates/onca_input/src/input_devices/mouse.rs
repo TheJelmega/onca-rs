@@ -165,20 +165,20 @@ impl Mouse {
     pub const SIDE0_BUTTON_STR  : &str = "Mouse Side Button0";
     pub const SIDE1_BUTTON_STR  : &str = "Mouse Side Button1";
 
-    pub const XY            : InputAxisId = InputAxisId::const_new(Self::XY_STR           );
-    pub const X             : InputAxisId = InputAxisId::const_new(Self::X_STR            );
-    pub const Y             : InputAxisId = InputAxisId::const_new(Self::Y_STR            );
-    pub const WHEEL         : InputAxisId = InputAxisId::const_new(Self::WHEEL_STR        );
-    pub const WHEEL_UP      : InputAxisId = InputAxisId::const_new(Self::WHEEL_UP_STR     );
-    pub const WHEEL_DOWN    : InputAxisId = InputAxisId::const_new(Self::WHEEL_DOWN_STR   );
-    pub const HWHEEL        : InputAxisId = InputAxisId::const_new(Self::HWHEEL_STR       );
-    pub const HWHEEL_LEFT   : InputAxisId = InputAxisId::const_new(Self::HWHEEL_LEFT_STR  );
-    pub const HWHEEL_RIGHT  : InputAxisId = InputAxisId::const_new(Self::HWHEEL_RIGHT_STR );
-    pub const LEFT_BUTTON   : InputAxisId = InputAxisId::const_new(Self::LEFT_BUTTON_STR  );
-    pub const MIDDLE_BUTTON : InputAxisId = InputAxisId::const_new(Self::MIDDLE_BUTTON_STR);
-    pub const RIGHT_BUTTON  : InputAxisId = InputAxisId::const_new(Self::RIGHT_BUTTON_STR );
-    pub const SIDE0_BUTTON  : InputAxisId = InputAxisId::const_new(Self::SIDE0_BUTTON_STR );
-    pub const SIDE1_BUTTON  : InputAxisId = InputAxisId::const_new(Self::SIDE1_BUTTON_STR );
+    pub const XY            : InputAxisId = InputAxisId::new(Self::XY_STR           );
+    pub const X             : InputAxisId = InputAxisId::new(Self::X_STR            );
+    pub const Y             : InputAxisId = InputAxisId::new(Self::Y_STR            );
+    pub const WHEEL         : InputAxisId = InputAxisId::new(Self::WHEEL_STR        );
+    pub const WHEEL_UP      : InputAxisId = InputAxisId::new(Self::WHEEL_UP_STR     );
+    pub const WHEEL_DOWN    : InputAxisId = InputAxisId::new(Self::WHEEL_DOWN_STR   );
+    pub const HWHEEL        : InputAxisId = InputAxisId::new(Self::HWHEEL_STR       );
+    pub const HWHEEL_LEFT   : InputAxisId = InputAxisId::new(Self::HWHEEL_LEFT_STR  );
+    pub const HWHEEL_RIGHT  : InputAxisId = InputAxisId::new(Self::HWHEEL_RIGHT_STR );
+    pub const LEFT_BUTTON   : InputAxisId = InputAxisId::new(Self::LEFT_BUTTON_STR  );
+    pub const MIDDLE_BUTTON : InputAxisId = InputAxisId::new(Self::MIDDLE_BUTTON_STR);
+    pub const RIGHT_BUTTON  : InputAxisId = InputAxisId::new(Self::RIGHT_BUTTON_STR );
+    pub const SIDE0_BUTTON  : InputAxisId = InputAxisId::new(Self::SIDE0_BUTTON_STR );
+    pub const SIDE1_BUTTON  : InputAxisId = InputAxisId::new(Self::SIDE1_BUTTON_STR );
     /// Create a new mouse.
     pub fn new() -> Option<Self> {
         os::OSMouse::new().map(|os_mouse| Self {
