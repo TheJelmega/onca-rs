@@ -1,4 +1,8 @@
-use core::{cell::Cell, ptr::null};
+use core::{
+    ptr::null,
+    hash::{Hash, Hasher},
+    fmt,
+};
 
 use cfg_if::cfg_if;
 use crate::{hashing, collections::HashMap, sync::Mutex, prelude::ScopedMemTag, alloc::CoreMemTag};
@@ -17,7 +21,7 @@ impl StringId {
 /// Interned string
 /// 
 /// When in debug, the string is cached for debugging purposes
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq)]
 pub struct InternedString {
     id     : StringId,
     /// Cached pointer to string data, only used to visualize in debugger
@@ -57,6 +61,34 @@ impl InternedString {
     /// When in debug, the cached string will also be updated if it is currently `None`
     pub fn get(&self) -> String {
         INTERNED_STRING_MANAGER.get_string(self.id).unwrap_or_default()
+    }
+}
+
+impl PartialEq for InternedString {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl fmt::Debug for InternedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InternedString")
+            .field("id", &self.id)
+            .field("string", &format_args!("{}", INTERNED_STRING_MANAGER.get_string(self.id).as_ref().map_or("", |s| s.as_str())))
+        .finish()
+    }
+}
+
+impl fmt::Display for InternedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // We don't use .get() here to avoid making a copy of the string when we don't need to
+        f.write_str(INTERNED_STRING_MANAGER.get_string(self.id).as_ref().map_or("", |s| s.as_str()))
+    }
+}
+
+impl Hash for InternedString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
