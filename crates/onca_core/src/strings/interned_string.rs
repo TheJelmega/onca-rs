@@ -20,17 +20,20 @@ impl StringId {
 
 /// Interned string
 /// 
-/// When in debug, the string is cached for debugging purposes
-#[derive(Clone, Copy, Eq)]
+/// String cannot be displayed in debugger, as it only points to a string, it isn't a string itself
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct InternedString {
-    id     : StringId,
-    /// Cached pointer to string data, only used to visualize in debugger
-    // SAFETY: This pointer is not accessable anywhere and is solely used for debugging purposes
-    #[cfg(debug_assertions)]
-    cached : *const u8,
+    id : StringId,
 }
 
 impl InternedString {
+    /// Create a constant interned string
+    /// 
+    /// When in debug, the interned string will not have any debug value cached
+    pub const fn const_new(s: &str) -> Self {
+        Self { id: StringId::new(s) }
+    }
+
     /// Create an interned string
     pub fn new(s: &str) -> Self {
         let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
@@ -38,22 +41,14 @@ impl InternedString {
         let id = StringId::new(s);
         let _cached = INTERNED_STRING_MANAGER.register_string(s, id);
 
-        Self {
-            id: id,
-            #[cfg(debug_assertions)]
-            cached: _cached
-        }
+        Self { id }
     }
 
     /// Create an interned string
     /// 
     /// When in debug, no value will be cached if the string has not yet been added to the interned string manager
     pub fn from_raw_id(id: StringId) -> Self {
-        Self {
-            id,
-            #[cfg(debug_assertions)]
-            cached: INTERNED_STRING_MANAGER.get_cached(id)
-        }
+        Self { id }
     }
 
     /// Get the string that is stored in the InternedString
@@ -62,11 +57,10 @@ impl InternedString {
     pub fn get(&self) -> String {
         INTERNED_STRING_MANAGER.get_string(self.id).unwrap_or_default()
     }
-}
 
-impl PartialEq for InternedString {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+    /// Get the underlying string id
+    pub fn id(&self) -> StringId {
+        self.id
     }
 }
 
@@ -127,12 +121,6 @@ impl InternedStringManager {
         let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
         let strings = self.strings.lock();
         strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_onca_string()))
-    }
-
-    #[cfg(debug_assertions)]
-    fn get_cached(&self, id: StringId) -> *const u8 {
-        let strings = self.strings.lock();
-        strings.as_ref().map_or(null(), |data| data.get(&id).map_or(null(), |s| s.as_ptr()))
     }
 }
 

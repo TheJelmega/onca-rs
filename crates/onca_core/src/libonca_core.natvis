@@ -42,8 +42,7 @@
     </Type>
 
     <Type Name="onca_core::strings::interned_string::InternedString">
-        <DisplayString>{cached,s8}</DisplayString>
-        <StringView>cached,s8</StringView>
+        <DisplayString>{id}</DisplayString>
         <Expand>
             <Item Name="Id">id</Item>
         </Expand>
