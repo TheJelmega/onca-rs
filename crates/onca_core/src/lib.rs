@@ -63,6 +63,7 @@ pub mod time;
 pub mod sys;
 
 pub mod utils;
+pub mod hashing;
 
 pub mod event_listener;
 

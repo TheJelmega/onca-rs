@@ -312,6 +312,7 @@ pub enum CoreMemTag {
     TlsTempAlloc,
     Callbacks,
     EventListeners,
+    InternedString,
 
     /// External predefined tags
     Terminal,
@@ -369,7 +370,13 @@ impl CoreMemTag {
     pub fn event_listeners() -> MemTag {
         CoreMemTag::EventListeners.create_tag()
     }
-    
+
+    /// Create a interned string mem tag
+    #[inline]
+    pub fn interned_string() -> MemTag {
+        CoreMemTag::InternedString.create_tag()
+    }
+
     /// Create a terminal memtag
     #[inline]
     pub fn terminal() -> MemTag {
