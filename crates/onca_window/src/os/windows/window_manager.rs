@@ -1,4 +1,4 @@
-use core::{mem, ptr};
+use core::mem;
 use onca_core::{
     prelude::*,
     collections::HashMap,
@@ -6,7 +6,7 @@ use onca_core::{
     sys::get_app_handle,
 };
 
-use onca_logging::{log_error, log_debug, log_info};
+use onca_logging::{log_error, log_debug};
 use windows::{
     Win32::{
         UI::{
@@ -17,8 +17,8 @@ use windows::{
                 PM_REMOVE, 
             },
         },
-        Foundation::{WPARAM, LPARAM, HWND, LRESULT, GetLastError, OLE_E_WRONGCOMPOBJ, RPC_E_CHANGED_MODE},
-        Graphics::Gdi::{COLOR_BACKGROUND, HBRUSH}, System::Ole::{OleInitialize, OleUninitialize}
+        Foundation::{WPARAM, LPARAM, HWND, LRESULT, GetLastError},
+        Graphics::Gdi::{COLOR_BACKGROUND, HBRUSH}
     },
     core::PCSTR
 };
@@ -38,27 +38,6 @@ pub(crate) struct WindowManagerData {
 
 impl WindowManagerData {
     pub(crate) fn new() -> Self {
-        // TODO: move to system initialization
-        // Setup OLE
-        unsafe {
-            let ole_res = OleInitialize(ptr::null_mut());
-            match ole_res {
-                Ok(_) => log_info!(LOG_CAT, "Windows OLE has been initialized"),
-                Err(err) => {
-                    let err_code = err.code();
-                    match err_code {
-                        OLE_E_WRONGCOMPOBJ => {
-                            log_error!(LOG_CAT, Self::new, "COMPOBJ.DLL and OLE2.DLL are incompatible (err: OLE_E_WRONGCOMPOBJ)");
-                        },
-                        RPC_E_CHANGED_MODE => {
-                            log_error!(LOG_CAT, Self::new, "Trying to initialize OLE which already initialized COM to be multi-threaded. OLE requires STA (Single Threaded Apartments). (err: RPC_E_CHANGED_MODE)");
-                        }
-                        _ => {}
-                    }
-                },
-            }
-        }
-
         Self { wnd_classes: HashMap::new() }
     }
 
@@ -118,15 +97,6 @@ impl WindowManagerData {
                 TranslateMessage(&msg);
                 DispatchMessageA(&msg);
             }
-        }
-    }
-}
-
-impl Drop for WindowManagerData {
-    fn drop(&mut self) {
-        // Cleanup OLE
-        unsafe {
-            OleUninitialize();
         }
     }
 }

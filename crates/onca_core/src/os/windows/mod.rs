@@ -1,9 +1,14 @@
+use core::{
+    sync::atomic::{AtomicBool, Ordering},
+    ptr
+};
+
 use windows::{
     Win32::{
-        Foundation::{GetLastError, HINSTANCE},
+        Foundation::{GetLastError, HINSTANCE, OLE_E_WRONGCOMPOBJ, RPC_E_CHANGED_MODE},
         System::{
             LibraryLoader::GetModuleHandleA,
-            Console::{SetConsoleOutputCP, SetConsoleCP}
+            Console::{SetConsoleOutputCP, SetConsoleCP}, Ole::{OleUninitialize, OleInitialize}
         }, 
         Globalization::{CP_UTF8, GetACP}
     },
@@ -69,5 +74,43 @@ pub(crate) fn get_app_handle() -> AppHandle {
                 Err(_) => panic!("Failed to get application handle"),
             }
         },
+    }
+}
+
+static OLE_INITIALIZED : AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn init_system() -> Result<(), &'static str> {
+    if !OLE_INITIALIZED.load(Ordering::Relaxed) {
+        // Setup OLE
+        unsafe {
+            let ole_res = OleInitialize(ptr::null_mut());
+            match ole_res {
+                Ok(_) => {
+                    OLE_INITIALIZED.store(true, Ordering::Relaxed);
+                },
+                Err(err) => {
+                    let err_code = err.code();
+                    match err_code {
+                        OLE_E_WRONGCOMPOBJ => {
+                            return Err("COMPOBJ.DLL and OLE2.DLL are incompatible (err: OLE_E_WRONGCOMPOBJ)");
+                        },
+                        RPC_E_CHANGED_MODE => {
+                            return Err("Trying to initialize OLE which already initialized COM to be multi-threaded. OLE requires STA (Single Threaded Apartments). (err: RPC_E_CHANGED_MODE)");
+                        }
+                        _ => return Err("Failed to initialize OLE")
+                    }
+                },
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn shutdown_system() {
+    // Use relaxed, as this can only be called from the main thread
+    if OLE_INITIALIZED.load(Ordering::Relaxed) {
+        unsafe { OleUninitialize() };
+        OLE_INITIALIZED.store(false, Ordering::Relaxed);
     }
 }
