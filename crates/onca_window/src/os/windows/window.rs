@@ -1001,6 +1001,7 @@ pub(crate) fn create(
             manager: manager as *mut WindowManager,
             listeners: Mutex::new(EventListenerArray::new()),
             is_closing: false,
+            is_destroyed: false,
         };
         let mut window_ptr = HeapPtr::new(window);
 

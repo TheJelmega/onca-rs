@@ -168,6 +168,7 @@ pub struct Window {
     pub(crate) manager: *mut WindowManager,
     pub(crate) listeners: Mutex<EventListenerArray<WindowEventListener>>,
     pub(crate) is_closing: bool,
+    pub(crate) is_destroyed: bool,
 }
 
 impl Window {
@@ -188,6 +189,11 @@ impl Window {
 
     /// Posts a close message to the windows message queue, the window will be closed on the next tick of the window manager.
     pub fn close(&mut self) {
+        // Don't try to close again if the window is already closing
+        if self.is_closing {
+            return;
+        }
+
         let res = self.os_handle.close();
         if !res {
             log_warning!(LOG_CAT, "Failed to notify window {} to try and close", self.id);
@@ -473,9 +479,6 @@ impl Window {
 
     pub(crate) fn notify_destroyed(&mut self) {
         self.listeners.lock().notify(&(self.id, WindowEvent::Destroyed));
-
-        // SAFETY: Since we are the last place that a reference to the window is used, we can delete the memory it points to
-        let manager = unsafe { &mut *self.manager };
-        manager.remove_window(self.id);
+        self.is_destroyed = true;
     }
 }

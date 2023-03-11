@@ -81,6 +81,9 @@ impl WindowManager {
     pub fn tick(&mut self) {
         assert!(is_on_main_thread(), "The window manager should only be ticked on the main thead");
 
+        // Remove any destroyed windows
+        self.windows.retain(|(_, wnd)| !wnd.is_destroyed);
+
         // Call all newly added creation callbacks to make sure the newly registed systems know about the existing windows
         {
             let mut new_callbacks = self.new_callbacks.lock();
@@ -103,7 +106,7 @@ impl WindowManager {
 
     /// Get a mutable reference to the window from its handle.
     pub fn get_mut_window(&mut self, handle: WindowId) -> Option<&mut Window> {
-        assert!(self.is_any_window_open(), "Getting a mutable reference to a window is only allowed on the main thread");
+        assert!(is_on_main_thread(), "Getting a mutable reference to a window is only allowed on the main thread");
 
         let idx = self.windows.binary_search_by_key(&handle, |val| val.0);
         match idx {
