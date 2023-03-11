@@ -17,6 +17,17 @@
             <Item Name="[layout]">layout</Item>
         </Expand>
     </Type>
+    <Type Name="onca_core::alloc::mem_tag::MemTag">
+        <DisplayString>{{ packed =::: {packed} }}</DisplayString>
+        <Expand>
+            <Item Name="[packed]">packed</Item>
+            <Item Name="[tracked]">packed &gt;&gt; 63</Item>
+            <Item Name="[state]">(packed &gt;&gt; 60) &amp; 0x7</Item>
+            <Item Name="[plugin id]">(packed &gt;&gt; 48) &amp; 0xFFF</Item>
+            <Item Name="[category]">(packed &gt;&gt; 40) &amp; 0xFF</Item>
+            <Item Name="[sub-category]">(packed &gt;&gt; 32) &amp; 0xFF</Item>
+        </Expand>
+    </Type>
 
 
     <!-- Containers-->
