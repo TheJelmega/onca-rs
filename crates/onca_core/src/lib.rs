@@ -61,6 +61,7 @@ pub mod io;
 pub mod time;
 
 pub mod sys;
+pub mod dynlib;
 
 pub mod utils;
 pub mod hashing;

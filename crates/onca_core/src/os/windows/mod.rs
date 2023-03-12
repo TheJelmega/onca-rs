@@ -20,6 +20,7 @@ use crate::sync::Mutex;
 pub mod sync;
 pub mod time;
 pub mod thread;
+pub mod dynlib;
 
 pub(crate) fn errno() -> u32 {
     unsafe { GetLastError().0 }
