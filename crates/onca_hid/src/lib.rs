@@ -7,7 +7,7 @@ use core::{
 	ops::{self, RangeInclusive, RangeBounds},
 };
 
-use onca_core::{time::Duration, alloc::CoreMemTag};
+use onca_core::time::Duration;
 
 use onca_core::prelude::*;
 use onca_logging::{LogCategory, log_warning};
@@ -614,8 +614,6 @@ pub struct Device {
 
 impl Device {
 	pub fn new_path(path: &str) -> Option<Self> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::open_device(path).and_then(|handle| Self::_new(handle, true))
 	}
 
@@ -623,15 +621,11 @@ impl Device {
 	/// 
 	/// If an invalid handle is passed, `None` will be returned.
 	pub fn new_handle(handle: DeviceHandle) -> Option<Self> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		Self::_new(handle, false)
 	}
 
 	/// Create a new HID device from raw data.
 	pub fn new_raw(handle: DeviceHandle, preparse_data: PreparseData, identifier: Identifier) -> Option<Self> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		Self::_new_raw(handle, preparse_data, identifier, false)
 	}
 
@@ -693,8 +687,6 @@ impl Device {
 	/// 
 	/// If the vendor string could not be retrieved, `None` is returned
 	pub fn get_vendor_string(&self) -> Option<String> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		match os::get_vendor_string(self.handle) {
 		    Some(s) => Some(s),
 			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
@@ -706,8 +698,6 @@ impl Device {
 	/// 
 	/// This should normally match the string which can be found using `UsbDevice::new(...).get_device(...).name`.
 	pub fn get_product_string(&self) -> Option<String> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		match os::get_product_string(self.handle) {
 		    Some(s) => Some(s),
 			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
@@ -717,15 +707,11 @@ impl Device {
 
 	/// Get the serial number string.
 	pub fn get_serial_number_string(&self) -> Option<String> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::get_serial_number_string(self.handle)
 	}
 
 	/// Get an indexed string.
 	pub fn get_indexed_string(&self, index: usize) -> Option<String> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::get_indexed_string(self.handle, index)
 	}
 
@@ -794,23 +780,17 @@ impl Device {
 	
 	/// Get the HID collections for the device
 	pub fn get_top_level_collection(&self) -> Option<TopLevelCollection<'_>> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::get_top_level_collection(&self)
 	}
 
 	/// Create an output report
 	pub fn create_output_report(&self, report_id: u8) -> Option<OutputReport<'_>> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(OutputReport { data: ReportData::Blob(blob), device: self })
 	}
 
 	/// Create a feature report
 	pub fn create_feature_report(&self, report_id: u8) -> Option<FeatureReport<'_>> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(FeatureReport { data: ReportData::Blob(blob), device: self })
 	}
@@ -826,8 +806,6 @@ impl Device {
 	/// 
 	/// If the read is successfull, `Ok(None)` can return, meaning that the io operation is still pending
 	pub fn read_input_report(&mut self, timeout: Duration) -> Result<Option<InputReport>, ()> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::read_input_report(self, timeout)
 	}
 
@@ -842,8 +820,6 @@ impl Device {
 
 	/// Get the feature report from the device
 	pub fn get_feature_report(&mut self) -> Option<FeatureReport> {
-		let _scope_tag = ScopedMemTag::new(CoreMemTag::hid());
-
 		os::get_feature_report(self)
 	}
 

@@ -6,7 +6,7 @@ use crate::{
     collections::DynArray,
     mem::Arc,
     sync::Mutex,
-    alloc::{CoreMemTag, ScopedMemTag, MemTag, Layout}
+    alloc::Layout
 };
 
 pub type DynEventListenerRef<Event> = EventListenerRef<dyn EventListener<Event>>;
@@ -34,7 +34,6 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
     #[inline]
     #[must_use]
     pub fn new() -> Self { 
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::event_listeners());
         Self { listeners: DynArray::new() }
     }
 
@@ -42,7 +41,6 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
     #[inline]
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::event_listeners());
         Self { listeners: DynArray::with_capacity(capacity) }
     }
 
@@ -118,12 +116,6 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
     #[must_use]
     pub fn allocator_id(&self) -> u16 {
         self.listeners.allocator_id()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn mem_tag(&self) -> MemTag {
-        self.listeners.mem_tag()
     }
 
     pub fn notify<Event>(&mut self, event: &Event)

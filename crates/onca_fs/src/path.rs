@@ -44,12 +44,7 @@ use core::{
     ops::{Deref},
 };
 use std::collections::TryReserveError;
-use onca_core::{
-    prelude::*,
-    alloc::ScopedMemTag
-};
-
-use crate::FsMemTag;
+use onca_core::prelude::*;
 
 //--------------------------------------------------------------
 
@@ -786,7 +781,6 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn new() -> Self {
-        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
         Self { inner: String::new() }
     }
 
@@ -797,7 +791,6 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
-        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
         Self { inner: String::with_capacity(capacity) }
     }
 
@@ -805,7 +798,6 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn from_str(s: &str) -> Self {
-        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
         Self { inner: String::from_str(s) }
     }
 
@@ -813,7 +805,6 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn from_utf8_lossy(s: &[u8]) -> Self {
-        let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
         Self { inner: String::from_utf8_lossy(s) }
     }
 
@@ -881,7 +872,6 @@ impl PathBuf {
                 }
             }
 
-            let _scoped_mem_tag = ScopedMemTag::new(FsMemTag::path());
             let mut res = String::new();
             let mut need_sep = false;
 

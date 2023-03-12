@@ -1,3 +1,4 @@
+use onca_core::prelude::*;
 use onca_logging::log_warning;
 use windows::{
     Win32::{
@@ -7,11 +8,6 @@ use windows::{
         Foundation::{HINSTANCE, GetLastError}
     },
     core::PCSTR
-};
-use onca_core::{
-    prelude::*,
-    strings::String,
-    alloc::{CoreMemTag, ScopedMemTag, ScopedAlloc}
 };
 
 use crate::{PhysicalSize, LOG_CAT};
@@ -24,7 +20,6 @@ impl OSIcon {
     pub(crate) fn from_path(path: &str, size: Option<PhysicalSize>) -> OSIcon {
         unsafe {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
 
             let (width, height) = size.map(|size | (size.width as i32, size.height as i32)).unwrap_or((0, 0));
             let path = String::from_str(path);

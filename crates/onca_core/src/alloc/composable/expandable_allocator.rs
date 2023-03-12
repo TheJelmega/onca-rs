@@ -22,7 +22,6 @@ where A    : Allocator + ComposableAllocator<Args>,
 {
     pub fn new(args: Args, arena_alloc: UseAlloc) -> Self {
         let _scope_alloc = ScopedAlloc::new(arena_alloc);
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::allocator());
         Self {
             allocs: Mutex::new(DynArray::new()),
             args,
@@ -37,11 +36,11 @@ where
     A    : Allocator + ComposableAllocator<Args>,
     Args : Copy   
 {
-    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
         {
             let mut allocs = self.allocs.lock();
             for alloc in allocs.iter_mut() {
-                match alloc.alloc(layout, mem_tag) {
+                match alloc.alloc(layout) {
                     Some(allocation) => return Some(allocation),
                     None => {}
                 }
@@ -51,7 +50,7 @@ where
 
         let mut new_alloc = A::new_composable(self.args);
         new_alloc.set_alloc_id(self.id);
-        let allocation = new_alloc.alloc(layout, mem_tag);
+        let allocation = new_alloc.alloc(layout);
         if let None = allocation {
             return None;
         }

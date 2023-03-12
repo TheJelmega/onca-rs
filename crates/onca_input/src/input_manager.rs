@@ -7,7 +7,6 @@ use onca_core::{
     prelude::*,
     collections::HashMap,
     sync::{Mutex, RwLock},
-    alloc::CoreMemTag,
     event_listener::EventListener,
     time::DeltaTime,
     sys,
@@ -91,7 +90,6 @@ impl DeviceStorage {
         } else {
             log_error!(LOG_INPUT_CAT, DeviceStorage::handle_hid_input, "Failed to find device to process hid report")
         }
-
     }
 }
 
@@ -141,8 +139,6 @@ impl InputManager {
     pub fn new(window_manager: &HeapPtr<WindowManager>) -> HeapPtr<Self> {
         assert!(sys::is_on_main_thread(), "The input manager should only be created on the main thread");
 
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
-
         let mut ptr = HeapPtr::new(Self {
             os_input: os::OSInput::new(),
             mouse: None,
@@ -160,7 +156,6 @@ impl InputManager {
         });
         ptr.raw_input_listener.lock().init(&ptr);
 
-        //window_manager.register_message_hook(move |msg| unsafe { OSInput::msg_hook(raw_ptr, msg) });
         window_manager.register_raw_input_listener(ptr.raw_input_listener.clone());
 
         // Try to register all devices we can
@@ -290,7 +285,6 @@ impl InputManager {
             return;
         }
 
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         self.rebind_context = Some(RebindContext {
             binding_name: binding_name.to_onca_string(),
             context_name: mapping_context_identifier.map(|s| s.to_onca_string()),
@@ -301,7 +295,6 @@ impl InputManager {
     pub fn tick(&mut self, dt: DeltaTime) {
         assert!(sys::is_on_main_thread(), "The input manager should only be ticked on the main thread");
 
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
         
         // Update devices

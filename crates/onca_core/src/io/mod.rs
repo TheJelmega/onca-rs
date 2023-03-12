@@ -43,7 +43,7 @@
 //! For this functionality, see `onca_??::??`
 
 use crate::{
-    alloc::{UseAlloc, MemTag, ScopedAlloc, ScopedMemTag, get_active_mem_tag, get_active_alloc},
+    alloc::{UseAlloc, ScopedAlloc, get_active_alloc},
     collections::DynArray, 
     mem::HeapPtr,
     strings::String, 
@@ -851,7 +851,7 @@ pub trait BufRead : Read {
     where
         Self : Sized
     {
-        Split { buf: self, delim: byte, alloc_id: get_active_alloc().get_id(), mem_tag: get_active_mem_tag() }
+        Split { buf: self, delim: byte, alloc_id: get_active_alloc().get_id() }
     }
 
     /// returns an iterator over the lines of this reader.
@@ -864,7 +864,7 @@ pub trait BufRead : Read {
     where
         Self : Sized
     {
-        Lines { buf: self, alloc_id: get_active_alloc().get_id(), mem_tag: get_active_mem_tag() }
+        Lines { buf: self, alloc_id: get_active_alloc().get_id() }
     }
 }
 
@@ -1388,7 +1388,6 @@ pub struct Split<B> {
     buf      : B,
     delim    : u8,
     alloc_id : u16,
-    mem_tag  : MemTag
 }
 
 impl<B: BufRead> Iterator for Split<B> {
@@ -1396,7 +1395,6 @@ impl<B: BufRead> Iterator for Split<B> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
 
         let mut buf = DynArray::new();
         match self.buf.read_until(self.delim, &mut buf) {
@@ -1422,7 +1420,6 @@ impl<B: BufRead> Iterator for Split<B> {
 pub struct Lines<B> {
     buf      : B,
     alloc_id : u16,
-    mem_tag  : MemTag,
 }
 
 impl<B: BufRead> Iterator for Lines<B> {
@@ -1430,7 +1427,6 @@ impl<B: BufRead> Iterator for Lines<B> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.alloc_id));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag);
 
         let mut buf = String::new();
         match self.buf.read_line(&mut buf) {

@@ -9,7 +9,9 @@ use std::{hash::Hash, mem::ManuallyDrop};
 use super::{imp::ThreadParker, word_lock::WordLock};
 use crate::{
     collections::{SmallDynArray, DynArray},
-    time::{Duration, Instant}, mem::HeapPtr, alloc::{UseAlloc, CoreMemTag, ScopedAlloc, ScopedMemTag},
+    time::{Duration, Instant},
+    mem::HeapPtr,
+    alloc::{UseAlloc, ScopedAlloc},
 };
 
 // NOTE(jel): parking_lot mentions that time::Instant doesn't work on wasm32-unknown-unknown
@@ -24,7 +26,7 @@ static NUM_TREADS : AtomicUsize = AtomicUsize::new(0);
 /// Any `HashTable` this global static has ever pointed to must never be freed.
 static HASHTABLE : AtomicPtr<HashTable> = AtomicPtr::new(ptr::null_mut());
 
-// Even with 3x mre buckets than threads, teh memory overhead per thread is still only a few hundred bytes per thread.
+// Even with 3x mre buckets than threads, the memory overhead per thread is still only a few hundred bytes per thread.
 const LOAD_FACTOR : usize = 3;
 
 struct HashTable {
@@ -34,7 +36,7 @@ struct HashTable {
     /// Number of bits used for the hash function.
     hash_bits : u32,
 
-    // Previous table. This is only jept to keep leak detectors happy.
+    // Previous table. This is only kept to keep leak detectors happy.
     _prev     : *const HashTable,
 }
 
@@ -42,7 +44,6 @@ impl HashTable {
     #[inline]
     fn new(num_threads: usize, prev: *const HashTable) -> HeapPtr<HashTable> {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::sync());
 
         let new_size = (num_threads * LOAD_FACTOR).next_power_of_two();
         let hash_bits = 0usize.leading_zeros() - new_size.leading_zeros() - 1;
@@ -190,7 +191,7 @@ impl Drop for ThreadData {
 fn get_hashtable() -> &'static HashTable {
     let table = HASHTABLE.load(Ordering::Acquire);
 
-    // If ther eis no table, craete one
+    // If there is no table, create one
     if table.is_null() {
         create_hashtable()
     } else {
@@ -729,7 +730,6 @@ pub unsafe fn unpark_one(
 #[inline]
 pub unsafe fn unpark_all(key: usize, unpark_token: UnparkToken) -> usize {
     let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
-    let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::sync());
 
     // Lock the bucket for the given key
     let bucket = lock_bucket(key);
@@ -923,9 +923,6 @@ pub unsafe fn unpark_filter(
     mut filter: impl FnMut(ParkToken) -> FilterOp,
     callback: impl FnOnce(UnparkResult) -> UnparkToken,
 ) -> UnparkResult {
-    let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::sync());
-
     // Lock the bucket for the given key
     let bucket = lock_bucket(key);
 

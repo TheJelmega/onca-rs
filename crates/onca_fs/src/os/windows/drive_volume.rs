@@ -1,7 +1,6 @@
 use core::mem;
 use onca_core::{
     prelude::*,
-    alloc::{ScopedAlloc, ScopedMemTag},
     utils,
 };
 use windows::{
@@ -16,7 +15,7 @@ use windows::{
     core::PCSTR,
     Win32::Foundation::ERROR_MORE_DATA,
 };
-use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, FsMemTag};
+use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags};
 use super::MAX_PATH;
 
 pub fn get_drive_info(path: PathBuf) -> Option<DriveInfo> {
@@ -33,8 +32,6 @@ pub fn get_drive_type(mut path: PathBuf) -> DriveType {
 
 pub fn get_all_drive_info() -> DynArray<DriveInfo> {
     unsafe {
-        let scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
-        
         let names = {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
@@ -49,7 +46,6 @@ pub fn get_all_drive_info() -> DynArray<DriveInfo> {
             
             names
         };
-        scope_mem_tag.set(FsMemTag::general());
 
         let mut infos = DynArray::new();
         for utf8 in names.split_inclusive(|&c| c == 0) {
@@ -114,8 +110,6 @@ pub fn get_volume_info(path: PathBuf) -> Option<VolumeInfo> {
 
 pub fn get_all_volume_info() -> DynArray<VolumeInfo> {
     unsafe {
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::general());
-
         let mut guid_buf = [0u8; 65];
         let handle = FindFirstVolumeA(&mut guid_buf);
         let handle = match handle {
@@ -197,8 +191,6 @@ fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
 }
 
 unsafe fn get_drive_names_for_volume(guid: &[u8]) -> DynArray<PathBuf> {
-    let _scope_mem_tag = ScopedMemTag::new(FsMemTag::general());
-    
     let utf8_paths = {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
@@ -260,8 +252,6 @@ fn get_volume_info_internal(mut path: PathBuf) -> Option<VolumeInfo> {
 
         let fs_flags = get_volume_fs_flags(win32_fs_flags);
         
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::general());
-
         // TODO: dynarr!(path, ...) macro
         let mut roots = DynArray::with_capacity(1);
         roots.push(path);

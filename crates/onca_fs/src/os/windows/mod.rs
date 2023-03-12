@@ -1,9 +1,8 @@
 use onca_core::{
     prelude::*,
-    alloc::ScopedMemTag,
     io,
 };
-use crate::{FileFlags, PathBuf, FsMemTag};
+use crate::{FileFlags, PathBuf};
 use windows::{Win32::{
     Storage::FileSystem::{
         FILE_FLAGS_AND_ATTRIBUTES,
@@ -41,8 +40,6 @@ pub(crate) mod link;
 
 pub(crate) fn get_working_dir() -> io::Result<PathBuf> {
     unsafe {
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::path());
-
         let expected_len = GetCurrentDirectoryA(None) as usize;
         let mut dynarr = DynArray::with_capacity(expected_len);
         

@@ -2,7 +2,7 @@ use core::{
     mem,
     ffi::c_void,
 };
-use onca_core::{prelude::*, alloc::CoreMemTag};
+use onca_core::{prelude::*};
 use onca_hid as hid;
 use windows::Win32::{
     UI::{
@@ -42,8 +42,6 @@ impl OSInput {
     }
 
     pub unsafe fn process_window_event(manager: &mut InputManager, event: &onca_window::RawInputEvent) {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
-        
         match *event {
             onca_window::RawInputEvent::Input(raw_ptr) => {
                 let (wparam, lparam) = unsafe { *(raw_ptr as *const (WPARAM, LPARAM)) };

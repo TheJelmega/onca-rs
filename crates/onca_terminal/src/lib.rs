@@ -1,6 +1,5 @@
 use onca_core::{
-    prelude::*, 
-    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag},
+    prelude::*,
     io::{self, prelude::*},
 };
 
@@ -285,7 +284,6 @@ impl Terminal {
         where F : FnOnce(&mut DynArray<u8>)
     {
         let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::terminal());
 
         let mut buffer = DynArray::with_capacity(32);
         write_sequence(&mut buffer);

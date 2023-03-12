@@ -3,11 +3,11 @@ use core::{ffi::c_void, mem, ptr::null_mut};
 use std::cell::Cell;
 use onca_core::{
     prelude::*,
-    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag}, 
     mem::HeapPtr, 
     sync::Mutex,
     sys::get_app_handle,
-    utils::is_flag_set, event_listener::EventListenerArray,
+    utils::is_flag_set,
+    event_listener::EventListenerArray,
 };
 use onca_logging::{log_debug, log_error, log_warning};
 use windows::{
@@ -890,7 +890,6 @@ unsafe extern "system" fn wnd_proc(
             );
 
             let _scope_alloc: ScopedAlloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
             for i in 0..num_files {
                 let path_len = DragQueryFileA(hdrop, i, None);
                 let mut buf = DynArray::<u8>::new();
@@ -979,8 +978,6 @@ pub(crate) fn create(
         settings.margins = calculate_margins(style, ex_style);
         let pos = settings.outer_position();
         let PhysicalSize { width, height } = settings.size_with_borders();
-
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
 
         let title = match &settings.title {
             Some(title) => title.clone(),

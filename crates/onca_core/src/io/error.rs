@@ -594,7 +594,7 @@ impl error::Error for Error {
 /// The `NonNull<()>` seems like the only alternative, even if it's fairly off to use a pointer type to store something that may hold an integer, some of the time.
 
 #[repr(transparent)]
-struct Repr((NonNull<()>, u64, u64), PhantomData<ErrorData<HeapPtr<Custom>>>);
+struct Repr((NonNull<()>, u64), PhantomData<ErrorData<HeapPtr<Custom>>>);
 
 unsafe impl Send for Repr {}
 unsafe impl Sync for Repr {}
@@ -619,7 +619,7 @@ impl Repr {
     }
 
     fn new_custom(p: HeapPtr<Custom>) -> Self {
-       let (ptr, layout, mem_tag) = unsafe { HeapPtr::leak(p).into_raw() };
+       let (ptr, layout) = unsafe { HeapPtr::leak(p).into_raw() };
        let ptr = ptr.cast::<u8>();
        /// Should only be possible if an allocator handed out a pointer with the wrong alignment
        debug_assert_eq!(ptr.addr() & Self::TAG_MASK, 0);
@@ -632,7 +632,7 @@ impl Repr {
        //
        // Then, `TAG_CUSTOM | p` is not zero, as that would require `TAG_CUSTOM` and `p` both to be zero, and neither is (as `p` came from a HeapPtr, and `TAG_CUSTOM` just.. isn't zero -- it's `0b01`).
        // Therefore, `TAG_CUSTOM + p` isn't zero and so `tagged` can't be, and the `new_unchecked` is safe
-       let res = Self(unsafe{ (NonNull::new_unchecked(tagged) , core::mem::transmute(layout), core::mem::transmute(mem_tag)) }, PhantomData);
+       let res = Self(unsafe{ (NonNull::new_unchecked(tagged) , core::mem::transmute(layout)) }, PhantomData);
        // quickly smoke-check we encoded the right thing (This generally will only run in tests)
        debug_assert!(matches!(res.data(), ErrorData::Custom(_)), "repr(custom) encoding failed");
        res
@@ -641,7 +641,7 @@ impl Repr {
     fn new_os(code: i32) -> Self {
         let untagged = ((code as usize) << 32) | Self::TAG_OS;
         // Safety: `TAG_OS`` is not zero, so the result of the `|` is not 0
-        let res = Self((unsafe { NonNull::new_unchecked(core::ptr::invalid_mut(untagged)) }, 0, 0), PhantomData);
+        let res = Self((unsafe { NonNull::new_unchecked(core::ptr::invalid_mut(untagged)) }, 0), PhantomData);
         // quickly smoke-check we encoded the right thing (This generally will only run in tests)
         debug_assert!(matches!(res.data(), ErrorData::Os(c) if c == code), "repr(os) encoding failed for {code}");
         res
@@ -650,7 +650,7 @@ impl Repr {
     fn new_simple(kind: ErrorKind) -> Self {
         let untagged = ((kind as usize) << 32) | Self::TAG_SIMPLE;
         // Safety: `TAG_SIMPLE`` is not zero, so the result of the `|` is not 0
-        let res = Self((unsafe { NonNull::new_unchecked(core::ptr::invalid_mut(untagged)) }, 0, 0), PhantomData);
+        let res = Self((unsafe { NonNull::new_unchecked(core::ptr::invalid_mut(untagged)) }, 0), PhantomData);
         // quickly smoke-check we encoded the right thing (This generally will only run in tests)
         debug_assert!(matches!(res.data(), ErrorData::Simple(k) if k == kind), "repr(os) encoding failed for {:?}", kind);
         res
@@ -658,24 +658,24 @@ impl Repr {
 
     const fn new_simple_message(m: &'static SimpleMessage) -> Self {
         // Safety: References are never null
-        Self((unsafe { NonNull::new_unchecked(m as *const _ as *mut ()) }, 0, 0), PhantomData)
+        Self((unsafe { NonNull::new_unchecked(m as *const _ as *mut ()) }, 0), PhantomData)
     }
 
     fn data(&self) -> ErrorData<&Custom> {
         // Safety: We're a Repr, decode_repr is fine
-        unsafe { decode_repr(self.0.0, self.0.1, self.0.2, |c, _, _| &*c) }
+        unsafe { decode_repr(self.0.0, self.0.1, |c, _| &*c) }
     }
 
     fn data_mut(&self) -> ErrorData<&mut Custom> {
         // Safety: We're a Repr, decode_repr is fine
-        unsafe { decode_repr(self.0.0, self.0.1, self.0.2, |c, _, _| &mut *c) }
+        unsafe { decode_repr(self.0.0, self.0.1, |c, _| &mut *c) }
     }
 
     fn into_data(self) -> ErrorData<HeapPtr<Custom>> {
         // Safety: We're a Repr, decode_repr is fine
         unsafe { 
-            decode_repr(self.0.0, self.0.1, self.0.2, |c, layout, mem_tag| 
-                HeapPtr::from_raw_components(c, core::mem::transmute(layout), core::mem::transmute(mem_tag))) 
+            decode_repr(self.0.0, self.0.1, |c, layout| 
+                HeapPtr::from_raw_components(c, core::mem::transmute(layout))) 
         }
     }
 }
@@ -685,14 +685,14 @@ impl Repr {
         // Safety: We're a Repr, decode_repr is fine.
         // The `HeapPtr` is safe because we're being dropped
         unsafe {
-            decode_repr(self.0.0, self.0.1, self.0.2, |c, layout, mem_tag| 
-                HeapPtr::from_raw_components(c, core::mem::transmute(layout), core::mem::transmute(mem_tag)));
+            decode_repr(self.0.0, self.0.1, |c, layout| 
+                HeapPtr::from_raw_components(c, core::mem::transmute(layout)));
         }
     }
 }
 
- unsafe fn decode_repr<C, F>(ptr: NonNull<()>, layout: u64, mem_tag: u64, make_custom: F) -> ErrorData<C>
-    where F: FnOnce(*mut Custom, u64, u64) -> C
+ unsafe fn decode_repr<C, F>(ptr: NonNull<()>, layout: u64, make_custom: F) -> ErrorData<C>
+    where F: FnOnce(*mut Custom, u64) -> C
 {
     let bits = ptr.as_ptr().addr();
     match bits & Repr::TAG_MASK {
@@ -715,7 +715,7 @@ impl Repr {
         Repr::TAG_CUSTOM => {
             // It would be correct for use to use `ptr::byte_sub` here (see the comment above the `wrapping_add` call in `new_custom` for why), but it isn't clear that it makes a difference, so we don't.
             let custom = ptr.as_ptr().cast::<u8>().wrapping_sub(Repr::TAG_CUSTOM).cast::<Custom>();
-            ErrorData::Custom(make_custom(custom, layout, mem_tag))
+            ErrorData::Custom(make_custom(custom, layout))
         },
         // Can't happen
         _ => unreachable!()
@@ -809,10 +809,6 @@ static_assert!(@usize_eq: size_of::<NonNull<()>>(), size_of::<usize>());
 static_assert!(@usize_eq: size_of::<&'static SimpleMessage>(), 8);
 
 // `Custom` needs to be a fat pointer
-#[cfg(feature = "memory_tracking")]
-static_assert!(@usize_eq: size_of::<HeapPtr<Custom>>(), 24);
-
-#[cfg(not(feature = "memory_tracking"))]
 static_assert!(@usize_eq: size_of::<HeapPtr<Custom>>(), 16);
 
 static_assert!((Repr::TAG_MASK + 1).is_power_of_two());
@@ -844,13 +840,13 @@ static_assert!(@usize_eq: Repr::TAG_SIMPLE_MESSAGE, 0);
 // We'd check against `io::Error`, but *technically* it's allowed to vary as it's not `#[repr(transparnet)]`/`#[repr(C)]`.
 // We could add that, but the `#[repr()]` would show up in rustdoc, which might be seen as a stable commitment
 #[cfg(feature = "memory_tracking")]
-static_assert!(@usize_eq: size_of::<Repr>(), 24);
+static_assert!(@usize_eq: size_of::<Repr>(), 16);
 #[cfg(feature = "memory_tracking")]
-static_assert!(@usize_eq: size_of::<Option<Repr>>(), 24);
+static_assert!(@usize_eq: size_of::<Option<Repr>>(), 16);
 #[cfg(feature = "memory_tracking")]
-static_assert!(@usize_eq: size_of::<result::Result<(), Repr>>(), 24);
+static_assert!(@usize_eq: size_of::<result::Result<(), Repr>>(), 16);
 #[cfg(feature = "memory_tracking")]
-static_assert!(@usize_eq: size_of::<result::Result<usize, Repr>>(), 24);
+static_assert!(@usize_eq: size_of::<result::Result<usize, Repr>>(), 16);
 
 #[cfg(not(feature = "memory_tracking"))]
 static_assert!(@usize_eq: size_of::<Repr>(), 16);

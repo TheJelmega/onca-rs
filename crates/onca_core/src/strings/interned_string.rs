@@ -5,7 +5,11 @@ use core::{
 };
 
 use cfg_if::cfg_if;
-use crate::{hashing, collections::HashMap, sync::Mutex, prelude::ScopedMemTag, alloc::CoreMemTag};
+use crate::{
+    hashing, 
+    collections::HashMap,
+    sync::Mutex,
+};
 use super::string::*;
 
 /// String id
@@ -31,8 +35,6 @@ pub struct InternedString {
 impl InternedString {
     /// Create an interned string
     pub fn new(s: &str) -> Self {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
-
         let id = StringId::new(s);
         let _cached = INTERNED_STRING_MANAGER.register_string(s, id);
 
@@ -104,7 +106,6 @@ impl InternedStringManager {
     }
 
     fn register_string(&self, s: &str, id: StringId) -> *const u8 {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
         let mut strings = self.strings.lock();
         if strings.is_none() {
             *strings = Some(HashMap::new());
@@ -123,7 +124,6 @@ impl InternedStringManager {
     }
 
     fn get_string(&self, id: StringId) -> Option<String> {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::interned_string());
         let strings = self.strings.lock();
         strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_onca_string()))
     }

@@ -8,7 +8,6 @@ use onca_core::{
     prelude::*,
     io::{SeekFrom, self},
     mem::HeapPtr,
-    alloc::ScopedMemTag,
 };
 use windows::Win32::{
     Storage::FileSystem::{ReadFileEx, WriteFileEx},
@@ -18,8 +17,6 @@ use windows::Win32::{
     },
     Foundation::{ERROR_SUCCESS, HANDLE, BOOL, ERROR_TIMEOUT}
 };
-
-use crate::FsMemTag;
 
 use super::file::FileHandle;
 
@@ -165,8 +162,6 @@ impl AsyncWriteResult {
 impl FileHandle {
     pub(crate) fn read_async(&mut self, bytes_to_read: u64) -> io::Result<AsyncReadResult> {
         unsafe {
-            let _scope_mem_tag = ScopedMemTag::new(FsMemTag::asynchronous());
-
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
             let mut overlapped = HeapPtr::new(OVERLAPPED::default());
@@ -200,8 +195,6 @@ impl FileHandle {
 
     pub(crate) fn write_async(&mut self, buffer: DynArray<u8>) -> io::Result<AsyncWriteResult> {
         unsafe {
-            let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
-
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
             let mut overlapped = HeapPtr::new(OVERLAPPED::default());

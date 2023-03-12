@@ -5,10 +5,10 @@ use core::{
 };
 use crate::{
     alloc::{
-        Allocator, Allocation, Layout, UseAlloc, MemTag,
-        primitives::{Mallocator, FreelistAllocator}, CoreMemTag, NUM_RESERVED_ALLOC_IDS, get_active_mem_tag, get_active_alloc, ScopedAlloc, ScopedMemTag,
+        Allocator, Allocation, Layout, UseAlloc, NUM_RESERVED_ALLOC_IDS, get_active_alloc, ScopedAlloc,
+        primitives::{Mallocator, FreelistAllocator},
     },
-    sync::RwLock, MiB
+    sync::{RwLock, Mutex}, MiB, collections::HashMap
 };
 use once_cell::sync::Lazy;
 
@@ -164,7 +164,6 @@ impl MemoryManager {
         }
 
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(ptr.layout().alloc_id()));
-        let _scope_mem_tag = ScopedMemTag::new(ptr.mem_tag());
 
         if ptr.ptr() == core::ptr::null() {
             return match self.alloc_raw(AllocInitState::Uninitialized, new_layout) {
@@ -214,7 +213,6 @@ impl MemoryManager {
         assert!(new_layout.size() < ptr.layout().size(), "new size needs to be smaller that the current size");
 
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(ptr.layout().alloc_id()));
-        let _scope_mem_tag = ScopedMemTag::new(ptr.mem_tag());
 
         match self.alloc_raw(AllocInitState::Uninitialized, new_layout) {
             Some(mem) => unsafe {
@@ -232,7 +230,6 @@ impl MemoryManager {
             let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
             if !is_init {
                 let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
-                let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::tls_temp_alloc());
 
                 let layout = Layout::new_size_align(MiB(1), 8);
                 let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);

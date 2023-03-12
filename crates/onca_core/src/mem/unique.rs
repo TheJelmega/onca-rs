@@ -12,7 +12,7 @@ use core::{
     ptr::drop_in_place,
 };
 use std::{ops::CoerceUnsized, marker::Unsize, f32::consts::E};
-use crate::alloc::{Allocation, Layout, MemTag};
+use crate::alloc::{Allocation, Layout};
 use super::{MEMORY_MANAGER, HeapPtr};
 
 
@@ -54,12 +54,6 @@ impl<T: ?Sized> Unique<T> {
     #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
         HeapPtr::allocator_id(&this.ptr)
-    }
-
-    /// Get the memory tag
-    #[inline]
-    pub fn mem_tag(this: &Self) -> MemTag {
-        HeapPtr::mem_tag(&this.ptr)
     }
 }
 

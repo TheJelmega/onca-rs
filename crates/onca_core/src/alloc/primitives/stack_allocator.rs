@@ -2,7 +2,10 @@ use core::{
     mem::size_of,
     ptr::{null, null_mut},
 };
-use crate::{alloc::{Allocation, Allocator, Layout, MemTag}, mem::MEMORY_MANAGER};
+use crate::{
+    alloc::{Allocation, Allocator, Layout},
+    mem::MEMORY_MANAGER
+};
 
 /// Linear/Bump allocator
 /// 
@@ -54,7 +57,7 @@ impl StackAllocator {
 }
 
 impl Allocator for StackAllocator {
-    unsafe fn alloc(&mut self, mut layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, mut layout: Layout) -> Option<Allocation<u8>> {
         assert!(self.is_initialized(), "Trying to allocate memory using an uninitialized stack allocator");
 
         if layout.align() > self.max_align as usize {
@@ -70,7 +73,7 @@ impl Allocator for StackAllocator {
             None
         } else {
             self.head = new_head;
-            Some(Allocation::<_>::from_raw(ptr, layout.with_alloc_id(self.id), mem_tag))
+            Some(Allocation::<_>::from_raw(ptr, layout.with_alloc_id(self.id)))
         }
     }
 
@@ -113,11 +116,11 @@ mod tests {
     #[test]
     fn alloc_dealloc() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
         let mut alloc = StackAllocator::new(buffer, 8);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
             alloc.dealloc(ptr);
         }
     }
@@ -125,11 +128,11 @@ mod tests {
     #[test]
     fn align_too_large() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
         let mut alloc = StackAllocator::new(buffer, 8);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new_size_align(8, 16), CoreMemTag::test());
+            let ptr = alloc.alloc(Layout::new_size_align(8, 16));
             match ptr {
                 None => {},
                 Some(_) => panic!()
@@ -140,13 +143,13 @@ mod tests {
     #[test]
     fn multi_allocs() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
         let mut alloc = StackAllocator::new(buffer, 8);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
 
             alloc.dealloc(ptr2);
             alloc.dealloc(ptr1);
@@ -158,13 +161,13 @@ mod tests {
     #[should_panic]
     fn invalid_dealloc_order() {
         let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
         let mut alloc = StackAllocator::new(buffer, 8);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
 
             alloc.dealloc(ptr1);
             alloc.dealloc(ptr0);

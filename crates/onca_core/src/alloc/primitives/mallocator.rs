@@ -1,4 +1,6 @@
-use crate::alloc::{Allocator, Layout, Allocation, MemTag};
+use core::intrinsics::breakpoint;
+
+use crate::alloc::{Allocator, Layout, Allocation};
 
 extern crate alloc;
 
@@ -10,18 +12,26 @@ extern crate alloc;
 pub struct Mallocator;
 
 impl Allocator for Mallocator {
-    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+        if layout.size() > 1000 {
+            //breakpoint();
+        }
+
         let rs_layout = core::alloc::Layout::from_size_align_unchecked(layout.size(), layout.align());
         let ptr = unsafe { alloc::alloc::alloc(rs_layout) };
         if ptr == core::ptr::null_mut() {
             None
         } else {
-            Some(Allocation::<u8>::from_raw(ptr, layout.with_alloc_id(Layout::MAX_ALLOC_ID), mem_tag))
+            Some(Allocation::<u8>::from_raw(ptr, layout.with_alloc_id(0)))
         }
     }
 
     unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), Layout::MAX_ALLOC_ID);
+        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), 0);
+
+        if ptr.layout().size() > 1000 {
+            //breakpoint();
+        }
 
         let rs_layout = core::alloc::Layout::from_size_align_unchecked(ptr.layout().size(), ptr.layout().align());
         unsafe { alloc::alloc::dealloc(ptr.ptr_mut(), rs_layout) }
@@ -32,7 +42,7 @@ impl Allocator for Mallocator {
     }
 
     fn alloc_id(&self) -> u16 {
-        Layout::MAX_ALLOC_ID
+        0
     }
 }
 
@@ -46,7 +56,7 @@ mod test {
         let mut alloc = Mallocator;
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>(), MemTag::default()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
             alloc.dealloc(ptr);
         }
     }

@@ -10,12 +10,11 @@ use windows::{
     },
     core::PCSTR,
 };
-use crate::{Path, FsMemTag};
+use crate::Path;
 
 pub(crate) fn create(path: &Path) -> io::Result<()> {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         let path = path.to_null_terminated_path_buf();
         create_dir(PCSTR(path.as_ptr()))
@@ -25,7 +24,6 @@ pub(crate) fn create(path: &Path) -> io::Result<()> {
 pub(crate) fn create_recursive(path: &Path) -> io::Result<()> {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         let mut parent_paths = SmallDynArray::<_, 8>::new();
         for component in path.ancestors() {

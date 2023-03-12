@@ -39,7 +39,7 @@ use windows::{
     core::{PCSTR, PSTR, PCWSTR}
 };
 
-use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FsMemTag};
+use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId};
 
 use super::{high_low_to_u64, dword_to_flags, MAX_PATH, file};
 
@@ -82,9 +82,6 @@ impl EntrySearchHandle {
     }
 
     pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
-
         let mut find_data = WIN32_FIND_DATAA::default();
         if unsafe { FindNextFileA(self.0, &mut find_data).as_bool() } {
             let mut it = find_data.cFileName.split(|&c| c.0 == 0);
@@ -110,9 +107,6 @@ impl Drop for EntrySearchHandle {
 
 pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
-
         let path = &path.to_null_terminated_path_buf();
 
         let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
@@ -197,7 +191,6 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
 fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         // Get the SID of the current user, we will use this later to get the correct file permissions for the user
 
@@ -332,7 +325,6 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
 pub(crate) fn get_entry_file_type(path: &Path) -> FileType {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         let path = path.to_null_terminated_path_buf();
 

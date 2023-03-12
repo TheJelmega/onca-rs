@@ -9,7 +9,7 @@ use core::{
     hash::{Hash, Hasher},
     array,
 };
-use crate::alloc::{UseAlloc, MemTag, Layout, get_active_alloc, get_active_mem_tag, ScopedAlloc, ScopedMemTag};
+use crate::alloc::{UseAlloc, Layout, get_active_alloc, ScopedAlloc};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -18,13 +18,13 @@ use imp::DynArrayBuffer;
 use super::dyn_array::DynamicBuffer;
 
 union SmallBufferData<T, const N: usize> {
-    inline  : (ManuallyDrop<MaybeUninit<[T; N]>>, u16, MemTag),
+    inline  : (ManuallyDrop<MaybeUninit<[T; N]>>, u16),
     dynamic : ManuallyDrop<DynamicBuffer<T>>,
 }
 
 impl<T, const N: usize> SmallBufferData<T, N> {
-    fn new_inline(alloc_id: u16, mem_tag: MemTag) -> Self {
-        Self { inline: (ManuallyDrop::new(MaybeUninit::uninit()), alloc_id, mem_tag) }
+    fn new_inline(alloc_id: u16) -> Self {
+        Self { inline: (ManuallyDrop::new(MaybeUninit::uninit()), alloc_id) }
     }
 
     fn new_dynamic() -> Self {
@@ -47,7 +47,7 @@ struct SmallBuffer<T, const N: usize> {
 
 impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
     fn new() -> Self {
-        Self { cap: N, data: SmallBufferData::new_inline(get_active_alloc().get_id(), get_active_mem_tag()) }
+        Self { cap: N, data: SmallBufferData::new_inline(get_active_alloc().get_id()) }
     }
 
     fn with_capacity(capacity: usize) -> Self {
@@ -76,7 +76,6 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
         if len + additional > self.cap {
             self.cap = if self.cap == N {
                 let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(unsafe { self.data.inline.1 }));
-                let _scope_mem_tag = ScopedMemTag::new(unsafe { self.data.inline.2 });
 
                 let mut data = SmallBufferData::new_dynamic();
 
@@ -101,7 +100,6 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
         if len + additional > self.cap {
             self.cap = if self.cap == N {
                 let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(unsafe { self.data.inline.1 }));
-                let _scope_mem_tag = ScopedMemTag::new(unsafe { self.data.inline.2 });
 
                 let mut data = SmallBufferData::new_dynamic();
 
@@ -123,8 +121,7 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
             if cap <= N {
                 unsafe {
                     let alloc_id = (*self.data.dynamic).allocator_id();
-                    let mem_tag = (*self.data.dynamic).mem_tag();
-                    let mut data = SmallBufferData::new_inline(alloc_id, mem_tag);
+                    let mut data = SmallBufferData::new_inline(alloc_id);
 
                     let dynbuf = ManuallyDrop::take(&mut self.data.dynamic);
                     ptr::copy_nonoverlapping(dynbuf.as_ptr(), (*data.inline.0).as_ptr() as *mut T, self.cap);
@@ -181,16 +178,6 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for SmallBuffer<T, N> {
                 self.data.inline.1
             } else {
                 (*self.data.dynamic).allocator_id()
-            }
-        }
-    }
-
-    fn mem_tag(&self) -> MemTag {
-        unsafe {
-            if self.cap == N {
-                self.data.inline.2
-            } else {
-                (*self.data.dynamic).mem_tag()
             }
         }
     }

@@ -1,7 +1,6 @@
 use core::mem::size_of;
 use onca_core::{
     prelude::*,
-    alloc::{CoreMemTag, ScopedMemTag},
     collections::BTreeSet,
     utils
 };
@@ -49,8 +48,6 @@ unsafe extern "system" fn primary_monitor_enum_proc(hmonitor: HMONITOR, _dc: HDC
 }
 
 unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor> {
-    let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
-
     // Both values are identical
     let mut dpi_x = 0;
     let mut dpi_y = 0;
@@ -136,8 +133,6 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
 
 pub(crate) fn enumerate_monitors() -> DynArray<Monitor> {
     unsafe {
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
-
         let mut monitors = DynArray::new();
 
         let lparam = LPARAM(&mut monitors as *mut DynArray<Monitor> as isize);

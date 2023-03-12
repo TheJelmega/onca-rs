@@ -14,7 +14,7 @@ use core::{
 };
 use std::collections::TryReserveError;
 use crate::{
-    alloc::{Layout, MemTag, ScopedAlloc, UseAlloc, ScopedMemTag},
+    alloc::{Layout, ScopedAlloc, UseAlloc},
     collections::{ExtendFunc, ExtendElement, ExtendWith, SetLenOnDrop, SpecExtendFromWithin, SpecCloneFrom, SpecExtend, IsZero, SpecFromIterNested, SpecFromIter, impl_slice_partial_eq},
 };
 
@@ -40,7 +40,6 @@ pub trait DynArrayBuffer<T> {
 
     fn layout(&self) -> Layout;
     fn allocator_id(&self) -> u16;
-    fn mem_tag(&self) -> MemTag;
 }
 
 
@@ -503,16 +502,10 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         self.buf.allocator_id()
     }
 
-    #[inline]
-    pub fn mem_tag(&self) -> MemTag {
-        self.buf.mem_tag()
-    }
-
     pub fn split_off(&mut self, at: usize) -> Self {
         assert!(at < self.len);
 
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         if at == 0 {
             return mem::replace(
@@ -978,7 +971,6 @@ impl<T: Clone, B: DynArrayBuffer<T>> Clone for DynArray<T, B> {
     #[inline]
     fn clone(&self) -> Self {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.buf.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.buf.mem_tag());
 
         <[T]>::to_imp_dynarray(&**self)
     }
@@ -1225,10 +1217,6 @@ impl<T, B: DynArrayBuffer<T>> IntoIter<T, B> {
         self.buf.allocator_id()
     }
 
-    pub fn mem_tag(&self) -> MemTag {
-        self.buf.mem_tag()
-    }
-
     fn as_raw_mut_slice(&mut self) -> *mut [T] {
         ptr::slice_from_raw_parts_mut(self.ptr as *mut T, self.len())
     }
@@ -1237,7 +1225,6 @@ impl<T, B: DynArrayBuffer<T>> IntoIter<T, B> {
         let remaining = self.as_raw_mut_slice();
         
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
 
         self.buf = ManuallyDrop::new(DynArray::new());
@@ -1325,7 +1312,6 @@ impl<T, B: DynArrayBuffer<T>> FusedIterator for IntoIter<T, B> {}
 impl<T: Clone, B: DynArrayBuffer<T>> Clone for IntoIter<T, B> {
     fn clone(&self) -> Self {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.buf.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.buf.mem_tag());
 
         self.as_slice().to_imp_dynarray::<B>().into_iter()
     }

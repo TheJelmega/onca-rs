@@ -15,7 +15,7 @@ use std::{
     
 };
 use crate::{
-    alloc::{Allocation, Layout, UseAlloc, MemTag, ScopedAlloc, ScopedMemTag},
+    alloc::{Allocation, Layout, UseAlloc, ScopedAlloc},
     mem::MEMORY_MANAGER,
 };
 
@@ -45,8 +45,8 @@ impl<T: ?Sized> HeapPtr<T> {
     /// 
     /// The user needs to guarantee that the given allocation will not be deallocate by anything else, otherwise it results in UB
     #[inline]
-    pub unsafe fn from_raw_components(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
-        HeapPtr { ptr: Allocation::from_raw(ptr, layout, mem_tag), _phantom: PhantomData }
+    pub unsafe fn from_raw_components(ptr: *mut T, layout: Layout) -> Self {
+        HeapPtr { ptr: Allocation::from_raw(ptr, layout), _phantom: PhantomData }
     }
 
     /// Cast a `HeapPtr` to another `HeapPtr` that holds a different type
@@ -93,12 +93,6 @@ impl<T: ?Sized> HeapPtr<T> {
     #[inline]
     pub fn allocator_id(this: &Self) -> u16 {
         this.ptr.layout().alloc_id()
-    }
-
-    /// Get the memory tag
-    #[inline]
-    pub fn mem_tag(this: &Self) -> MemTag {
-        this.ptr.mem_tag()
     }
 }
 
@@ -324,7 +318,6 @@ impl<T: ?Sized> Drop for HeapPtr<T> {
 impl<T: Clone> Clone for HeapPtr<T> {
     fn clone(&self) -> Self {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(Self::allocator_id(self)));
-        let _scope_mem_tag = ScopedMemTag::new(Self::mem_tag(self));
         let new = Self::new_uninit();
         HeapPtr::<_>::write(new, self.as_ref().clone())
     }

@@ -17,7 +17,7 @@ use std::{
 };
 
 use crate::{
-    alloc::{UseAlloc, MemTag, Layout, ScopedAlloc, ScopedMemTag},
+    alloc::{UseAlloc, Layout, ScopedAlloc},
     collections::DynArray,
     mem::{MEMORY_MANAGER, self},
     io,
@@ -513,13 +513,6 @@ impl String {
         self.arr.allocator_id()
     }
 
-    /// Get the memory tag
-    #[inline]
-    #[must_use]
-    pub fn mem_tag(&self) -> MemTag {
-        self.arr.mem_tag()
-    }
-
     /// Splits the string into two at the given byte index
     /// 
     /// Returns a newly allocated `String` with the same allocator as this `String`.
@@ -633,7 +626,6 @@ impl String {
     #[must_use = "this returns the replaced string as a new allocation, without modifying the original"]
     pub fn replace<'a, P: Pattern<'a>>(&'a self, from: P, to: &str) -> String {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         let mut res = String::new();
         let mut last_end = 0;
@@ -653,7 +645,6 @@ impl String {
     /// If it finds any, it replaces them with the replacement string slice at the most `count` times
     pub fn replacen<'a, P: Pattern<'a>>(&'a self, pat: P, to: &str, count: usize) -> String {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         // Hope to reduce the times of re-allocation
         let mut res = String::with_capacity(32);
@@ -674,7 +665,6 @@ impl String {
     /// Since some charactes can expend into multiple characters when changing case, this functions returns a `String` instead of modifying the paramter in-place
     pub fn to_lowercase(&self) -> String {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_lowercase);
 
@@ -734,7 +724,6 @@ impl String {
     #[must_use = "this returns the uppercase string as a new String, without modigying the original"]
     pub fn to_uppercase(&self) -> String {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         let out = Self::convert_while_ascii(self.as_bytes(), u8::to_ascii_uppercase);
 
@@ -770,7 +759,6 @@ impl String {
     #[must_use]
     pub fn repeat(&self, n: usize) -> String {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
         if n == 0 {
             return String::new();

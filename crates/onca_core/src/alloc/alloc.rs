@@ -1,4 +1,4 @@
-use super::{mem_tag::MemTag, Allocation, Layout};
+use super::{Allocation, Layout};
 use core::cell::Cell;
 
 /// Allocator/Arena that can provide access to heap memory for the program
@@ -6,7 +6,7 @@ pub trait Allocator {
     /// Allocate memory from an allocator/arena
     ///
     /// If no memory could be allocated, a null `Allocation<u8>` should be returned
-    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>>;
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>>;
 
     /// Deallocate an allocation
     ///

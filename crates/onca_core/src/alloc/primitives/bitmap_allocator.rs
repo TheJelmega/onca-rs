@@ -84,7 +84,7 @@ impl BitmapAllocator {
 }
 
 impl Allocator for BitmapAllocator {
-    unsafe fn alloc(&mut self, layout: Layout, mem_tag: MemTag) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
 
         let blocks_needed = (layout.size() + self.block_size - 1) / self.block_size;
         if blocks_needed >= self.num_blocks {
@@ -120,7 +120,7 @@ impl Allocator for BitmapAllocator {
 
             let ptr = self.buffer.ptr_mut().add((self.num_manage + i) * self.block_size);
             let layout = layout.with_size_multiple_of(self.block_size as u64).with_alloc_id(self.id);
-            return Some(Allocation::<_>::from_raw(ptr, layout, mem_tag));
+            return Some(Allocation::<_>::from_raw(ptr, layout));
         }
         None
     }
@@ -148,8 +148,6 @@ impl Allocator for BitmapAllocator {
 
 impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
     fn new_composable(args: (usize, usize)) -> Self {
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::allocator());
-                
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
         let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, Layout::new_size_align(buffer_size, 8)).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, args.0, args.1)
@@ -174,7 +172,7 @@ unsafe impl Sync for BitmapAllocator {}
 
 #[cfg(test)]
 mod tests {
-    use crate::alloc::{*, primitives::*, mem_tag::MemTag};
+    use crate::alloc::{*, primitives::*};
 
     #[test]
     fn alloc_dealloc() {
@@ -184,11 +182,11 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
             alloc.dealloc(ptr);
         }
     }
@@ -201,13 +199,13 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);
@@ -223,20 +221,20 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
 
             let raw0 = ptr0.ptr();
 
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>(), CoreMemTag::test()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
 
             alloc.dealloc(ptr0);
 
-            let new_ptr = alloc.alloc(Layout::new::<u16>(), CoreMemTag::test()).unwrap();
+            let new_ptr = alloc.alloc(Layout::new::<u16>()).unwrap();
             assert_eq!(raw0, new_ptr.ptr());
         }
     }
@@ -249,11 +247,11 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test());
+            let ptr = alloc.alloc(Layout::new_size_align(buffer_size, 8));
             match ptr {
                 None => {},
                 Some(_) => panic!()
@@ -269,23 +267,23 @@ mod tests {
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);
 
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8), CoreMemTag::test()).unwrap() };
+        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(buffer_size, 8)).unwrap() };
         let mut alloc = BitmapAllocator::new(buffer, block_size, num_blocks);
 
         struct Large { a: u64, b: u64 }
 
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<Large>(), CoreMemTag::test()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
+            let ptr0 = alloc.alloc(Layout::new::<Large>()).unwrap();
+            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr2 = alloc.alloc(Layout::new::<u64>()).unwrap();
 
             let raw_ptr0 = ptr0.ptr();
 
             alloc.dealloc(ptr0);
             alloc.dealloc(ptr1);
 
-            let ptr4 = alloc.alloc(Layout::new::<u64>(), CoreMemTag::test()).unwrap();
-            let ptr5 = alloc.alloc(Layout::new::<Large>(), CoreMemTag::test()).unwrap();
+            let ptr4 = alloc.alloc(Layout::new::<u64>()).unwrap();
+            let ptr5 = alloc.alloc(Layout::new::<Large>()).unwrap();
 
             assert!(ptr4.ptr() == raw_ptr0);
             assert!(ptr5.ptr() == raw_ptr0.add(8));

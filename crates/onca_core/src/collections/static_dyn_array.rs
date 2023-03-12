@@ -9,7 +9,7 @@ use core::{
     hash::{Hash, Hasher},
     array,
 };
-use crate::alloc::{MemTag, Layout};
+use crate::alloc::Layout;
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -74,10 +74,6 @@ impl<T, const N: usize> imp::DynArrayBuffer<T> for StaticBuf<T, N> {
 
     fn allocator_id(&self) -> u16 {
         u16::MAX
-    }
-
-    fn mem_tag(&self) -> MemTag {
-        MemTag::default()
     }
 }
 

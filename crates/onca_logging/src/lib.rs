@@ -5,7 +5,6 @@ use onca_core::{
     io::{self, prelude::*},
     sync::Mutex,
     mem::HeapPtr,
-    alloc::{CoreMemTag, ScopedAlloc, ScopedMemTag},
     time::TimeStamp,
 };
 use onca_terminal::{Terminal, TerminalColor, TextFormatting};
@@ -211,7 +210,6 @@ impl Logger {
     pub fn log(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, text: &str) {
         if level as u8 <= self.max_level as u8 {
             let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::logging());
 
             let mut formatted = String::new();
 
@@ -226,7 +224,6 @@ impl Logger {
     pub fn log_fmt(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, format: Arguments) {
         if level as u8 <= self.max_level as u8 {
             let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-            let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::logging());
 
             let mut formatted = String::new();
 

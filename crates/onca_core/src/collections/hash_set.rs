@@ -7,7 +7,7 @@ use core::{
 
 use hashbrown::TryReserveError;
 use crate::{
-    alloc::{UseAlloc, MemTag, ScopedAlloc, ScopedMemTag},
+    alloc::{UseAlloc, ScopedAlloc},
     mem::MEMORY_MANAGER
 };
 use super::{collections_alloc::Alloc, HashMap};
@@ -93,10 +93,6 @@ impl<T, S> HashSet<T, S> {
 
     pub fn allocator_id(&self) -> u16 {
         self.0.allocator().layout().alloc_id()
-    }
-
-    pub fn mem_tag(&self) -> MemTag {
-        self.0.allocator().mem_tag()
     }
 }
 
@@ -220,7 +216,6 @@ impl<T, S> BitAnd<&HashSet<T, S>> for &HashSet<T, S>
 
     fn bitand(self, other: &HashSet<T, S>) -> Self::Output {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
         HashSet::from_iter_with_hasher(self.intersection(other).cloned(), self.hasher().clone())
     }
 }
@@ -233,7 +228,6 @@ impl<T, S> BitOr<&HashSet<T, S>> for &HashSet<T, S>
 
     fn bitor(self, other: &HashSet<T, S>) -> Self::Output {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
         HashSet::from_iter_with_hasher(self.union(other).cloned(), self.hasher().clone())
     }
 }
@@ -246,7 +240,6 @@ impl<T, S> BitXor<&HashSet<T, S>> for &HashSet<T, S>
 
     fn bitxor(self, other: &HashSet<T, S>) -> Self::Output {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
         HashSet::from_iter_with_hasher(self.symmetric_difference(other).cloned(), self.hasher().clone())
     }
 }
@@ -259,7 +252,6 @@ impl<T, S> Sub<&HashSet<T, S>> for &HashSet<T, S>
 
     fn sub(self, other: &HashSet<T, S>) -> Self::Output {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-        let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
         HashSet::from_iter_with_hasher(self.difference(other).cloned(), self.hasher().clone())
     }
 }

@@ -1,7 +1,7 @@
 use onca_core::{
     prelude::*,
     mem::HeapPtr,
-    alloc::{CoreMemTag, ScopedMemTag, get_active_alloc, ScopedAlloc},
+    alloc::{get_active_alloc},
     sys::is_on_main_thread, sync::Mutex, event_listener::{EventListenerArray, EventListenerRef, EventListener},
 };
 
@@ -39,8 +39,6 @@ impl WindowManager {
     pub fn new() -> HeapPtr<Self> {
         assert!(is_on_main_thread(), "The window manager should be only be created on the main thread");
 
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
-
         let os_data = os::WindowManagerData::new();
 
         HeapPtr::new(Self {
@@ -59,7 +57,6 @@ impl WindowManager {
         assert!(is_on_main_thread(), "A window should only be crated on the main thead");
 
         let _scope_alloc = ScopedAlloc::new(self.alloc);
-        let _scope_mem_tag = ScopedMemTag::new(CoreMemTag::window());
 
         let heap_ptr = Window::create(self, settings);
         let mut heap_ptr = match heap_ptr {
@@ -184,14 +181,6 @@ impl WindowManager {
 
     pub(crate) fn get_os_data(&mut self) -> &mut os::WindowManagerData {
         &mut self.os_data
-    }
-
-    pub(crate) fn remove_window(&mut self, handle: WindowId) {
-        let idx = self.windows.binary_search_by_key(&handle, |val| val.0);
-        match idx {
-            Ok(idx) => { self.windows.remove(idx); },
-            Err(_) => {},
-        }
     }
 
     pub(crate) fn process_raw_input(&mut self, raw_input: RawInputEvent) {

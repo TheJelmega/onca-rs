@@ -3,7 +3,7 @@ mod buffer;
 use core::fmt;
 use crate::{
     io::{self, BorrowedCursor, BufRead, IoSliceMut, Read, Seek, SeekFrom, SizeHint, DEFAULT_BUF_SIZE},
-    alloc::{UseAlloc, ScopedAlloc, ScopedMemTag},
+    alloc::{UseAlloc, ScopedAlloc},
     collections::DynArray
 };
 use buffer::Buffer;
@@ -185,7 +185,6 @@ impl<R: Read> Read for BufReader<R> {
             unsafe { crate::io::append_to_string(buf, |b| self.read_to_end(b)) }
         } else {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(buf.allocator_id()));
-            let _scope_mem_tag = ScopedMemTag::new(buf.mem_tag());
 
             // We cannot append our byte buffer directly onto the `buf` String as there could be an incomplete UTF-8 sequence that has only been partially read.
             // We must read everything into a side buffer first and then call `from_utf8` on the complete buffer

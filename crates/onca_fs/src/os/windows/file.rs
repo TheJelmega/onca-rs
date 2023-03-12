@@ -28,14 +28,13 @@ use windows::{
     core::PCSTR,
 };
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FsMemTag};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH};
 
 use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
 pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         let path = path.to_null_terminated_path_buf();
 
@@ -57,7 +56,6 @@ pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
 pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-        let _scope_mem_tag = ScopedMemTag::new(FsMemTag::temporary());
 
         let path = path.to_null_terminated_path_buf();
         let res = DeleteFileA(PCSTR(path.as_ptr())).as_bool();

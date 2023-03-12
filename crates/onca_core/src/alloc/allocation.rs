@@ -3,10 +3,8 @@ use std::mem::MaybeUninit;
 
 use crate::mem::MEMORY_MANAGER;
 
-use super::{Layout, layout, get_active_mem_tag, CoreMemTag, get_active_alloc};
+use super::{Layout, layout, get_active_alloc};
 
-#[cfg(feature = "memory_tracking")]
-use super::mem_tag::MemTag;
 
 /// Representation of allocated memory
 #[derive(Debug)]
@@ -14,7 +12,6 @@ pub struct Allocation<T: ?Sized>
 {
     ptr     : *mut T,
     layout  : Layout,
-    mem_tag : MemTag,
 }
 
 impl<T: ?Sized> Allocation<T>
@@ -43,18 +40,6 @@ impl<T: ?Sized> Allocation<T>
         &mut self.layout
     }
 
-    /// Get the memory tag
-    #[inline]
-    pub fn mem_tag(&self) -> MemTag {
-        self.mem_tag
-    }
-    
-    /// Get the memory tag
-    #[inline]
-    pub fn mem_tag_mut(&mut self) -> &mut MemTag {
-        &mut self.mem_tag
-    }
-    
     /// Get a reference to the data pointed at by the `Allocation<T>`
     #[inline]
     pub fn get_ref(&self) -> &T {
@@ -83,8 +68,8 @@ impl<T: ?Sized> Allocation<T>
     /// 
     /// The components given by this value should only be change when absolutely certain
     #[inline]
-    pub unsafe fn into_raw(self) -> (*mut T, Layout, MemTag) {
-        (self.ptr, self.layout, self.mem_tag)
+    pub unsafe fn into_raw(self) -> (*mut T, Layout) {
+        (self.ptr, self.layout)
     }
     
     /// Cast the `Allocation`  to contain a value of another type
@@ -111,7 +96,7 @@ impl<T: ?Sized> Allocation<T>
     /// Panics when the provided pointer is null.
     #[inline]
     pub fn new(ptr: *mut T, layout: Layout) -> Self {
-        Self::from_raw(ptr, layout, get_active_mem_tag())
+        Self::from_raw(ptr, layout)
     }
 
     /// Create a `Allocation<T>` from its raw components.
@@ -120,8 +105,8 @@ impl<T: ?Sized> Allocation<T>
     /// 
     /// Panics when the provided pointer is null.
     #[inline]
-    pub fn from_raw(ptr: *mut T, layout: Layout, mem_tag: MemTag) -> Self {
-        Self { ptr: unsafe { ptr }, layout, mem_tag }
+    pub fn from_raw(ptr: *mut T, layout: Layout) -> Self {
+        Self { ptr: unsafe { ptr }, layout }
     }
 
     /// Replace the pointer with the given pointer
@@ -131,15 +116,15 @@ impl<T: ?Sized> Allocation<T>
     /// The user has to make sure that the previous allocation has been deallocated correctly and that the memory matches the current layout
     #[inline]
     pub unsafe fn with_ptr<U: ?Sized>(&self, ptr: *mut U) -> Allocation<U> {
-        Allocation { ptr , layout: self.layout, mem_tag: self.mem_tag }
+        Allocation { ptr , layout: self.layout }
     } 
 }
 
 impl<T> Allocation<T>
 {
     /// Get the pointer as an untyped ptr
-    pub fn untyped(this: Self) -> (*mut u8, Layout, MemTag) {
-        (this.ptr.cast::<u8>(), this.layout, this.mem_tag)
+    pub fn untyped(this: Self) -> (*mut u8, Layout) {
+        (this.ptr.cast::<u8>(), this.layout)
     }
 
     /// Create a Allocation from an untyped ptr
@@ -148,8 +133,8 @@ impl<T> Allocation<T>
     /// 
     /// Panics if the provided pointer is null
     #[inline]
-    pub fn from_untyped(ptr: *mut u8, layout: Layout, mem_tag: MemTag) -> Self {
-        Self { ptr: unsafe { ptr.cast::<T>() }, layout, mem_tag }
+    pub fn from_untyped(ptr: *mut u8, layout: Layout) -> Self {
+        Self { ptr: unsafe { ptr.cast::<T>() }, layout }
     }
 
     /// Create a null allocation
@@ -159,14 +144,14 @@ impl<T> Allocation<T>
     /// This function is meant for internal use, calling anything using it is UB
     #[inline]
     pub const unsafe fn const_null() -> Self {
-        Self { ptr: null_mut(), layout: Layout::null(), mem_tag: MemTag::unknown(0) }
+        Self { ptr: null_mut(), layout: Layout::null() }
     }
 
     
     /// Create a null heap pointer that store an allocator id for future use
     pub unsafe fn null() -> Self {
         let layout = Layout::null().with_alloc_id(get_active_alloc().get_id());
-        Self { ptr: null_mut(), layout, mem_tag: get_active_mem_tag() }
+        Self { ptr: null_mut(), layout }
     }
 }
 

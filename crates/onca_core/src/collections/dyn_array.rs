@@ -10,7 +10,7 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self, MemTag, ScopedMemTag, ScopedAlloc}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
+use crate::{alloc::{UseAlloc, Allocation, Layout, self, ScopedAlloc}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -96,7 +96,6 @@ impl<T> DynamicBuffer<T> {
     pub fn finish_grow(&mut self, new_layout: Layout, new_cap: usize) -> Result<usize, std::collections::TryReserveError> {
         if self.cap == 0 {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
-            let _scope_mem_tag = ScopedMemTag::new(self.mem_tag());
 
             let res = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, new_layout);
             self.ptr = match res {
@@ -205,10 +204,6 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
 
     fn allocator_id(&self) -> u16 {
         self.ptr.layout().alloc_id()
-    }
-
-    fn mem_tag(&self) -> MemTag {
-        self.ptr.mem_tag()
     }
 }
 
@@ -431,19 +426,13 @@ impl<T> DynArray<T> {
     }
 
     #[inline]
-    #[must_use]
-    pub fn mem_tag(&self) -> MemTag {
-        self.0.mem_tag()
-    }
-
-    #[inline]
     pub fn into_heap_slice(self) -> HeapPtr<[T]> {
         unsafe {
             let mut me = ManuallyDrop::new(self);
             let slice_len = me.capacity();
             let alloc = &mut me.0.buf.ptr;
             let ptr = slice::from_raw_parts_mut(alloc.ptr_mut(), slice_len);
-            HeapPtr::from_raw_components(ptr, alloc.layout(), alloc.mem_tag())
+            HeapPtr::from_raw_components(ptr, alloc.layout())
         }
     }
 

@@ -8,7 +8,7 @@ use core::{
     ops::{Deref, CoerceUnsized},
     ptr::{drop_in_place, read, null}
 };
-use crate::alloc::{Allocation, Layout, UseAlloc, MemTag, ScopedAlloc, ScopedMemTag};
+use crate::alloc::{Allocation, Layout, UseAlloc, ScopedAlloc};
 use crate::mem::MEMORY_MANAGER;
 
 use super::AllocInitState;
@@ -90,12 +90,6 @@ impl<T: ?Sized> Rc<T> {
         this.ptr.layout().alloc_id()
     }
 
-    /// Get the memory tag
-    #[inline]
-    pub fn mem_tag(this: &Self) -> MemTag {
-        this.ptr.mem_tag()
-    }
-
     /// Get a mutable reference to the value, when the `Rc` is unique (only 1 strong and no weak)
     pub fn get_mut(this: &mut Self) -> Option<&mut T> {
         if Self::is_unique(this) {
@@ -119,7 +113,6 @@ impl<T: ?Sized> Rc<T> {
     {
         if !Self::is_unique(this) {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(Self::allocator_id(this)));
-            let _scope_mem_tag = ScopedMemTag::new(Self::mem_tag(this));
 
             let mut new = Self::new_uninit();
             unsafe {

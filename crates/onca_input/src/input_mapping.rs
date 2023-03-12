@@ -4,7 +4,7 @@ use onca_core::{
     prelude::*,
     time::DeltaTime,
     sync::Mutex,
-    event_listener::*, alloc::CoreMemTag,
+    event_listener::*,
 };
 use onca_core_macros::flags;
 use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z};
@@ -601,7 +601,6 @@ pub struct Action {
 
 impl Action {
     pub fn new(consume_input: bool, trigger_when_paused: bool, axis_type: AxisType) -> Self {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         Self {
             description: (),
             consume_input,
@@ -657,7 +656,6 @@ pub struct Binding {
 
 impl Binding {
     pub fn new(input_axis: InputAxisId) -> Self {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         Self {
             input_axis,
             triggers: DynArray::new(),
@@ -703,7 +701,6 @@ pub struct Mapping {
 
 impl Mapping {
     pub fn new(action: Arc<Mutex<Action>>) -> Self {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
 
         let (triggers, modifiers) = {
             let action = action.lock();
@@ -811,7 +808,6 @@ pub struct MappingContext {
 
 impl MappingContext {
     pub fn new(identifier: String) -> Self {
-        let _scope_tag = ScopedMemTag::new(CoreMemTag::input());
         Self { description: (), identifier, mappings: DynArray::new() }
     }
 
