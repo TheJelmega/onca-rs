@@ -554,6 +554,12 @@ impl InputManager {
 
 }
 
+impl Drop for InputManager {
+    fn drop(&mut self) {
+        self.raw_input_listener.lock().shutdown();
+    }
+}
+
 struct RawInputListener {
     manager : *mut InputManager
 }
@@ -566,12 +572,18 @@ impl RawInputListener {
     pub(crate) fn init(&mut self, manager: &HeapPtr<InputManager>) {
         self.manager = manager.ptr_mut();
     }
+
+    pub(crate) fn shutdown(&mut self) {
+        self.manager = null_mut();
+    }
 }
 
 impl EventListener<onca_window::RawInputEvent> for RawInputListener {
     fn notify(&mut self, event: &onca_window::RawInputEvent) {
         // SAFETY: `process_window_event`: We know the implementation to be safe
         // SAFETY: deref: Events can only be sent via the main thread (via the window manager), so our deref here is not causing mutability over multiple threads
-        unsafe { OSInput::process_window_event(&mut *self.manager, event) };
+        if self.manager != null_mut() {
+            unsafe { OSInput::process_window_event(&mut *self.manager, event) };
+        }
     }
 }
