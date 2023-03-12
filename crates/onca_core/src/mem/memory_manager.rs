@@ -1,6 +1,6 @@
 use core::{
     cell::{UnsafeCell, Cell},
-    ptr::{write_bytes, copy_nonoverlapping},
+    ptr::{copy_nonoverlapping, write_bytes},
     borrow::BorrowMut
 };
 use crate::{
@@ -10,10 +10,9 @@ use crate::{
     },
     sync::{RwLock, Mutex}, MiB, collections::HashMap
 };
-use once_cell::sync::Lazy;
 
 thread_local! {
-    pub static TLS_TEMP_STACK_ALLOC : UnsafeCell<FreelistAllocator> = UnsafeCell::new(FreelistAllocator::new_uninit());
+    pub static TLS_TEMP_ALLOC : UnsafeCell<FreelistAllocator> = UnsafeCell::new(FreelistAllocator::new_uninit());
 }
 
 pub static MEMORY_MANAGER : MemoryManager = MemoryManager::new();
@@ -29,15 +28,17 @@ pub enum AllocInitState {
 
 struct State
 {
-    malloc : Mallocator,
-    allocs : [Option<*mut dyn Allocator>; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize],
+    malloc          : Mallocator,
+    allocs          : [Option<*mut dyn Allocator>; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize],
+    default         : u16,
 }
 
 impl State {
     const fn new() -> Self {
         Self{ 
             malloc: Mallocator,
-            allocs: [None; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize]
+            allocs: [None; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize],
+            default: 0,
         }
     }
 }
@@ -45,7 +46,8 @@ impl State {
 /// Memory manager
 pub struct MemoryManager
 {
-    state : RwLock<State>
+    state : RwLock<State>,
+    //layout_and_tags : Mutex<Option<LayoutAndMemtagStorage>>,
 }
 
 impl MemoryManager {
@@ -54,48 +56,61 @@ impl MemoryManager {
 
     /// Create a new memory manager
     pub const fn new() -> Self {
-        Self { state: RwLock::new(State::new()) }
+        Self { state: RwLock::new(State::new()), /*layout_and_tags: Mutex::new(None)*/ }
+    }
+
+    /// Initialize the memory manager (needs to be called before doing any allocation)
+    pub fn init(&self) {
+        //let mut locked = self.layout_and_tags.lock();
+        //if locked.is_none() {
+        //    *locked = Some(LayoutAndMemtagStorage::new())
+        //}
     }
 
     /// Register an allocator to the manager and set its allocator id
     pub fn register_allocator(&self, alloc: *mut dyn Allocator) -> u16 {
-        let mut id : u16 = NUM_RESERVED_ALLOC_IDS;
-        {
-            let state = self.state.read();
-            for (i, alloc) in state.allocs.into_iter().enumerate() {
-                if let None = alloc {
-                    id = i as u16;
-                    break;
-                }
-            }
-        }
-        {
-            let mut state = self.state.write();
+        let mut state = self.state.write();
+        let idx = state.allocs.iter().position(|alloc| alloc.is_none());
+        if let Some(idx) = idx {
+            let id = idx as u16 + NUM_RESERVED_ALLOC_IDS;
             unsafe { (*alloc).set_alloc_id(id) };
-            state.allocs[id as usize] = Some(alloc);
+            state.allocs[idx as usize] = Some(alloc);
+
+            id
+        } else {
+            Layout::MAX_ALLOC_ID
         }
-        id + NUM_RESERVED_ALLOC_IDS
+    }
+
+    pub fn set_default_allocator(&self, alloc: UseAlloc) {
+        self.state.write().default = alloc.get_id();
     }
 
     /// Get an allocator
     pub fn get_allocator(&self, alloc: UseAlloc) -> Option<&mut dyn Allocator> {
+        /// Handle any default id
+        match alloc {
+            UseAlloc::Default => {
+                let default_id = self.state.read().default;
+                return self.get_allocator(UseAlloc::Id(default_id));
+            },
+            UseAlloc::Id(id) if id >= Layout::MAX_ALLOC_ID => {
+                let default_id = self.state.read().default;
+                return self.get_allocator(UseAlloc::Id(default_id));
+            }
+            _ => (),
+        }
+
         let mut state = self.state.read();
-        
         let alloc_ref : Option<&dyn Allocator> = match alloc {
-            // TODO(jel): default alloc is not always the mallocator
-            UseAlloc::Default => Some(unsafe { &state.malloc }),
+            UseAlloc::Default => unreachable!(),
             UseAlloc::Malloc => Some(&state.malloc),
             UseAlloc::TlsTemp => Self::get_tls_alloc(),
             UseAlloc::Id(id) => {
-                if id == 0 {
-                    // TODO(jel): default alloc is not always the mallocator
-                    Some(&state.malloc)
-                } else if id == 1 {
-                    Self::get_tls_alloc()
-                }  else if id >= Layout::MAX_ALLOC_ID {
-                    Some(&state.malloc)
-                }else {
-                    match state.allocs[(id - NUM_RESERVED_ALLOC_IDS) as usize] {
+                match id {
+                    0 => Some(&state.malloc),
+                    1 => Self::get_tls_alloc(),
+                    id => match state.allocs[(id - NUM_RESERVED_ALLOC_IDS) as usize] {
                         None => None,
                         Some(alloc) => Some(unsafe{ &*alloc })
                     }
@@ -112,29 +127,18 @@ impl MemoryManager {
 
     /// Allocate a raw allocation with the given layout, using the active allocator and memory tag.
     pub fn alloc_raw(&self, init_state: AllocInitState, layout: Layout) -> Option<Allocation<u8>> {
-        let alloc = self.get_allocator(get_active_alloc());
-        match alloc {
-            None => None,
-            Some(alloc) => {
-                match unsafe{ alloc.alloc(layout, get_active_mem_tag()) } {
-                    None => None,
-                    Some(ptr) => {
-                        if init_state == AllocInitState::Zeroed {
-                            unsafe { write_bytes(ptr.ptr_mut(), 0, layout.size()) };
-                        }
-                        Some(ptr)
-                    }
-                }
-            }
+        let alloc = self.get_allocator(get_active_alloc())?;
+        let mut ptr = unsafe{ alloc.alloc(layout) }?;
+        if init_state == AllocInitState::Zeroed {
+            unsafe { write_bytes(ptr.ptr_mut()  , 0, layout.size()) };
         }
+
+        Some(ptr)
     }
 
     /// Allocate memory with the given layout, using the active allocator and memory tag.
     pub fn alloc<T>(&self, init_state: AllocInitState) -> Option<Allocation<T>> {
-        match self.alloc_raw(init_state, Layout::new::<T>()) {
-            None => None,
-            Some(ptr) => Some(ptr.cast())
-        }
+        self.alloc_raw(init_state, Layout::new::<T>()).map(|ptr| ptr.cast())
     }
 
     /// Deallocate memory
@@ -144,9 +148,7 @@ impl MemoryManager {
         }
 
         if let Some(alloc) = self.get_allocator(UseAlloc::Id(ptr.layout().alloc_id())) {
-            unsafe {
-                (*alloc).dealloc(ptr.cast())
-            }
+            unsafe { (*alloc).dealloc(ptr.cast()) }
         } else {
             panic!("Failed to retrieve allocator to deallocate memory");
         }
@@ -156,7 +158,7 @@ impl MemoryManager {
     /// 
     /// Alignment of the new layout needs to match that of the old
     /// 
-    /// If new memory was unable to be allocated, the result will contain an `Err(...)` with the original allocator
+    /// If new memory was unable to be allocated, the result will contain an `Err(...)` with the original allocation
     pub fn grow<T>(&self, ptr: Allocation<T>, new_layout: Layout) -> Result<Allocation<T>, Allocation<T>> {
         /// Old layout could be larger, as allocators are free to allocate more memory that needed, and do report it in the returned layout
         if new_layout.size() <= ptr.layout().size() {
@@ -227,7 +229,7 @@ impl MemoryManager {
 
     fn get_tls_alloc() -> Option<&'static dyn Allocator> {
         unsafe {
-            let is_init = TLS_TEMP_STACK_ALLOC.with(|tls| (*tls.get()).is_initialized());
+            let is_init = TLS_TEMP_ALLOC.with(|tls| (*tls.get()).is_initialized());
             if !is_init {
                 let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
 
@@ -237,12 +239,12 @@ impl MemoryManager {
                     None => return None,
                     Some(buf) => buf
                 };
-                TLS_TEMP_STACK_ALLOC.with(|tls| {
+                TLS_TEMP_ALLOC.with(|tls| {
                     (*tls.get()).init(buffer);
                     (*tls.get()).set_alloc_id(1)
                 });
             }
-            Some(&mut *TLS_TEMP_STACK_ALLOC.with(|tls| tls.get()))
+            Some(&mut *TLS_TEMP_ALLOC.with(|tls| tls.get()))
         }
     }
 }
