@@ -43,6 +43,52 @@
         </Expand>
     </Type>
 
+    <Type Name="onca_core::collections::hash_map::HashMap&lt;*,*,*&gt;">
+        <DisplayString>{{ len = {__0.table.table.items} }}</DisplayString>
+        <Expand>
+            <Item Name="[len]">__0.table.table.items</Item>
+            <Item Name="[cap]">__0.table.table.items + __0.table.table.growth_left</Item>
+            <Item Name="[state]">__0.hash_builder</Item>
+            <CustomListItems>
+                <Variable Name="i" InitialValue="0" />
+                <Variable Name="n" InitialValue="__0.table.table.items" />
+                <Size>__0.table.table.items</Size>
+                <Loop>
+                    <Break Condition="n == 0" />
+                    <If Condition="(__0.table.table.ctrl.pointer[i] &amp; 0x80) == 0">
+                        <!-- Bucket is populated -->
+                        <Exec>n--</Exec>
+                        <Item Name="{((tuple$&lt;$T1,$T2&gt;*)__0.table.table.ctrl.pointer)[-(i + 1)].__0}">((tuple$&lt;$T1,$T2&gt;*)__0.table.table.ctrl.pointer)[-(i + 1)].__1</Item>
+                    </If>
+                    <Exec>i++</Exec>
+                </Loop>
+            </CustomListItems>
+        </Expand>
+    </Type>
+
+    <Type Name="onca_core::collections::hash_set::HashSet&lt;*,*,*&gt;">
+        <DisplayString>{{ len = {__0.table.table.items} }}</DisplayString>
+        <Expand>
+            <Item Name="[len]">__0.table.table.items</Item>
+            <Item Name="[cap]">__0.table.table.items + __0.table.table.growth_left</Item>
+            <Item Name="[state]">__0.hash_builder</Item>
+            <CustomListItems>
+                <Variable Name="i" InitialValue="0" />
+                <Variable Name="n" InitialValue="__0.table.table.items" />
+                <Size>__0.table.table.items</Size>
+                <Loop>
+                    <Break Condition="n == 0" />
+                    <If Condition="(__0.table.table.ctrl.pointer[i] &amp; 0x80) == 0">
+                        <!-- Bucket is populated -->
+                        <Exec>n--</Exec>
+                        <Item>((tuple$&lt;$T1,$T2&gt;*)__0.table.table.ctrl.pointer)[-(i + 1)]</Item>
+                    </If>
+                    <Exec>i++</Exec>
+                </Loop>
+            </CustomListItems>
+        </Expand>
+    </Type>
+
     <!-- Strings-->
     <Type Name="onca_core::strings::string::String">
         <DisplayString>{arr.__0.buf.ptr.ptr,s8}</DisplayString>
