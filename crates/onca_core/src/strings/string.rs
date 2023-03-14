@@ -392,7 +392,7 @@ impl String {
         impl<'a> Drop for SetLenOnDrop<'a> {
             fn drop(&mut self) {
                 let new_len = self.idx - self.del_bytes;
-                debug_assert!(new_len < self.s.len());
+                debug_assert!(new_len <= self.s.len());
                 unsafe { self.s.arr.set_len(new_len) };
             }
         }
@@ -418,10 +418,10 @@ impl String {
                         ch.len_utf8()
                     )
                 });
-
-                // Point idx to the next char
-                guard.idx += ch_len;
             }
+
+            // Point idx to the next char
+            guard.idx += ch_len;
         }
         drop(guard);
         self.null_terminate();
