@@ -2,9 +2,9 @@ use core::str::pattern::{Pattern, Searcher};
 
 /// Parser error
 pub struct ParserError {
-    line   : usize,
-    column : usize,
-    msg    : &'static str,
+    pub line   : usize,
+    pub column : usize,
+    pub msg    : &'static str,
 }
 
 /// Parser that can parse a `&str`
