@@ -433,6 +433,9 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
 
     unsafe fn append_elements(&mut self, other: *const [T]) {
         let count = (*other).len();
+        if count == 0 {
+            return;
+        }
 
         let new_cap = self.reserve(count);
 
