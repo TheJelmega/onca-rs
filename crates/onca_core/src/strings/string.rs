@@ -66,7 +66,13 @@ impl String {
         }
     }
 
-    /// Creat a string from raw utf8 bytes, including invalid characters
+    /// Create a string from raw null-terminated utf8 bytes if the utf8 bytes are valid, otherwise return an error
+    #[inline]
+    pub fn from_null_terminated_utf8(arr: &[u8]) -> Result<String, FromUtf8Error> {
+        Self::from_utf8(arr.iter().map_while(|byte| if *byte == 0 { None } else { Some(*byte) }).collect())
+    }
+
+    /// Create a string from raw utf8 bytes, including invalid characters
     /// 
     /// Unlike `std::String`, we cannot return a `Cow<'_, str>` for 2 reasons
     ///   - str already has ToOwned implemented, returning `std::string::String`'
@@ -105,6 +111,17 @@ impl String {
         res
     }
 
+    /// Create a string from raw null-terminated utf8 bytes, including invalid characters
+    /// 
+    /// Unlike `std::String`, we cannot return a `Cow<'_, str>` for 2 reasons
+    ///   - str already has ToOwned implemented, returning `std::string::String`'
+    ///   - We would be missing info about the request allocator, because of how `Cow::Borrowed` works
+    #[must_use]
+    pub fn from_null_terminated_utf8_lossy(v: &[u8]) -> String {
+        let len = v.iter().position(|byte| *byte == 0).unwrap_or(v.len());
+        Self::from_utf8_lossy(&v[..len])
+    }
+
     /// Create a string from raw utf16 characters if the uthf 16 bytes are valid, otherwise return an error
     pub fn from_utf16(arr: &[u16]) -> Result<String, FromUtf16Error> {
         let mut ret = String::with_capacity(arr.len());
@@ -137,7 +154,29 @@ impl String {
     #[inline]
     #[must_use]
     pub unsafe fn from_utf8_unchecked(bytes: DynArray<u8>) -> String {
-        Self { arr: bytes }
+        let mut res = Self { arr: bytes };
+        res.null_terminate();
+        res
+    }
+
+    /// Convert a dynamic array of null-terminated bytes to a `String` without checking that the string contains valid UTF-8
+    #[inline]
+    #[must_use]
+    pub unsafe fn from_null_terminated_utf8_unchecked(bytes: &[u8]) -> String {
+        let len = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        let mut res = Self::from_utf8_unchecked(bytes[..len].iter().map(|byte| *byte).collect());
+        res.null_terminate();
+        res
+    }
+
+    /// Convert a dynamic array of null-terminated bytes to a `String` without checking that the string contains valid UTF-8
+    #[inline]
+    #[must_use]
+    pub unsafe fn from_null_terminated_utf8_unchecked_i8(bytes: &[i8]) -> String {
+        let len = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        let mut res = Self::from_utf8_unchecked(bytes[..len].iter().map(|byte| *byte as u8).collect());
+        res.null_terminate();
+        res
     }
 
     /// Converts a 'String' into a byte dynamic array
@@ -268,6 +307,35 @@ impl String {
         &self.arr
     }
 
+    /// Returns a null-terminated byte slice of this `String`'s contents
+    /// 
+    /// The inverse of this method is [`from_null_terminated_utf8`]
+    /// 
+    /// #Safety
+    /// 
+    /// The user needs to call [`null_terminate`] before calling this function
+    #[inline]
+    #[must_use]
+    pub fn as_null_terminated_bytes(&self) -> &[u8] {
+        // SAFETY: We always null-terminate the string, so we can return it null terminated here (if the user follows the safety requirement)
+        unsafe { slice::from_raw_parts(self.as_ptr(), self.len() + 1) } 
+    }
+
+    /// Returns a null-terminated str slice of this `String`'s contents
+    /// 
+    /// #Safety
+    /// 
+    /// The user needs to call [`null_terminate`] before calling this function
+    #[inline]
+    #[must_use]
+    pub fn as_null_terminated_str(&self) -> &str {
+        // SAFETY: We always null-terminate the string, so we can return it null terminated here (if the user follows the safety requirement)
+        unsafe {
+            let slice = slice::from_raw_parts(self.as_ptr(), self.len() + 1);
+            core::str::from_utf8_unchecked(slice)
+        }
+    }
+
     /// Shortens the `String`to the specified length
     /// 
     /// If `new_len` is greater than the string's curent length, this has no effect
@@ -294,7 +362,6 @@ impl String {
         let ch = self.chars().rev().next()?;
         let new_len = self.len() - ch.len_utf8();
         unsafe {
-            // TODO: See null_terminate
             self.arr[new_len] = 0;
             self.arr.set_len(new_len);
         }
@@ -605,7 +672,7 @@ impl String {
         unsafe { self.as_mut_dynarr() }.splice((start, end), replace_with.bytes());
     }
 
-    // TODO: should only be called when debugging, it makes no sense otherwise, as we handle not having null terminators correctly
+    // TODO: should only be called automatically in string code when debugging, it makes no sense otherwise, as we handle not having null terminators correctly
     /// Null terminate a string (for APIs that take in a null-terminated string)
     pub fn null_terminate(&mut self) {
         self.arr.push(0);
