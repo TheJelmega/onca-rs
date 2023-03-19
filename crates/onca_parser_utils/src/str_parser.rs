@@ -1,6 +1,7 @@
 use core::str::pattern::{Pattern, Searcher};
 
 /// Parser error
+#[derive(Clone, Copy, Debug)]
 pub struct ParserError {
     pub line   : usize,
     pub column : usize,
@@ -69,7 +70,7 @@ impl<'a> StrParser<'a> {
     }
 
     pub fn consume_whitespace(&mut self, include_newline: bool) {
-        let idx = self.string.find(|ch: char| !ch.is_whitespace() || (include_newline && ch != '\n')).unwrap_or(self.string.len());
+        let idx = self.string.find(|ch: char| !ch.is_whitespace() || (include_newline && ch != '\r' && ch != '\n')).unwrap_or(self.string.len());
         self.consume_count(idx);
     }
     

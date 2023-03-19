@@ -1,13 +1,23 @@
 #![feature(let_chains)]
 
+use core::fmt;
 use onca_core::{
 	prelude::*,
 	collections::HashMap,
 };
 use onca_parser_utils::str_parser::*;
 
+/// TOML parsing error
+#[derive(Clone, Copy, Debug)]
 pub struct TomlParseError(pub ParserError);
 
+impl fmt::Display for TomlParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("Failed to parse toml at {}:{}, err: {}", self.0.line, self.0.column, self.0.msg))
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Item {
 	Comment(String),
 	String(String),
@@ -19,11 +29,21 @@ pub enum Item {
 }
 
 /// Toml table that preserves comments
+#[derive(Clone)]
 pub struct Table {
 	/// Actual items (including comments)
 	items   : DynArray<Item>,
 	/// Mapping from key to an index
 	mapping : HashMap<String, usize>,
+}
+
+impl fmt::Debug for Table {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Table")
+			.field("items", &self.items)
+			.field("mapping", &"'No Debug implemented for HashMap'")
+		.finish()
+    }
 }
 
 impl Table {
@@ -149,8 +169,14 @@ impl Table {
 			}
 		}
 	}
+
+	/// Create a new toml from this table
+	pub fn to_toml(self) -> Toml {
+		Toml { table: self }
+	}
 }
 
+#[derive(Clone, Debug)]
 pub struct Toml {
 	table : Table,
 }
@@ -290,6 +316,14 @@ impl<'a> Parser<'a> {
 			return Err(self.error_and_terminate("End of file"));
 		}
 
+		if self.parser.string.starts_with("true") && self.parser.string.chars().nth(4).map_or(false, |c| !c.is_alphanumeric()) {
+			self.parser.consume_count(4);
+			return Ok(Item::Boolean(true));
+		} else if self.parser.string.starts_with("false") && self.parser.string.chars().nth(5).map_or(false, |c| !c.is_alphanumeric()) {
+			self.parser.consume_count(5);
+			return Ok(Item::Boolean(true));
+		}
+
 		// SAFETY: We only can reach here if there is still data to parse, so there is at least 1 character
 		match self.parser.string.chars().nth(0).unwrap() {
 			// TOML basic strings
@@ -379,6 +413,10 @@ impl<'a> Parser<'a> {
 		debug_assert!(valid);
 
 		self.parser.consume_whitespace(false);
+
+		if self.parser.consume_char(']') {
+			return Ok(Item::Array(DynArray::new()));
+		}
 		
 		let mut arr = DynArray::new();
 		arr.push(self.parse_item()?);
@@ -403,6 +441,10 @@ impl<'a> Parser<'a> {
 		debug_assert!(valid);
 
 		self.parser.consume_whitespace(false);
+
+		if self.parser.consume_char('}') {
+			return Ok(Item::Table(Table::new()));
+		}
 		
 		let mut table = Table::new();
 		let (keys, item) = self.parse_key_item()?;
