@@ -1,4 +1,4 @@
-use core::mem::ManuallyDrop;
+use core::mem::{ManuallyDrop, size_of};
 
 use crate::{os::dynlib as os, prelude::ScopedAlloc, strings::ToString};
 
@@ -30,10 +30,16 @@ impl DynLib {
     }
 
     /// Get a function pointer to the given function
-    pub fn get_proc_address(&self, proc_name: &str) -> Option<fn()> {
+    pub fn get<T: Copy>(&self, proc_name: &str) -> Option<T> {
+        // This is probably the best we can do to insure that `T` is a function pointer
+        if size_of::<T>() != size_of::<fn()>() {
+            return None;
+        }
+
         let _scope_alloc = ScopedAlloc::new(crate::prelude::UseAlloc::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
-        os::get_proc_address(self.handle, &proc_name.to_onca_string())
+        let addr = os::get_proc_address(self.handle, &proc_name.to_onca_string());
+        addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })
     }
 }
 
