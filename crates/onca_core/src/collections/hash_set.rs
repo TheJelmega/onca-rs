@@ -33,11 +33,11 @@ pub struct HashSet<T, S = DefaultHashBuilder>(hashbrown::HashSet<T, S, Alloc>);
 impl<T> HashSet<T, DefaultHashBuilder> {
     
     pub fn new() -> Self {
-        Self::with_hasher(DefaultHashBuilder::new())
+        Self::with_hasher(DefaultHashBuilder::default())
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new())
+        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::default())
     }
 }
 

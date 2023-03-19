@@ -8,9 +8,7 @@ use crate::time::TimeStamp;
 
 pub fn get_timestamp() -> TimeStamp {
     unsafe {
-        let mut sys_time = SYSTEMTIME::default();
-        GetSystemTime(&mut sys_time);
-
+        let sys_time = GetSystemTime();
         TimeStamp {
             year:        sys_time.wYear,
             month:       sys_time.wMonth as u8,

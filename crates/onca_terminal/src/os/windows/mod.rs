@@ -1,4 +1,3 @@
-use core::ffi::c_void;
 use onca_core::io;
 use windows::Win32::{
     Foundation::HANDLE, 
@@ -66,14 +65,9 @@ impl Terminal {
 
     unsafe fn write_non_terminal(handle: HANDLE, utf8: &[u8]) -> io::Result<usize> {
         let mut chars_written = 0;
-
-        let len = utf8.len();
-        let ptr = utf8.as_ptr();
-
         let res = WriteFile(
             handle,
-            Some(ptr as *const c_void),
-            len as u32,
+            Some(utf8),
             Some(&mut chars_written),
             None
         );

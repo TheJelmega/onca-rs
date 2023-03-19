@@ -1,7 +1,6 @@
 // For VTable builders
 #![feature(const_mut_refs)]
 
-pub mod definitions;
 pub mod ole;
 pub mod com;
 

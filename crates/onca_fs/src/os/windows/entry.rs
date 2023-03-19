@@ -61,8 +61,8 @@ impl EntrySearchHandle {
             match handle {
                 Ok(handle) => {
                     // Skip both "." and ".."
-                    while find_data.cFileName[0].0 as char == '.' && find_data.cFileName[1].0 == 0 || // "."
-                        find_data.cFileName[0].0 as char == '.' && find_data.cFileName[0].0 as char == '.' && find_data.cFileName[2].0 == 0 // ".."
+                    while find_data.cFileName[0] as char == '.' && find_data.cFileName[1] == 0 || // "."
+                        find_data.cFileName[0] as char == '.' && find_data.cFileName[0] as char == '.' && find_data.cFileName[2] == 0 // ".."
                     {
                         let res = FindNextFileA(handle, &mut find_data).as_bool();
                         if !res {
@@ -71,7 +71,7 @@ impl EntrySearchHandle {
                     }
 
                     let mut path = path.to_path_buf();
-                    let filename_len = find_data.cFileName.iter().position(|&c| c.0 == 0).unwrap_or(MAX_PATH);
+                    let filename_len = find_data.cFileName.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
                     let filename_slice = core::slice::from_raw_parts(find_data.cFileName.as_ptr() as *const u8, filename_len);
                     path.push(PathBuf::from_utf8_lossy(filename_slice));
                     Ok((EntrySearchHandle(handle), path))
@@ -84,7 +84,7 @@ impl EntrySearchHandle {
     pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
         let mut find_data = WIN32_FIND_DATAA::default();
         if unsafe { FindNextFileA(self.0, &mut find_data).as_bool() } {
-            let mut it = find_data.cFileName.split(|&c| c.0 == 0);
+            let mut it = find_data.cFileName.split(|&c| c == 0);
             let char_slice = it.next().unwrap();
             let utf8_slice = unsafe { core::slice::from_raw_parts(char_slice.as_ptr() as *const u8, char_slice.len()) };
             let file_name = String::from_utf8_lossy(utf8_slice);

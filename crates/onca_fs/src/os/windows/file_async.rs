@@ -204,11 +204,9 @@ impl FileHandle {
             let completion_data = HeapPtr::new(AsyncIOCompletionData::new());
             overlapped.hEvent = core::mem::transmute(completion_data.ptr());
 
-            let bytes_to_write = buffer.len() as u32;
             let res = WriteFileEx(
                 self.0,
-                Some(buffer.as_ptr() as *const c_void),
-                bytes_to_write,
+                Some(&buffer),
                 overlapped.ptr_mut(),
                 Some(io_completion_callback)
             );

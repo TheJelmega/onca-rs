@@ -11,10 +11,10 @@ use windows::{
         Graphics::Gdi::{
             EnumDisplayMonitors, GetMonitorInfoA, MonitorFromWindow, MonitorFromPoint, MonitorFromRect, 
             HMONITOR, HDC, MONITORINFOEXA, MONITORINFO,
-            MONITOR_DEFAULTTONULL, EnumDisplaySettingsExA, ENUM_CURRENT_SETTINGS, DEVMODEA, ENUM_DISPLAY_SETTINGS_MODE, DM_BITSPERPEL, DM_PELSWIDTH, DM_PELSHEIGHT, DM_DISPLAYFREQUENCY, EnumDisplayDevicesA, DISPLAY_DEVICEA,
+            MONITOR_DEFAULTTONULL, EnumDisplaySettingsExA, ENUM_CURRENT_SETTINGS, DEVMODEA, ENUM_DISPLAY_SETTINGS_MODE, DM_BITSPERPEL, DM_PELSWIDTH, DM_PELSHEIGHT, DM_DISPLAYFREQUENCY, EnumDisplayDevicesA, DISPLAY_DEVICEA, EDS_RAWMODE,
         },
         UI::{
-            WindowsAndMessaging::{MONITORINFOF_PRIMARY, EDS_RAWMODE},
+            WindowsAndMessaging::{MONITORINFOF_PRIMARY},
             HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}
         },
     },
@@ -78,8 +78,8 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
         let mut i = 0;
         let mut res = true;
         // window-rs DEVMODEA struct is incorrect, so we are using our own definition for now
-        let mut dev_mode = onca_windows_utils::definitions::DEVMODEA::default();
-        dev_mode.dmSize = size_of::<onca_windows_utils::definitions::DEVMODEA>() as u16;
+        let mut dev_mode = DEVMODEA::default();
+        dev_mode.dmSize = size_of::<DEVMODEA>() as u16;
 
         // All available modes
         let mut monitor_btree = BTreeSet::new();

@@ -35,11 +35,11 @@ pub type DefaultHashBuilder = hashbrown::hash_map::DefaultHashBuilder;
 
 impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     pub fn new() -> Self {
-        Self::with_hasher(DefaultHashBuilder::new())
+        Self::with_hasher(DefaultHashBuilder::default())
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::new())
+        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::default())
     }
 }
 

@@ -7,7 +7,7 @@ use windows::Win32::{
             KeyboardAndMouse::*,
             RAWINPUTDEVICE, RIDEV_NOHOTKEYS, RegisterRawInputDevices, RAWKEYBOARD,
         },
-        WindowsAndMessaging::{RI_KEY_BREAK, MAPVK_VK_TO_CHAR}
+        WindowsAndMessaging::{RI_KEY_BREAK}
     },
     Foundation::{HWND, GetLastError},
     Devices::HumanInterfaceDevice::{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD}

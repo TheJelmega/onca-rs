@@ -648,7 +648,7 @@ pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Re
 
         let mut bytes_written = 0;
         let data = report.data.get_data();
-        let res = WriteFile(handle, Some(data.as_ptr() as *const c_void), data.len() as u32, Some(&mut bytes_written), Some(overlapped)).as_bool();
+        let res = WriteFile(handle, Some(data), Some(&mut bytes_written), Some(overlapped)).as_bool();
 
         let write_pending = if !res {
             let err = GetLastError().0;

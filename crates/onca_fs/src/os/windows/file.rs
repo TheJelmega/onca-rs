@@ -191,9 +191,9 @@ impl FileHandle {
     
     pub(crate) fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         unsafe {
-            unsafe fn write_impl(handle: &mut FileHandle, ptr: *const u8, len: u32) -> io::Result<usize> {
+            unsafe fn write_impl(handle: &mut FileHandle, buf: &[u8]) -> io::Result<usize> {
                 let mut bytes_written = 0;
-                let res = WriteFile(handle.0, Some(ptr as *const c_void), len, Some(&mut bytes_written), None);
+                let res = WriteFile(handle.0, Some(buf), Some(&mut bytes_written), None);
                 if res.as_bool() {
                     Ok(bytes_written as usize)
                 } else {
@@ -204,7 +204,7 @@ impl FileHandle {
             let mut buf_ptr = buf.as_ptr();
             let mut buf_len = buf.len();
             if buf_len <= i32::MAX as usize {
-                write_impl(self, buf_ptr, buf_len as u32)
+                write_impl(self, buf)
 
             // While it's extremely unlikely someone will write >4GiB from memory, we still need to be able to do it
             } else {
@@ -214,7 +214,8 @@ impl FileHandle {
 
                 while bytes_written > 0 {
                     let to_write = if buf_len > u32::MAX as usize { u32::MAX } else { buf_len as u32 };
-                    bytes_written = write_impl(self, buf_ptr, to_write)?;
+                    let slice = core::slice::from_raw_parts(buf_ptr, to_write as usize);
+                    bytes_written = write_impl(self, slice)?;
 
                     buf_len -= bytes_written;
                     total_written += bytes_written;
