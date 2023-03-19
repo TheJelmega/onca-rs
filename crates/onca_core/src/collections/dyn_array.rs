@@ -10,7 +10,11 @@ use core::{
     array,
     cmp,
 };
-use crate::{alloc::{UseAlloc, Allocation, Layout, self, ScopedAlloc}, KiB, mem::{MEMORY_MANAGER, HeapPtr, AllocInitState}};
+use crate::{
+    alloc::{UseAlloc, Allocation, Layout, self, ScopedAlloc},
+    mem::{HeapPtr, AllocInitState, get_memory_manager},
+    KiB,
+};
 
 use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
@@ -42,7 +46,7 @@ impl<T> DynamicBuffer<T> {
             Self::new()
         } else {
             let layout = Layout::array::<T>(capacity);
-            let res = MEMORY_MANAGER.alloc_raw(init_state, layout);
+            let res = get_memory_manager().alloc_raw(init_state, layout);
             let ptr = match res {
                 Some(ptr) => ptr,
                 None => panic!("Failed to allocate memory")
@@ -97,7 +101,7 @@ impl<T> DynamicBuffer<T> {
         if self.cap == 0 {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.allocator_id()));
 
-            let res = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, new_layout);
+            let res = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, new_layout);
             self.ptr = match res {
                 Some(ptr) => ptr.cast(),
                 None => {
@@ -107,7 +111,7 @@ impl<T> DynamicBuffer<T> {
                 }
             };
         } else {
-            self.ptr = match MEMORY_MANAGER.grow(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
+            self.ptr = match get_memory_manager().grow(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
                 Ok(ptr) => ptr,
                 Err(_) => {
                     let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
@@ -170,7 +174,7 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
         }
 
         let new_layout = Layout::array::<T>(cap);
-        self.ptr = match MEMORY_MANAGER.shrink(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
+        self.ptr = match get_memory_manager().shrink(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }), new_layout) {
             Ok(ptr) => ptr,
             Err(_) => {
                 //let rs_layout = unsafe { std::alloc::Layout::from_size_align_unchecked(new_layout.size(), new_layout.align()) };
@@ -210,7 +214,7 @@ impl<T> imp::DynArrayBuffer<T> for DynamicBuffer<T> {
 impl<T> Drop for DynamicBuffer<T> {
     fn drop(&mut self) {
         if self.cap > 0 {
-            MEMORY_MANAGER.dealloc(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }))
+            get_memory_manager().dealloc(mem::replace(&mut self.ptr, unsafe { Allocation::const_null() }))
         }
     }
 }

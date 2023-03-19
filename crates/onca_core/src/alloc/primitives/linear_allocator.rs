@@ -1,5 +1,5 @@
 use core::mem::size_of;
-use crate::{alloc::{Allocation, Allocator, Layout}, mem::MEMORY_MANAGER};
+use crate::{alloc::{Allocation, Allocator, Layout}, mem::get_memory_manager};
 
 /// Linear/Bump allocator
 /// 
@@ -61,7 +61,7 @@ impl Allocator for LinearAllocator {
 
 impl Drop for LinearAllocator {
     fn drop(&mut self) {
-        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
+        get_memory_manager().dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
     }
 }
 

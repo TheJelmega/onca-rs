@@ -2,7 +2,7 @@ use core::{ptr::NonNull, cell::UnsafeCell};
 
 use crate::{
     alloc::{Layout, UseAlloc, Allocation, get_active_alloc, ScopedAlloc},
-    mem::{MEMORY_MANAGER, AllocInitState}
+    mem::{AllocInitState, get_memory_manager}
 };
 
 extern crate alloc;
@@ -33,7 +33,7 @@ unsafe impl alloc::alloc::Allocator for Alloc {
             let self_layout = &mut *self.layout.get();
             let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self_layout.alloc_id()));
 
-            let alloc = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);
+            let alloc = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout);
             match alloc {
                 Some(ptr) => {
                     let slice_ptr = core::ptr::slice_from_raw_parts_mut(ptr.ptr_mut(), ptr.layout().size());
@@ -48,7 +48,7 @@ unsafe impl alloc::alloc::Allocator for Alloc {
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
         let layout = unsafe { *self.layout.get() };
         let alloc = Allocation::from_raw(ptr.as_ptr(), layout);
-        MEMORY_MANAGER.dealloc(alloc);
+        get_memory_manager().dealloc(alloc);
     }
 }
 

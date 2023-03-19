@@ -6,7 +6,7 @@ use core::{
 
 use crate::{
     alloc::{Allocation, Allocator, Layout, ComposableAllocator, UseAlloc},
-    mem::{MEMORY_MANAGER, self, AllocInitState},
+    mem::{self, AllocInitState, get_memory_manager},
 };
 
 struct Header {
@@ -102,7 +102,7 @@ impl Allocator for PoolAllocator {
 
 impl ComposableAllocator<(usize, usize)> for PoolAllocator {
     fn new_composable(args: (usize, usize)) -> Self {
-        let buffer = unsafe { MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, Layout::new_size_align(args.0, 8)).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, Layout::new_size_align(args.0, 8)).expect("Failed to allocate memory for composable allocator") };
         PoolAllocator::new(buffer, args.1)
     }
 
@@ -117,7 +117,7 @@ impl ComposableAllocator<(usize, usize)> for PoolAllocator {
 
 impl Drop for PoolAllocator {
     fn drop(&mut self) {
-        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
+        get_memory_manager().dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
     }
 }
 

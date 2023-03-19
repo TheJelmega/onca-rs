@@ -19,7 +19,7 @@ use std::{
 use crate::{
     alloc::{UseAlloc, Layout, ScopedAlloc},
     collections::DynArray,
-    mem::{MEMORY_MANAGER, self},
+    mem,
     io,
 };
 

@@ -16,7 +16,7 @@ use std::{
 };
 use crate::{
     alloc::{Allocation, Layout, UseAlloc, ScopedAlloc},
-    mem::MEMORY_MANAGER,
+    mem::get_memory_manager,
 };
 
 use super::AllocInitState;
@@ -124,7 +124,7 @@ impl<T> HeapPtr<T> {
         let uninit = if size_of::<MaybeUninit<T>>() == 0 {
             Some(unsafe { Allocation::const_null() })
         } else {
-            MEMORY_MANAGER.alloc::<MaybeUninit<T>>(AllocInitState::Uninitialized)
+            get_memory_manager().alloc::<MaybeUninit<T>>(AllocInitState::Uninitialized)
         };
         match uninit {
             None => None,
@@ -141,7 +141,7 @@ impl<T> HeapPtr<T> {
     /// Try to create a new `HeapPtr<[T]>` with an uninitialized value, using the given allocator
     pub fn try_new_uninit_slice(len: usize) -> Option<HeapPtr<[MaybeUninit<T>]>> {
         let layout = Layout::array::<MaybeUninit<T>>(len);
-        let uninit = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);
+        let uninit = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout);
         unsafe {
             match uninit {
                 None => None,
@@ -301,7 +301,7 @@ impl<T> HeapPtr<T> {
     pub fn deref_move(self) -> T {
         let me = ManuallyDrop::new(self);
         let val = unsafe{ core::ptr::read(me.ptr()) };
-        MEMORY_MANAGER.dealloc(unsafe{ me.ptr.duplicate() });
+        get_memory_manager().dealloc(unsafe{ me.ptr.duplicate() });
         val
     }
 }
@@ -310,7 +310,7 @@ impl<T: ?Sized> Drop for HeapPtr<T> {
     fn drop(&mut self) {
         if self.ptr.ptr() as *const u8 != null() {
             unsafe { drop_in_place(self.ptr.ptr_mut()) };
-            MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+            get_memory_manager().dealloc(unsafe{ self.ptr.duplicate() });
         }
     }
 }

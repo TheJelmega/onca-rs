@@ -4,7 +4,7 @@ use core::{
 };
 use crate::{
     alloc::{Allocation, Allocator, Layout},
-    mem::MEMORY_MANAGER
+    mem::get_memory_manager
 };
 
 /// Linear/Bump allocator
@@ -105,7 +105,7 @@ impl Allocator for StackAllocator {
 
 impl Drop for StackAllocator {
     fn drop(&mut self) {
-        MEMORY_MANAGER.dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
+        get_memory_manager().dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
     }
 }
 

@@ -1,15 +1,31 @@
-use core::fmt::{Display, Arguments};
+use core::{fmt::{Display, Arguments}, ptr::null};
 
 use onca_core::{
     prelude::*,
     io::{self, prelude::*},
-    sync::Mutex,
+    sync::{RwLock, Mutex},
     mem::HeapPtr,
     time::TimeStamp,
 };
 use onca_terminal::{Terminal, TerminalColor, TextFormatting};
 
-pub const LOGGER : Mutex<Logger> = Mutex::new(Logger::const_new());
+struct LoggerPtr(*const Logger);
+
+unsafe impl Send for LoggerPtr {}
+unsafe impl Sync for LoggerPtr {}
+
+// The RwLock does not actually guard the value, but is used to have a global set-able state that is `Sync`
+static LOGGER : RwLock<LoggerPtr> = RwLock::new(LoggerPtr(null()));
+
+pub fn set_logger(logger: &Logger) {
+    *LOGGER.write() = LoggerPtr(logger as *const _);
+}
+
+pub fn get_logger() -> &'static Logger {
+    let ptr = LOGGER.read().0;
+    assert!(ptr != null(), "Logger was not set");
+    unsafe { &*ptr }
+}
 
 /// Logging level
 #[repr(u8)]
@@ -155,16 +171,13 @@ macro_rules! log_location {
     };
 }
 
-/// Logger
-/// 
-/// Supports up to 8 writers, e.g. terminal, file, in-game console, external tool, etc
-pub struct Logger {
+pub struct LoggerState {
     max_level : LogLevel,
     writers   : [Option<HeapPtr<dyn io::Write>>; 8],
 }
 
-impl Logger {
-    pub const fn const_new() -> Logger {
+impl LoggerState {
+    pub const fn new() -> Self {
         /// Workaround, as you can only initialize an array of `None`s, if it fulfills `Option<T> where T: Copy`
         const NONE: Option<HeapPtr<dyn io::Write>> = None;
         Self { 
@@ -172,10 +185,23 @@ impl Logger {
             writers: [NONE; 8],
         }
     }
+}
+
+/// Logger
+/// 
+/// Supports up to 8 writers, e.g. terminal, file, in-game console, external tool, etc
+pub struct Logger {
+    state: Mutex<LoggerState>
+}
+
+impl Logger {
+    pub const fn new() -> Self {
+        Self { state: Mutex::new(LoggerState::new()) }
+    }
 
     /// Set the maximum log level (severe == lowest, debug == highest)
     pub fn set_max_level(&mut self, level: LogLevel) {
-        self.max_level = level;
+        self.state.lock().max_level = level;
     }
 
     /// Add a writer. 
@@ -183,10 +209,12 @@ impl Logger {
     /// Returns `Ok(index)` if space was available. This index can be used to remove the writer later on.
     /// 
     /// Otherwise returns an `Err` with the provided writer
-    pub fn add_writer(&mut self, writer: HeapPtr<dyn io::Write>) -> Result<usize, HeapPtr<dyn io::Write>> {
+    pub fn add_writer(&self, writer: HeapPtr<dyn io::Write>) -> Result<usize, HeapPtr<dyn io::Write>> {
+        let mut state = self.state.lock();
+
         let mut index = None;
         for i in 0..8 {
-            if let None = self.writers[i] {
+            if let None = state.writers[i] {
                 index = Some(i);
                 break;
             }
@@ -194,7 +222,7 @@ impl Logger {
 
         match index {
             Some(idx) => {
-                self.writers[idx] = Some(writer);
+                state.writers[idx] = Some(writer);
                 Ok(idx)
             },
             None => Err(writer),
@@ -202,13 +230,15 @@ impl Logger {
     }
 
     /// Remove a writer from the logger
-    pub fn remove_writer(&mut self, index: usize) -> Option<HeapPtr<dyn io::Write>> {
-        core::mem::replace(&mut self.writers[index], None)
+    pub fn remove_writer(&self, index: usize) -> Option<HeapPtr<dyn io::Write>> {
+        core::mem::replace(&mut self.state.lock().writers[index], None)
     }
 
     /// Log a message to the console
-    pub fn log(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, text: &str) {
-        if level as u8 <= self.max_level as u8 {
+    pub fn log(&self, category: LogCategory, level: LogLevel, loc: LogLocation, text: &str) {
+        let mut state = self.state.lock();
+
+        if level as u8 <= state.max_level as u8 {
             let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
             let mut formatted = String::new();
@@ -217,12 +247,14 @@ impl Logger {
             let timestamp = loc.timestamp();
             let _ = write!(&mut formatted, "{timestamp} [{category}] {level}{loc_formatter}: {text}");
 
-            self.write_message(&formatted, level);
+            Self::write_message(&mut state, &formatted, level);
         }
     }
 
-    pub fn log_fmt(&mut self, category: LogCategory, level: LogLevel, loc: LogLocation, format: Arguments) {
-        if level as u8 <= self.max_level as u8 {
+    pub fn log_fmt(&self, category: LogCategory, level: LogLevel, loc: LogLocation, format: Arguments) {
+        let mut state = self.state.lock();
+
+        if level as u8 <= state.max_level as u8 {
             let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
             let mut formatted = String::new();
@@ -233,15 +265,15 @@ impl Logger {
             formatted = formatted.replace('\\', "/");
             let _ = write!(&mut formatted, "{format}\n");
 
-            self.write_message(&formatted, level);
+            Self::write_message(&mut state, &formatted, level);
         }
     }
 
-    fn write_message(&mut self, message: &str, level: LogLevel) {
+    fn write_message(state: &mut LoggerState, message: &str, level: LogLevel) {
         let (fore, back, formatting) = level.get_terminal_color_and_fromatting();
         let _ = Terminal::write_with(message, fore, back, formatting);
 
-        for writer in &mut self.writers {
+        for writer in &mut state.writers {
             if let Some(writer) = writer {
                 let _ = writer.write(message.as_bytes());
             }
@@ -252,70 +284,70 @@ impl Logger {
 #[macro_export]
 macro_rules! log {
     ($category:expr, $level:expr, $func:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($text));
+        $crate::get_logger().log_fmt($category, $level, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $level:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $level, $crate::log_location!($func), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $level, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_severe {
     ($category:expr, $func:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_error {
     ($category:expr, $func:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_warning {
     ($category:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Warning, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_info {
     ($category:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Info, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_verbose {
     ($category:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($text));
     };
     ($category:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Verbose, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_debug {
     ($category:expr, $func:expr, $text:expr) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($text));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($text));
     };
     ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::LOGGER.lock().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($format, $($arg),*));
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($format, $($arg),*));
     };
 }
 

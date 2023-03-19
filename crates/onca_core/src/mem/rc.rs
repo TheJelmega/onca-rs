@@ -9,7 +9,7 @@ use core::{
     ptr::{drop_in_place, read, null}
 };
 use crate::alloc::{Allocation, Layout, UseAlloc, ScopedAlloc};
-use crate::mem::MEMORY_MANAGER;
+use crate::mem::get_memory_manager;
 
 use super::AllocInitState;
 
@@ -191,7 +191,7 @@ impl<T> Rc<T> {
 
     /// Try to create a new `Rc` with an uninitialized value, using the default allocator
     pub fn try_new_uninit() -> Option<Rc<MaybeUninit<T>>> {
-        let ptr = MEMORY_MANAGER.alloc::<RcData<MaybeUninit<T>>>(AllocInitState::Uninitialized);
+        let ptr = get_memory_manager().alloc::<RcData<MaybeUninit<T>>>(AllocInitState::Uninitialized);
         match ptr {
             None => None,
             Some(ptr) => Self::fill_uninit(ptr.cast())
@@ -296,7 +296,7 @@ impl<T: ?Sized> Drop for Rc<T> {
         if Self::strong_count(self) == 0 {
             unsafe { drop_in_place(self.ptr.ptr_mut()) };
             if Self::weak_count(self) == 0 {
-                MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+                get_memory_manager().dealloc(unsafe{ self.ptr.duplicate() });
             }
         }
     }
@@ -419,7 +419,7 @@ impl<T: ?Sized> Drop for Weak<T> {
         if self.is_valid() {
             self.inner().dec_weak();
             if self.strong_count() == 0 && self.weak_count() == 0 {
-                MEMORY_MANAGER.dealloc(unsafe{ self.ptr.duplicate() });
+                get_memory_manager().dealloc(unsafe{ self.ptr.duplicate() });
             }
         }
     }

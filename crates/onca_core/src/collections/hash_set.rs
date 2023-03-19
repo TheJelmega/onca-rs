@@ -8,7 +8,6 @@ use core::{
 use hashbrown::TryReserveError;
 use crate::{
     alloc::{UseAlloc, ScopedAlloc},
-    mem::MEMORY_MANAGER
 };
 use super::{collections_alloc::Alloc, HashMap};
 

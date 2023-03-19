@@ -1,8 +1,5 @@
 use core::{any::Any, borrow::*, marker::Unsize, ops::*, ptr::*};
 use std::mem::MaybeUninit;
-
-use crate::mem::MEMORY_MANAGER;
-
 use super::{Layout, layout, get_active_alloc};
 
 

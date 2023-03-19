@@ -11,7 +11,6 @@ use alloc::collections::vec_deque as alloc_vec_deque;
 
 use crate::{
     alloc::UseAlloc,
-    mem::MEMORY_MANAGER
 };
 use super::DynArray;
 use super::collections_alloc::Alloc;

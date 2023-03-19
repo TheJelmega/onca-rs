@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicU8, Ordering, AtomicBool};
 
-use crate::{os, sync::thread_parker::SpinWait, mem::MEMORY_MANAGER};
+use crate::{os, sync::thread_parker::SpinWait};
 
 pub mod thread_id;
 pub use thread_id::*;
@@ -26,7 +26,6 @@ pub fn init_system() -> Result<(), &'static str> {
         return Ok(());
     }
 
-    MEMORY_MANAGER.init();
     os::init_system()?;
 
     IS_SYSTEM_INITIALIZED.store(true, Ordering::Release);

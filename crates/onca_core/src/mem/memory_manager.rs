@@ -1,6 +1,6 @@
 use core::{
     cell::{UnsafeCell, Cell},
-    ptr::{copy_nonoverlapping, write_bytes},
+    ptr::{copy_nonoverlapping, write_bytes, null},
     borrow::BorrowMut
 };
 use crate::{
@@ -15,7 +15,22 @@ thread_local! {
     pub static TLS_TEMP_ALLOC : UnsafeCell<FreelistAllocator> = UnsafeCell::new(FreelistAllocator::new_uninit());
 }
 
-pub static MEMORY_MANAGER : MemoryManager = MemoryManager::new();
+struct MemoryManagerPtr(*const MemoryManager);
+
+unsafe impl Send for MemoryManagerPtr {}
+unsafe impl Sync for MemoryManagerPtr {}
+
+static MEMORY_MANAGER : RwLock<MemoryManagerPtr> = RwLock::new(MemoryManagerPtr(null()));
+
+pub fn set_memory_manager(manager: &MemoryManager) {
+    *MEMORY_MANAGER.write() = MemoryManagerPtr(manager as *const _);
+}
+
+pub fn get_memory_manager() -> &'static MemoryManager {
+    let ptr = MEMORY_MANAGER.read().0;
+    assert!(ptr != null(), "Memory manager was not set");
+    unsafe { &*ptr }
+}
 
 /// Defines how memory should be initialized, i.e. uninitialized or zeroed
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -47,7 +62,6 @@ impl State {
 pub struct MemoryManager
 {
     state : RwLock<State>,
-    //layout_and_tags : Mutex<Option<LayoutAndMemtagStorage>>,
 }
 
 impl MemoryManager {
@@ -205,6 +219,10 @@ impl MemoryManager {
     }
 
     /// Shrink a given allocator to a newly provided size
+    /// 
+    /// Alignment of the new layout needs to match that of the old
+    /// 
+    /// If new memory was unable to be allocated, the result will contain an `Err(...)` with the original allocator
     pub fn shrink<T>(&self, ptr: Allocation<T>, new_layout: Layout) -> Result<Allocation<T>, Allocation<T>> {
         if new_layout.size() == 0 {
             self.dealloc(ptr);
@@ -234,7 +252,7 @@ impl MemoryManager {
                 let _scope_alloc = ScopedAlloc::new(UseAlloc::Malloc);
 
                 let layout = Layout::new_size_align(MiB(1), 8);
-                let buffer = MEMORY_MANAGER.alloc_raw(AllocInitState::Uninitialized, layout);
+                let buffer = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout);
                 let buffer = match buffer {
                     None => return None,
                     Some(buf) => buf

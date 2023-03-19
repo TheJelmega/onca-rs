@@ -13,7 +13,7 @@ use core::{
 };
 use std::{ops::CoerceUnsized, marker::Unsize, f32::consts::E};
 use crate::alloc::{Allocation, Layout};
-use super::{MEMORY_MANAGER, HeapPtr};
+use super::{HeapPtr};
 
 
 pub struct Unique<T: ?Sized> {

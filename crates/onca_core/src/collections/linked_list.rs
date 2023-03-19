@@ -8,7 +8,7 @@ use core::{
 };
 
 use crate::{
-    mem::{HeapPtr, MEMORY_MANAGER}, 
+    mem::{HeapPtr}, 
     alloc::{UseAlloc, get_active_alloc, ScopedAlloc}
 };
 use super::SpecExtend;
