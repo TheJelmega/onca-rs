@@ -14,9 +14,8 @@ use windows::{
     Win32::{
         Devices::HumanInterfaceDevice::*,
         Foundation::{HANDLE, GetLastError, CloseHandle, BOOL, ERROR_IO_PENDING, WAIT_OBJECT_0, BOOLEAN},
-        Storage::FileSystem::{CreateFileA, FILE_ACCESS_FLAGS, FILE_SHARE_WRITE, FILE_SHARE_READ, FILE_FLAG_OVERLAPPED, OPEN_EXISTING, ReadFile, WriteFile},
+        Storage::FileSystem::{CreateFileA, FILE_SHARE_WRITE, FILE_SHARE_READ, FILE_FLAG_OVERLAPPED, OPEN_EXISTING, ReadFile, WriteFile, FILE_GENERIC_WRITE, FILE_GENERIC_READ},
         System::{
-            SystemServices::{GENERIC_READ, GENERIC_WRITE},
             Threading::{CreateEventA, WaitForSingleObject}, IO::{OVERLAPPED, GetOverlappedResult, CancelIoEx},
         },
     },
@@ -40,7 +39,7 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
         
         let handle = CreateFileA(
             name,
-            FILE_ACCESS_FLAGS(GENERIC_READ | GENERIC_WRITE),
+            (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             None,
             OPEN_EXISTING,

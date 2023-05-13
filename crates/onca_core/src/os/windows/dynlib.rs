@@ -1,7 +1,7 @@
 use windows::{
     core::PCSTR,
     Win32::{
-        Foundation::{HINSTANCE, GetLastError},
+        Foundation::{HMODULE, GetLastError},
         System::LibraryLoader::{LoadLibraryA, FreeLibrary, GetProcAddress},
     },
 };
@@ -11,10 +11,10 @@ use crate::strings::String;
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct DynLibHandle(HINSTANCE);
+pub struct DynLibHandle(HMODULE);
 
 impl DynLibHandle {
-    pub fn handle(&self) -> HINSTANCE {
+    pub fn handle(&self) -> HMODULE {
         self.0
     }
 }

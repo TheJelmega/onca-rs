@@ -5,7 +5,7 @@ use core::{
 
 use windows::{
     Win32::{
-        Foundation::{GetLastError, HINSTANCE, OLE_E_WRONGCOMPOBJ, RPC_E_CHANGED_MODE},
+        Foundation::{GetLastError, HMODULE, OLE_E_WRONGCOMPOBJ, RPC_E_CHANGED_MODE},
         System::{
             LibraryLoader::GetModuleHandleA,
             Console::{SetConsoleOutputCP, SetConsoleCP}, Ole::{OleUninitialize, OleInitialize}
@@ -49,12 +49,12 @@ pub(crate) fn ensure_utf8() -> Result<(), u32> {
 
 #[derive(Clone, Copy)]
 pub struct AppHandle {
-    hinstance : HINSTANCE
+    hmodule : HMODULE
 }
 
 impl AppHandle {
-    pub fn hinstance(&self) -> HINSTANCE {
-        self.hinstance
+    pub fn hmodule(&self) -> HMODULE {
+        self.hmodule
     }
 }
 
@@ -68,7 +68,7 @@ pub(crate) fn get_app_handle() -> AppHandle {
             let hinstance = unsafe { GetModuleHandleA(PCSTR(core::ptr::null())) };
             match hinstance {
                 Ok(hinstance) => {
-                    let app_handle = AppHandle{ hinstance };
+                    let app_handle = AppHandle{ hmodule: hinstance };
                     *locked_handle = Some(app_handle);
                     app_handle
                 },

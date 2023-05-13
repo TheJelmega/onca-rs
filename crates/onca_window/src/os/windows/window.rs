@@ -1013,7 +1013,7 @@ pub(crate) fn create(
             height as i32,
             HWND(0),
             HMENU(0),
-            get_app_handle().os_handle().hinstance(),
+            get_app_handle().os_handle().hmodule(),
             Some(window_ptr.ptr() as *const c_void),
         );
 

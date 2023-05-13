@@ -5,7 +5,7 @@ use windows::{
         UI::WindowsAndMessaging::{
             HICON, LoadImageA, IMAGE_BITMAP, LR_LOADFROMFILE, DestroyIcon, CopyIcon
         },
-        Foundation::{HINSTANCE, GetLastError}
+        Foundation::{HMODULE, GetLastError}
     },
     core::PCSTR
 };
@@ -24,7 +24,7 @@ impl OSIcon {
             let (width, height) = size.map(|size | (size.width as i32, size.height as i32)).unwrap_or((0, 0));
             let path = String::from_str(path);
             let hicon = LoadImageA(
-                HINSTANCE(0),
+                HMODULE(0),
                 PCSTR(path.as_ptr()),
                 IMAGE_BITMAP,
                 width, height,

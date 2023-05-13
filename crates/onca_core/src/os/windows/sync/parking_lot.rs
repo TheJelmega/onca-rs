@@ -13,10 +13,7 @@ use crate::{
 use windows::
     { Win32::{
         Foundation::{GetLastError, BOOL, ERROR_TIMEOUT},
-        System::{
-            WindowsProgramming::INFINITE,
-            Threading::{WaitOnAddress, WakeByAddressSingle}
-        }
+        System::Threading::{WaitOnAddress, WakeByAddressSingle, INFINITE}
     },
 };
 

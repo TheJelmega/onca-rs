@@ -13,17 +13,16 @@ use windows::{
         Storage::FileSystem::{
             GetCompressedFileSizeA, 
             CreateFileA, 
-            FILE_APPEND_DATA, FILE_ACCESS_FLAGS, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE,
+            FILE_APPEND_DATA, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE,
             OPEN_ALWAYS, OPEN_EXISTING, CREATE_NEW, CREATE_ALWAYS, TRUNCATE_EXISTING,
             DeleteFileA, 
             ReadFile,  WriteFile, FlushFileBuffers,
             SetFilePointerEx, SET_FILE_POINTER_MOVE_METHOD, FILE_BEGIN, FILE_CURRENT, FILE_END,
             FILE_FLAGS_AND_ATTRIBUTES, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_FLAG_BACKUP_SEMANTICS,
             SetFileInformationByHandle, GetFileInformationByHandleEx, FileBasicInfo,  FILE_BASIC_INFO, FileEndOfFileInfo, FILE_END_OF_FILE_INFO,
-            SetFileTime,  GetTempFileNameA
+            SetFileTime,  GetTempFileNameA, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ACCESS_RIGHTS
         }, 
         Foundation::{GetLastError, NO_ERROR, HANDLE, CloseHandle, FILETIME}, 
-        System::SystemServices::{GENERIC_READ, GENERIC_EXECUTE, GENERIC_WRITE}
     }, 
     core::PCSTR,
 };
@@ -90,20 +89,20 @@ impl FileHandle {
                 }
             }
             
-            let mut win32_access = 0;
+            let mut win32_access = FILE_ACCESS_RIGHTS(0);
             if access.is_set(Permission::Read) {
-                win32_access |= GENERIC_READ;
+                win32_access |= FILE_GENERIC_READ;
             }
             if access.is_set(Permission::Write) {
-                win32_access |= GENERIC_WRITE;
+                win32_access |= FILE_GENERIC_WRITE;
             } else if access.is_set(Permission::Append) {
-                win32_access |= FILE_APPEND_DATA.0;
+                win32_access |= FILE_APPEND_DATA;
             }
             if access.is_set(Permission::Execute) {
-                win32_access |= GENERIC_EXECUTE;
+                win32_access |= FILE_GENERIC_EXECUTE;
             }
             if access.is_set(Permission::Delete) {
-                win32_access |= DELETE.0;
+                win32_access |= DELETE;
             }
         
             let mut win32_access_share = 0;
@@ -138,7 +137,7 @@ impl FileHandle {
             
             let handle = CreateFileA(
                 PCSTR(path_buf.as_ptr()),
-                FILE_ACCESS_FLAGS(win32_access),
+                win32_access.0,
                 FILE_SHARE_MODE(win32_access_share),
                 None,
                 win32_create_disposition,

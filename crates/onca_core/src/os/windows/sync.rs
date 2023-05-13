@@ -5,7 +5,7 @@ use windows::{
     core::PCWSTR, 
     Win32::{
         Foundation::*, 
-        System::{WindowsProgramming::INFINITE, Threading::*}}
+        System::Threading::*}
     };
 use core::{
     cell::UnsafeCell,

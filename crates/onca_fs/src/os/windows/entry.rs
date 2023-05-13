@@ -139,7 +139,7 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
         // Open file to get remaining data
         let handle = CreateFileA(
             PCSTR(path.as_ptr()),
-            FILE_READ_ATTRIBUTES,
+            FILE_READ_ATTRIBUTES.0,
             FILE_SHARE_READ,
             None,
             OPEN_EXISTING,
