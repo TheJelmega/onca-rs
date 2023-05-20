@@ -1,4 +1,4 @@
-use core::{mem::size_of, ptr::null_mut};
+use core::{mem::{size_of, align_of}, ptr::null_mut};
 
 use crate::{
     mem::{AllocInitState, get_memory_manager},
@@ -86,6 +86,9 @@ impl FreelistAllocator {
 
             // The allocation needs to have at minimum enough space to put a free block, as it's otherwise unable to deallocate the memory without overwriting other memory
             let padded_size = core::cmp::max(padding + size, size_of::<FreeBlock>());
+            // Make sure the pointer will be aligned correctly
+            let padded_size = padded_size.next_multiple_of(align_of::<FreeBlock>());
+
             if padded_size <= (*cur_block).size {
                 let remaining_size = (*cur_block).size - padded_size;
                 let aligned_ptr = ptr.add(padding);
