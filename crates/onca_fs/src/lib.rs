@@ -1,5 +1,3 @@
-// TODO: put behind feature
-#![feature(debugger_visualizer)]
 #![debugger_visualizer(natvis_file = "libonca_fs.natvis")]
 
 // TODO: Should we just set a global temp allocator id for the entire file system?
