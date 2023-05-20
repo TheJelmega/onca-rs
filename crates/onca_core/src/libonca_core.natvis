@@ -29,6 +29,40 @@
         </Expand>
     </Type>
 
+    <!-- Smart pointers -->
+    <Type Name="onca_core::mem::arc::Arc&lt;*&gt;">
+        <DisplayString>{{ {ptr.ptr->value} }}</DisplayString>
+        <Expand>
+            <Item Name="[value]">ptr.ptr->value</Item>
+            <Item Name="[strong]">ptr.ptr->strong</Item>
+            <Item Name="[weak]">ptr.ptr->weak</Item>
+        </Expand>
+    </Type>
+    <Type Name="onca_core::mem::arc::AWeak&lt;*&gt;">
+        <DisplayString>{{ {ptr.ptr->value} }}</DisplayString>
+        <Expand>
+            <Item Name="[value]">ptr.ptr->value</Item>
+            <Item Name="[strong]">ptr.ptr->strong</Item>
+            <Item Name="[weak]">ptr.ptr->weak</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="onca_core::mem::rc::Rc&lt;*&gt;">
+        <DisplayString>{{ {ptr.ptr->value} }}</DisplayString>
+        <Expand>
+            <Item Name="[value]">ptr.ptr->value</Item>
+            <Item Name="[strong]">ptr.ptr->strong</Item>
+            <Item Name="[weak]">ptr.ptr->weak</Item>
+        </Expand>
+    </Type>
+    <Type Name="onca_core::mem::rc::Weak&lt;*&gt;">
+        <DisplayString>{{ {ptr.ptr->value} }}</DisplayString>
+        <Expand>
+            <Item Name="[value]">ptr.ptr->value</Item>
+            <Item Name="[strong]">ptr.ptr->strong</Item>
+            <Item Name="[weak]">ptr.ptr->weak</Item>
+        </Expand>
+    </Type>
 
     <!-- Containers-->
     <Type Name="onca_core::collections::dyn_array::DynArray&lt;*&gt;">
