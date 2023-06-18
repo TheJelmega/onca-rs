@@ -4,7 +4,7 @@ use core::{
     slice,
     ptr,
     hash,
-    fmt,
+    fmt::{self, Write},
     str::*,
     ops::*,
     char::decode_utf16,
@@ -175,6 +175,15 @@ impl String {
     pub unsafe fn from_null_terminated_utf8_unchecked_i8(bytes: &[i8]) -> String {
         let len = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
         let mut res = Self::from_utf8_unchecked(bytes[..len].iter().map(|byte| *byte as u8).collect());
+        res.null_terminate();
+        res
+    }
+
+    #[inline]
+    #[must_use]
+    pub unsafe fn from_null_terminated_utf16_lossy(bytes: &[u16]) -> String {
+        let len = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        let mut res = Self::from_utf16_lossy(&bytes[..len]);
         res.null_terminate();
         res
     }
@@ -679,6 +688,13 @@ impl String {
         // SAFETY: We added a null terminator, so we can always go back 1 character
         self.arr.pop();
     }
+
+    /// Create a string which contains formatted text
+    pub fn format(args: core::fmt::Arguments<'_>) -> Self {
+        let mut res = Self::new();
+        res.write_fmt(args);
+        res
+    }
 }
 
 // TODO(jel): How to make this work on string slices directly? As it seems that the `alloc` crate only is allowed to do that, cause it's a special crate
@@ -943,12 +959,6 @@ impl String {
         }
 
         out
-    }
-
-    pub fn from_iter_alloc_tag<I: Iterator<Item = char>>(iter: I) -> String {
-        let mut buf = String::new();
-        buf.extend(iter);
-        buf
     }
 }
 
@@ -1610,4 +1620,21 @@ impl From<char> for String {
         buf.push(c);
         buf
     }
+}
+
+/// Creates a String using interpolation of runtime expressions.
+///
+/// The first argument format! receives is a format string. This must be a string literal. The power of the formatting string is in the {}s contained.
+///
+/// Additional parameters passed to format! replace the {}s within the formatting string in the order given unless named or positional parameters are used; see std::fmt for more information.
+///
+/// A common use for format! is concatenation and interpolation of strings. The same convention is used with print! and [write] macros, depending on the intended destination of the string.
+///
+/// To convert a single value to a string, use the [`to_onca_string`] method. This will use the [`Display`] formatting trait.
+#[macro_export]
+macro_rules! onca_format {
+    ($($arg:tt)*) => {{
+        let res = String::format(format_args!($($arg)*));
+        res
+    }}
 }

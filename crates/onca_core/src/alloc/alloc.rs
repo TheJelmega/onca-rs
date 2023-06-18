@@ -113,3 +113,10 @@ impl Drop for ScopedAlloc {
         set_active_alloc(UseAlloc::Id(self.old_id));
     }
 }
+
+#[macro_export]
+macro_rules! scoped_alloc {
+    ($alloc:expr) => {
+        let _scope_alloc = ScopedAlloc::new($alloc);
+    };
+}

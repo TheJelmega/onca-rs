@@ -294,8 +294,10 @@ impl<T: ?Sized> Drop for Rc<T> {
     fn drop(&mut self) {
         self.ptr.get_mut().dec_strong();
         if Self::strong_count(self) == 0 {
+            // Make sure to check before dropping, as the dropped value could have held a weak pointer
+            let delete = Self::weak_count(self) == 0;
             unsafe { drop_in_place(self.ptr.ptr_mut()) };
-            if Self::weak_count(self) == 0 {
+            if delete {
                 get_memory_manager().dealloc(unsafe{ self.ptr.duplicate() });
             }
         }

@@ -41,16 +41,9 @@ pub fn shutdown_system() {
 }
 
 /// Application handle
-pub struct AppHandle(os::AppHandle);
-
-impl AppHandle {
-    /// Get the OS handle from the application handle
-    pub fn os_handle(self) -> os::AppHandle {
-        self.0
-    }
-}
+pub type AppHandle = os::AppHandle;
 
 /// Get the current application handle
 pub fn get_app_handle() -> AppHandle {
-    AppHandle(os::get_app_handle())
+    os::get_app_handle()
 }

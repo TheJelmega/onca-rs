@@ -15,18 +15,18 @@ mod hash_set;
 mod bitset;
 
 
-pub use static_dyn_array::*;
-pub use dyn_array::*;
-pub use small_dyn_array::*;
+pub use static_dyn_array::StaticDynArray;
+pub use dyn_array::DynArray;
+pub use small_dyn_array::SmallDynArray;
 
-pub use btree_map::*;
-pub use btree_set::*;
-pub use linked_list::*;
-pub use vec_deque::*;
-pub use hash_map::*;
-pub use hash_set::*;
+pub use btree_map::BTreeMap;
+pub use btree_set::BTreeSet;
+pub use linked_list::LinkedList;
+pub use vec_deque::VecDeque;
+pub use hash_map::HashMap;
+pub use hash_set::HashSet;
 
-pub use bitset::*;
+pub use bitset::BitSet;
 
 use core::ops::Range;
 

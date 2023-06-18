@@ -145,6 +145,15 @@ impl<T: ?Sized> Arc<T> {
     fn inner(&self) -> &RcData<T> {
         self.ptr.get_ref()
     }
+
+    /// Get a pointer to the data 
+    /// 
+    /// # SAFETY
+    /// 
+    /// The user needs to make sure that the data stays valid for the remainder of the pointer's lifetime
+    pub unsafe fn data_ptr(this: &Self) -> *const T {
+        &this.ptr.get_ref().value
+    }
 }
 
 impl<T> Arc<T> {
@@ -155,7 +164,7 @@ impl<T> Arc<T> {
     }
 
     /// Create a new `Arc` using the value produced by the given closure, which itself has access to a weak pointer to the data
-    pub fn new_cyclic<F: FnOnce(AWeak<T>) -> T>(fun: F) -> Option<Self> {
+    pub fn new_cyclic<F: FnOnce(AWeak<T>) -> T>(fun: F) -> Self {
         let mut uninit = Self::try_new_uninit().expect("Failed to allocate memory");
         uninit.inner().dec_strong();
         uninit.inner().inc_weak();
@@ -165,7 +174,7 @@ impl<T> Arc<T> {
         uninit.ptr.get_mut().value.write(fun(weak));
 
         uninit.inner().inc_strong();
-        Some(uninit.assume_init())
+        uninit.assume_init()
     }
 
     /// Try to create a new `Arc` using the default allocator
@@ -252,7 +261,7 @@ impl Arc<dyn Any>
     }
 
     /// Downcast to a concrete type, calling this on an invalid downcasted type will result in UB
-    unsafe fn downcast_unchecked<T: Any>(self) -> Arc<T> {
+    pub unsafe fn downcast_unchecked<T: Any>(self) -> Arc<T> {
         debug_assert!(unsafe { self.ptr.get_ref().value.is::<T>() });
         Arc::<T>{ ptr: unsafe{ self.ptr.duplicate_cast::<RcData<T>>() }, phantom: PhantomData }
     }
@@ -290,9 +299,12 @@ impl<T: ?Sized> Clone for Arc<T> {
 impl<T: ?Sized> Drop for Arc<T> {
     fn drop(&mut self) {
         self.ptr.get_mut().dec_strong();
+
         if Self::strong_count(self) == 0 {
+            // Make sure to check before dropping, as the dropped value could have held a weak pointer
+            let delete = Self::weak_count(self) == 0;
             unsafe { drop_in_place(self.ptr.ptr_mut()) };
-            if Self::weak_count(self) == 0 {
+            if delete {
                 get_memory_manager().dealloc(unsafe{ self.ptr.duplicate() });
             }
         }
@@ -510,7 +522,7 @@ mod tests {
     fn cyclic() {
         let mut weak = AWeak::<u64>::new();
 
-        let rc = Arc::<u64>::new_cyclic(|wrc| { weak = wrc; 123 }).unwrap();
+        let rc = Arc::<u64>::new_cyclic(|wrc| { weak = wrc; 123 });
 
         assert_eq!(Arc::strong_count(&rc), 1);
         assert_eq!(Arc::weak_count(&rc), 1);

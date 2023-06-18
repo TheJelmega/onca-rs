@@ -2,15 +2,7 @@ use proc_macro2::*;
 use quote::quote;
 use syn::*;
 
-pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
-{
-	let annotated_parsed_res = syn::parse2::<syn::Type>(args);
-	let base_type = match annotated_parsed_res
-	{
-		Ok(typ) => typ,
-		Err(_) => syn::parse_str::<Type>("u32").unwrap() 	
-	};
-
+pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	// While we don't exactly are deriving, the `#[flags]` macro is close enough
 	let parsed_res = syn::parse2::<DeriveInput>(input);
 	let input_parsed = match parsed_res {
@@ -22,53 +14,54 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 	let flag_name = input_parsed.ident;
 	let enum_attrs = input_parsed.attrs;
 
-	let body_data = match input_parsed.data
-	{
+	let body_data = match input_parsed.data {
 		Data::Enum(body) => body,
 		_ => return quote!( compile_error!("Not an enum"); )
 	};
 
+	let u128_type = syn::parse_str::<Type>("u128").unwrap();
 	
 	let mut idents = Vec::<syn::Ident>::new();
 	let mut vals = Vec::<syn::Expr>::new();
 	let mut attrs = Vec::<Vec::<Attribute>>::new();
 	let mut i : u128 = 1;
+	let mut max_val : u128 = 0;
 	let mut has_zero = false;
-	for it in body_data.variants.into_iter()
-	{
+	
+	for it in body_data.variants.into_iter() {
 		idents.push(it.ident);
 		attrs.push(it.attrs);
-		match it.discriminant
-		{
-			Some((_, expr)) =>
-			{
-				let res = gen_bits_val_expr(expr, &flag_name, &base_type);
+		match it.discriminant {
+			Some((_, expr)) => {
+				let res = gen_bits_val_expr(expr, &flag_name, &u128_type);
 				let (bits_val, int) = match res {
     			    Ok(bits_val) => bits_val,
     			    Err(toks) => return toks,
     			};
-				vals.push(construct_flag(flag_name.clone(), bits_val));
+				vals.push(construct_flag(bits_val));
 
 				if let Some(int) = int {
 					if int == 0 {
 						has_zero = true;
+					} else {
+						max_val = max_val.max(int);
+						i = int.next_power_of_two();
 					}
-					i = int << 1;
 				}
 			},
-			None =>
-			{
+			None => {
 				if i == 0 {
 					i = 1;
 				} else if !i.is_power_of_two() {
 					return quote!( compile_error!("Previous enum value needs to be a power of 2"); );
 				}
 
-				match create_expr_from_lit(flag_name.clone(), i, base_type.clone()) {
+				match create_expr_from_lit(i, u128_type.clone()) {
 					Ok(val) => vals.push(val),
 					Err(err) => return err.to_compile_error().into(),
 				}
-				i <<= 1;
+				max_val = max_val.max(i);
+				i <<= 1u128;
 			}
 		};
 	}
@@ -80,6 +73,22 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 			/// Value representing that no flag is set.
 			#vis const None : #flag_name = #flag_name::none();
 		)
+	};
+
+	let annotated_parsed_res = syn::parse2::<syn::Type>(args);
+	let base_type = match annotated_parsed_res {
+		Ok(typ) => typ,
+		Err(_) => if max_val <= u8::MAX as u128 {
+			syn::parse_str::<Type>("u8").unwrap()
+		} else if max_val <= u16::MAX as u128 {
+			syn::parse_str::<Type>("u16").unwrap()
+		} else if max_val <= u32::MAX as u128 {
+			syn::parse_str::<Type>("u32").unwrap()
+		} else if max_val <= u64::MAX as u128 {
+			syn::parse_str::<Type>("u64").unwrap()
+		} else {
+			syn::parse_str::<Type>("u128").unwrap()
+		}
 	};
 
 	quote!(
@@ -95,46 +104,78 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream
 			
 			#(#(#attrs)* #vis const #idents : #flag_name = #vals;)*
 
-			// Helper function for integer literals, as `#flag_name{ bits: #i as #base_type }` didn't seem to work in `create_expr_from_lit`
+			// Helper function to create const values from a u128
+			const fn new_u128(val: u128) -> Self {
+				Self::new(val as #base_type)
+			}
+
 			const fn new(val: #base_type) -> Self {
 				Self { bits: val }
 			}
 
+			/// Create flags instance with no flag set.
 			#vis const fn none() -> Self {
 				Self { bits: 0 }
 			}
 
+			/// Create flags instance with all valid flags set.
 			#vis const fn all() -> Self {
 				const bits : #base_type = 0 #( | #flag_name::#idents.bits)*;
 				Self { bits }
 			}
 
+			/// Get the flags' bits
 			#vis const fn bits(&self) -> #base_type {
 				self.bits
 			}
 
+			/// Check if a given flag(s) is/are set (if multiple flags are checked, all flags need to be set).
 			#vis const fn is_set(&self, flag: #flag_name) -> bool {
 				self.bits & flag.bits == flag.bits
 			}
 
+			/// Check if any of the given flags are set.
+			#vis const fn is_any_set(&self, flag: #flag_name) -> bool {
+				self.bits & flag.bits != 0
+			}
+
+			/// Check if no flag is set.
 			#vis const fn is_none(&self) -> bool {
 				self.bits == 0
 			}
 
+			/// Check if any flag is set.
 			#vis const fn is_any(&self) -> bool {
 				self.bits != 0
 			}
 
+			/// Check if all valid flags are set.
 			#vis const fn is_all(&self) -> bool {
 				self.bits == Self::all().bits
 			}
 
+			/// Check if exactly 1 is set
+			#vis const fn is_single_bit_set(&self) -> bool {
+				self.bits.count_ones() == 1
+			}
+
+			/// Set the state of a given flag to `set`.
 			#vis fn set(&mut self, flag: #flag_name, set: bool) {
 				if set {
 					self.bits |= flag.bits;
 				} else {
 					self.bits &= !flag.bits;
 				}
+			}
+
+			/// Enable a given flag.
+			#vis fn enable(&mut self, flag: #flag_name) {
+				self.bits |= flag.bits;
+			}
+
+			/// Disable a given flag.
+			#vis fn disable(&mut self, flag: #flag_name) {
+				self.bits &= !flag.bits;
 			}
 		}
 
@@ -281,37 +322,44 @@ fn cast_to_base_type(expr: Expr, base_type: Type) -> (Expr, Option<u128>) {
 	}), int)
 }
 
-fn get_bits_from_expr(expr: Expr) -> Expr {
-	Expr::Field(ExprField {
+fn get_bits_from_expr(expr: Expr, base_type: Type) -> Expr {
+	let bits = Expr::Field(ExprField {
 		attrs: Default::default(), 
 		base: Box::new(expr),
 		dot_token: Default::default(),
 		member: Member::Named(Ident::new("bits", Span::mixed_site()))
-	})
+	});
+	cast_to_base_type(bits, base_type).0
 }
 
-fn ident_to_path(ident: Ident) -> Path {
+fn construct_flag(bits_val: Expr) -> Expr {
+	let mut args = syn::punctuated::Punctuated::new();
+	args.push(bits_val);
+
 	let mut segments = syn::punctuated::Punctuated::new();
-	segments.push(PathSegment{ ident, arguments: PathArguments::None });
-	Path{ leading_colon: None, segments, }
-}
-
-fn construct_flag(flag_name: Ident, bits_val: Expr) -> Expr {
-	let mut fields = syn::punctuated::Punctuated::new();
-	fields.push(FieldValue{
-		member: Member::Named(Ident::new("bits", Span::mixed_site())),
-	    expr: bits_val,
-	    colon_token: Some(Default::default()),
-	    attrs: Default::default(),
+	segments.push(PathSegment {
+	    ident: Ident::new("Self", proc_macro2::Span::mixed_site()),
+	    arguments: PathArguments::None,
+	});
+	segments.push(PathSegment {
+	    ident: Ident::new("new_u128", proc_macro2::Span::mixed_site()),
+	    arguments: PathArguments::None,
 	});
 
-	Expr::Struct(ExprStruct{
-		path: ident_to_path(flag_name),
-		brace_token: Default::default(),
-		fields,
-		dot2_token: None,
-		rest: None,
-		attrs: Default::default(),
+	let func = Expr::Path(ExprPath {
+    attrs: Default::default(),
+    qself: Default::default(),
+    path: Path {
+	        leading_colon: Default::default(),
+	        segments,
+	    },
+	});
+
+	Expr::Call(ExprCall {
+    attrs: Default::default(),
+    func: Box::new(func),
+    paren_token: Default::default(),
+    args,
 	})
 }
 
@@ -323,7 +371,7 @@ fn gen_bits_val_expr(expr: Expr, flag_name: &Ident, base_type: &Type) -> core::r
 		Expr::Path(path) => {
 			let res = create_expr_from_path(path.path);
 			match res {
-			   Ok(path_expr) => Ok((get_bits_from_expr(path_expr), None)),
+			   Ok(path_expr) => Ok((get_bits_from_expr(path_expr, base_type.clone()), None)),
 			   Err(err) => Err(quote!( compile_error!(#err); )),
 			}
 		},
@@ -334,8 +382,8 @@ fn gen_bits_val_expr(expr: Expr, flag_name: &Ident, base_type: &Type) -> core::r
 	}
 }
 
-fn create_expr_from_lit(flag_name: Ident, i: u128, base_type: Type) -> Result<Expr> {
-	Ok(construct_flag(flag_name, int_to_lit_expr(i, base_type)))
+fn create_expr_from_lit(i: u128, base_type: Type) -> Result<Expr> {
+	Ok(construct_flag(int_to_lit_expr(i, base_type)))
 }
 
 fn create_ored_expr(bin_expr: ExprBinary, flag_name: &Ident, base_type: &Type) -> core::result::Result<Expr, TokenStream> {

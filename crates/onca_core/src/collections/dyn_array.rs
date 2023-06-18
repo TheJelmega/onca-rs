@@ -856,3 +856,19 @@ impl<T: Copy> SliceToDynArray<T> for [T] {
         DynArray(self.to_imp_dynarray::<DynamicBuffer<T>>())
     }
 }
+
+#[macro_export]
+macro_rules! dynarr {
+    () => {
+        DynArray::new()
+    };
+    ($($val:expr),* $(,)?) => {
+        {
+            let mut arr = DynArray::with_capacity(onca_core::count_exprs!($($val),*));
+            $(
+                arr.push($val);
+            )*
+            arr
+        }
+    }
+}
