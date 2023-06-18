@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, convert};
+use core::{marker::{PhantomData, ConstParamTy}, convert};
 use crate::{SimdElement, Simd, LaneCount, SupportedLaneCount, Mask, MaskElement};
 
 
@@ -15,6 +15,8 @@ pub enum BackendType {
     // AArch64
     NEON,
 }
+
+impl ConstParamTy for BackendType {}
 
 pub trait SimdSetImpl<T: SimdElement, const BACKEND_TYPE: BackendType>
 {
