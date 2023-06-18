@@ -1,4 +1,3 @@
-#![feature(array_zip)]
 #![feature(unchecked_math)]
 #![allow(unused_unsafe)]
 
@@ -16,7 +15,9 @@ macro_rules! impl_op {
     (@2 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 2] = [2 as $elem_ty, 5 as $elem_ty];
         let arr1 : [$elem_ty; 2] = [1 as $elem_ty, 2 as $elem_ty];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 2];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -27,7 +28,9 @@ macro_rules! impl_op {
     (@4 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 4] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty];
         let arr1 : [$elem_ty; 4] = [1 as $elem_ty, 2 as $elem_ty, 3 as $elem_ty, 4  as $elem_ty];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 4];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -38,7 +41,9 @@ macro_rules! impl_op {
     (@8 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 8] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty, 14 as $elem_ty, 17 as $elem_ty, 20 as $elem_ty, 23 as $elem_ty];
         let arr1 : [$elem_ty; 8] = [1 as $elem_ty, 2 as $elem_ty, 3 as $elem_ty, 4  as $elem_ty, 5  as $elem_ty, 6  as $elem_ty, 7  as $elem_ty, 8  as $elem_ty];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 8];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -49,7 +54,9 @@ macro_rules! impl_op {
     (@16 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 16] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty, 14 as $elem_ty, 17 as $elem_ty, 20 as $elem_ty, 23 as $elem_ty, 26 as $elem_ty, 29 as $elem_ty, 32 as $elem_ty, 35 as $elem_ty, 38 as $elem_ty, 41 as $elem_ty, 44 as $elem_ty, 47 as $elem_ty];
         let arr1 : [$elem_ty; 16] = [1 as $elem_ty, 2 as $elem_ty, 3 as $elem_ty, 4  as $elem_ty, 5  as $elem_ty, 6  as $elem_ty, 7  as $elem_ty, 8  as $elem_ty, 9  as $elem_ty, 10 as $elem_ty, 11 as $elem_ty, 12 as $elem_ty, 13 as $elem_ty, 14 as $elem_ty, 15 as $elem_ty, 16 as $elem_ty];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 16];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -60,7 +67,9 @@ macro_rules! impl_op {
     (@32 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 32] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95];
         let arr1 : [$elem_ty; 32] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 , 9 , 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 32];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -71,7 +80,9 @@ macro_rules! impl_op {
     (@64 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr0 : [$elem_ty; 64] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 122, 119, 116, 113, 110, 107, 104, 101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 71, 68, 65, 62, 59];
         let arr1 : [$elem_ty; 64] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 , 9 , 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34 , 35 , 36 , 37 , 38 , 39 , 40 , 41 , 42 , 43 , 44 , 45 , 46 , 47 , 48 , 49 , 50 , 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 64];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -84,7 +95,9 @@ macro_rules! impl_op {
 macro_rules! impl_unary_op {
     (@2 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 2] = [2 as $elem_ty, 5 as $elem_ty];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 2];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -93,7 +106,9 @@ macro_rules! impl_unary_op {
     };
     (@4 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 4] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 4];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -102,7 +117,9 @@ macro_rules! impl_unary_op {
     };
     (@8 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 8] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty, 14 as $elem_ty, 17 as $elem_ty, 20 as $elem_ty, 23 as $elem_ty];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 8];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -111,7 +128,9 @@ macro_rules! impl_unary_op {
     };
     (@16 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 16] = [2 as $elem_ty, 5 as $elem_ty, 8 as $elem_ty, 11 as $elem_ty, 14 as $elem_ty, 17 as $elem_ty, 20 as $elem_ty, 23 as $elem_ty, 26 as $elem_ty, 29 as $elem_ty, 32 as $elem_ty, 35 as $elem_ty, 38 as $elem_ty, 41 as $elem_ty, 44 as $elem_ty, 47 as $elem_ty];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 16];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -120,7 +139,9 @@ macro_rules! impl_unary_op {
     };
     (@32 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 32] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 32];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -129,7 +150,9 @@ macro_rules! impl_unary_op {
     };
     (@64 $elem_ty:ty, $ty:ty, $op:tt, $expr:expr) => {
         let arr : [$elem_ty; 64] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 122, 119, 116, 113, 110, 107, 104, 101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 71, 68, 65, 62, 59];
-        let expected_arr = arr.map(|a| unsafe{ $expr(a) });
+        let mut expected_arr = [0 as $elem_ty; 64];
+        let arr_it = expected_arr.iter_mut().zip(arr.iter());
+        arr_it.for_each(|(res, a)| unsafe { *res = $expr(*a) });
 
         let val = <$ty>::from_array(arr);
         let expected = <$ty>::from_array(expected_arr);
@@ -142,7 +165,9 @@ macro_rules! impl_fn {
     (@2 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 2] = [2, 5];
         let arr1 : [$elem_ty; 2] = [1, 2];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 2];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -153,7 +178,9 @@ macro_rules! impl_fn {
     (@4 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 4] = [2, 5, 8, 11];
         let arr1 : [$elem_ty; 4] = [1, 2, 3, 4 ];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 4];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -164,7 +191,9 @@ macro_rules! impl_fn {
     (@8 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 8] = [2, 5, 8, 11, 14, 17, 20, 23];
         let arr1 : [$elem_ty; 8] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 ];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 8];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -175,7 +204,9 @@ macro_rules! impl_fn {
     (@16 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 16] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47];
         let arr1 : [$elem_ty; 16] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 , 9 , 10, 11, 12, 13, 14, 15, 16];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 16];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -186,7 +217,9 @@ macro_rules! impl_fn {
     (@32 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 32] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95];
         let arr1 : [$elem_ty; 32] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 , 9 , 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 32];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
@@ -197,7 +230,9 @@ macro_rules! impl_fn {
     (@64 $elem_ty:ty, $ty:ty, $op:ident, $expr:expr) => {
         let arr0 : [$elem_ty; 64] = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80, 83, 86, 89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 122, 119, 116, 113, 110, 107, 104, 101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 71, 68, 65, 62, 59];
         let arr1 : [$elem_ty; 64] = [1, 2, 3, 4 , 5 , 6 , 7 , 8 , 9 , 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34 , 35 , 36 , 37 , 38 , 39 , 40 , 41 , 42 , 43 , 44 , 45 , 46 , 47 , 48 , 49 , 50 , 51 , 52 , 53 , 54 , 55 , 56 , 57 , 58 , 59 , 60 , 61 , 62 , 63 , 64 ];
-        let expected_arr = arr0.zip(arr1).map(|(a, b)| unsafe{ $expr(a, b) });
+        let mut expected_arr = [0 as $elem_ty; 64];
+        let arr_it = expected_arr.iter_mut().zip(arr0.iter().zip(arr1.iter()));
+        arr_it.for_each(|(res, (a, b))| unsafe { *res = $expr(*a, *b) });
 
         let val0 = <$ty>::from_array(arr0);
         let val1 = <$ty>::from_array(arr1);
