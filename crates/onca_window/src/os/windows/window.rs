@@ -426,6 +426,18 @@ impl OSWindowHandle {
             }
         }
     }
+
+    pub(crate) unsafe fn destroy(&mut self) {
+        let res = DestroyWindow(self.hwnd).as_bool();
+        if !res{
+            log_error!(
+                LOG_MSG_CAT,
+                wnd_proc,
+                "Failed to destroy an HWND (win32 err: {:X})",
+                GetLastError().0
+            );
+        }
+    }
 }
 
 #[derive(Default)]
@@ -832,18 +844,8 @@ unsafe extern "system" fn wnd_proc(
             let cancel = || close.set(false);
             window.send_window_event(WindowEvent::CloseRequested{ cancel: &cancel });
             if close.get() {
-                let res = DestroyWindow(hwnd).as_bool();
-                if res {
-                    window.is_closing = true;
-                    window.send_window_event(WindowEvent::Closed);
-                } else {
-                    log_error!(
-                        LOG_MSG_CAT,
-                        wnd_proc,
-                        "Failed to destroy an HWND (win32 err: {:X})",
-                        GetLastError().0
-                    );
-                }
+                window.is_closing = true;
+                window.send_window_event(WindowEvent::Closed);
             }
             PROCESSED
         }
@@ -1013,7 +1015,7 @@ pub(crate) fn create(
             height as i32,
             HWND(0),
             HMENU(0),
-            get_app_handle().os_handle().hmodule(),
+            get_app_handle().hmodule(),
             Some(window_ptr.ptr() as *const c_void),
         );
 

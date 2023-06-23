@@ -481,4 +481,8 @@ impl Window {
         self.listeners.lock().notify(&(self.id, WindowEvent::Destroyed));
         self.is_destroyed = true;
     }
+
+    pub(crate) fn destroy(&mut self) {
+        unsafe { self.os_handle.destroy() };
+    }
 }

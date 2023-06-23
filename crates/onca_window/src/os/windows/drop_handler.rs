@@ -55,7 +55,7 @@ impl DropHandler {
 
         });
 
-        let mut data = heap_ptr.ptr_mut();
+        let data = heap_ptr.ptr_mut();
         unsafe { (*data).allocation = HeapPtr::leak(heap_ptr) };
         //let drop_target = unsafe { core::mem::transmute::<_, IDropTarget>(&mut data) };
         let drop_target = unsafe { core::mem::transmute::<_, IDropTarget>(data) };

@@ -78,9 +78,6 @@ impl WindowManager {
     pub fn tick(&mut self) {
         assert!(is_on_main_thread(), "The window manager should only be ticked on the main thead");
 
-        // Remove any destroyed windows
-        self.windows.retain(|(_, wnd)| !wnd.is_destroyed);
-
         // Call all newly added creation callbacks to make sure the newly registed systems know about the existing windows
         {
             let mut new_callbacks = self.new_callbacks.lock();
@@ -90,6 +87,20 @@ impl WindowManager {
         }
 
         self.os_data.tick()
+    }
+
+    /// Tick the window manager at the end of the frame, this will handle thing like destroying windows
+    pub fn end_of_frame_tick(&mut self) {
+        assert!(is_on_main_thread(), "The window manager should only be ticked on the main thead");
+
+        for window in &mut self.windows {
+            if window.1.is_closing() {
+                window.1.destroy();
+            }
+        }
+
+        // Remove any destroyed windows
+        self.windows.retain(|(_, wnd)| !wnd.is_destroyed);
     }
 
     /// Get a reference to the window from its handle.

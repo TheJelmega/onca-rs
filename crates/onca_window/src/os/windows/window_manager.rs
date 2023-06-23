@@ -57,7 +57,7 @@ impl WindowManagerData {
             let class_id = self.wnd_classes.values().len();
             let _ = write!(&mut class_name, "Win32 Class {class_id}");
 
-            let hinstance = get_app_handle().os_handle().hmodule();
+            let hinstance = get_app_handle().hmodule();
 
             let hicon = settings.icon().map(|ico| ico.get_os_icon().hicon()).unwrap_or(HICON(0));
             let hicon_sm = settings.small_icon().map(|ico| ico.get_os_icon().hicon()).unwrap_or(HICON(0));
