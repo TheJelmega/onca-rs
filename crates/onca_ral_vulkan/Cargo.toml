@@ -1,0 +1,20 @@
+[package]
+name = "onca_ral_vulkan"
+version = "0.1.0"
+edition = "2021"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ash = "0.37.2+1.3.238"
+cfg-if = "1.0.0"
+
+onca_core = { path = "../onca_core" }
+onca_core_macros = { path = "../onca_core_macros" }
+onca_logging = { path = "../onca_logging" }
+onca_toml = { path = "../onca_toml" }
+onca_ral = { path = "../onca_ral" }

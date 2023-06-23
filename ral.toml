@@ -1,0 +1,31 @@
+[common]
+# Which API to use, either: "dx12", "vulkan", "software", or the name of the RAL dynamic library
+api = "vulkan"
+
+[vulkan]
+# Vulkan application name
+app-name = "Onca app"
+# Vulkan application version (formatted as "x.y.z", if any value cannot be parsed, 0 will be used)
+app-version = "0.1.0"
+# Additional vulkan layers to enable, if available
+additional-layers = []
+
+[debug]
+# Enable/Disable graphics debug utilities (validation, etc)
+enable = true
+# Enable/Disable graphics API validation
+validation = true
+# Enable/Disable sub-optimal performance notifications
+performance = true
+# Enable/Disable GPU-based valication (might drastically impact performance), for a good explenation, see: https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-d3d12-debug-layer-gpu-based-validation
+gpu-based-validation = true
+# Enable/Disable state tracking for GPU-based validation (disabling this might reduce the impact of GPU-based validation)
+gbv-state-tracking = true
+# Enable/Disable Depended Command Queue/buffer Synchronization (DCQS)
+#
+# When multi-threaded, holds back actual submission until all fences are signalled, allowing for better validation, as the debug layer has better knowledge of the current GPU stat
+dcqs = true
+# Enable/Disable automatic naming of GPU objects
+auto-naming = true
+# Maximum log-level for debug notfication, any of the following: "error", "warning", "info", "verbose"
+log-level = "verbose"

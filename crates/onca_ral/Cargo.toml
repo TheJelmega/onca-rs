@@ -1,0 +1,19 @@
+[package]
+name = "onca_ral"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+onca_core = { path = "../onca_core" }
+onca_core_macros = { path = "../onca_core_macros" }
+onca_logging = { path = "../onca_logging" }
+onca_toml = { path = "../onca_toml" }
+onca_window = { path = "../onca_window" }
+
+[features]
+default = ["validation"]
+
+# Validation adds additional checks for programming/usage mistakes, at the cost of perfomance
+validation = []

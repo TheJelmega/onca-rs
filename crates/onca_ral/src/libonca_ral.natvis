@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+    <Type Name="onca_ral::ral::RalHandle&lt;*&gt;">
+    <DisplayString>{{ {handle.ptr.ptr.pointer} }}</DisplayString>
+        <Expand>
+            <Item Name="[value]">handle.ptr.ptr.pointer->value</Item>
+            <Item Name="[vtable]">handle.ptr.ptr.vtable</Item>
+            <Item Name="[strong]">handle.ptr.ptr.pointer->strong</Item>
+            <Item Name="[weak]">handle.ptr.ptr.pointer->weak</Item>
+        </Expand>
+    </Type>
+
+
+</AutoVisualizer>
