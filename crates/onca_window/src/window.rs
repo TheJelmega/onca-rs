@@ -444,7 +444,7 @@ impl Window {
     /// The return of this function depends on the `WindowEvent` that was sent, check its documentation for more info
     ///
     /// The callback receives the window handle and returns if the window is allowed to close, this should be `true` in most cases.
-    pub fn register_window_listener<'a, F>(&mut self, listener: EventListenerRef<WindowEventListener>) {
+    pub fn register_window_listener<'a>(&mut self, listener: EventListenerRef<WindowEventListener>) {
         self.listeners.lock().push(listener);
     }
 
