@@ -31,7 +31,7 @@ use windows::{
 
 use crate::{
     utils::*,
-    luts,
+    dx12_types::*,
     LOG_CAT,
 };
 
@@ -103,12 +103,11 @@ macro_rules! check_require_alignment {
 // Need to create dummy device to query support
 
 pub struct PhysicalDevice {
-    pub factory            : IDXGIFactory7,
-    pub adapter            : IDXGIAdapter4,
-    pub shader_model       : D3D_SHADER_MODEL,
-    pub root_signature_ver : D3D_ROOT_SIGNATURE_VERSION,
-    pub msaa_64kb_align    : bool,
-
+    pub factory:            IDXGIFactory7,
+    pub adapter:            IDXGIAdapter4,
+    pub shader_model:       D3D_SHADER_MODEL,
+    pub root_signature_ver: D3D_ROOT_SIGNATURE_VERSION,
+    pub options:            D3DOptions,
 }
 
 impl PhysicalDevice {
@@ -247,7 +246,7 @@ fn get_device(factory: &IDXGIFactory7, adapter: IDXGIAdapter4) -> ral::Result<ra
         adapter,
         shader_model: shader_model.HighestShaderModel,
         root_signature_ver: root_signature.HighestVersion,
-        msaa_64kb_align: options.options4.MSAA64KBAlignedTextureSupported.as_bool(),
+        options,
     });
 
     let properties = ral_phys_dev::Properties {
@@ -378,7 +377,7 @@ fn check_limits(options: &D3DOptions, device_memory_mb: u64) -> ral::Result<()> 
     check_require_at_least_constant!(D3D12_VS_OUTPUT_REGISTER_COUNT * D3D12_VS_OUTPUT_REGISTER_COMPONENTS, MAX_VERTEX_OUTPUT_COMPONENTS);
 
     check_require_at_least_constant!(D3D12_PS_INPUT_REGISTER_COUNT * D3D12_PS_INPUT_REGISTER_COMPONENTS, MAX_PIXEL_INPUT_COMPONENTS);
-    check_require_at_least_constant!(D3D12_PS_OUTPUT_REGISTER_COUNT                                    , MAX_PIXEL_OUTPUT_ATTACHMENTS);
+    check_require_at_least_constant!(D3D12_PS_OUTPUT_REGISTER_COUNT                                    , MAX_RENDERTARGETS);
 
     check_require_at_least_constant!(D3D12_CS_TGSM_REGISTER_COUNT * D3D12_CS_TGSM_RESOURCE_REGISTER_COMPONENTS * 4, MAX_COMPUTE_SHARED_MEMORY as u32);
     check_require_at_least_constant!(D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION                            , MAX_COMPUTE_WORKGROUP_COUNT_PER_DIMENSION[0]);
@@ -886,7 +885,8 @@ fn get_sampler_feedback_support(options: &D3DOptions) -> Option<SamplerFeedbackS
 // HELPERS
 //==============================================================================================================================
 
-struct D3DOptions {
+#[derive(Clone, Copy)]
+pub struct D3DOptions {
     options   : D3D12_FEATURE_DATA_D3D12_OPTIONS,
     options1  : D3D12_FEATURE_DATA_D3D12_OPTIONS1,
     options2  : D3D12_FEATURE_DATA_D3D12_OPTIONS2,
@@ -904,6 +904,9 @@ struct D3DOptions {
     options14 : D3D12_FEATURE_DATA_D3D12_OPTIONS14,
     options15 : D3D12_FEATURE_DATA_D3D12_OPTIONS15,
     options16 : D3D12_FEATURE_DATA_D3D12_OPTIONS16,
+    options17 : D3D12_FEATURE_DATA_D3D12_OPTIONS17,
+    options18 : D3D12_FEATURE_DATA_D3D12_OPTIONS18,
+    options19 : D3D12_FEATURE_DATA_D3D12_OPTIONS19,
 }
 
 impl D3DOptions {
@@ -927,6 +930,9 @@ impl D3DOptions {
             options14: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS14).unwrap_or_default(),
             options15: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS15).unwrap_or_default(),
             options16: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS16).unwrap_or_default(),
+            options17: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS17).unwrap_or_default(),
+            options18: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS18).unwrap_or_default(),
+            options19: get_dx12_feature_support(device, D3D12_FEATURE_D3D12_OPTIONS19).unwrap_or_default(),
         }
     }
 }

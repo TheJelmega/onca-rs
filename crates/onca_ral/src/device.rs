@@ -2,13 +2,17 @@ use onca_core::{
     prelude::*,
 };
 
-use crate::{*, handle::{InterfaceHandle, HandleImpl}};
+use crate::{*, handle::{InterfaceHandle, HandleImpl}, api::SwapChainResultInfo, shader::{ShaderHandle, Shader}};
 
 
 pub trait DeviceInterface {
-    unsafe fn create_swap_chain(&self, phys_dev: &PhysicalDevice, create_info: &SwapChainDesc) -> Result<SwapChainResultInfo>;
+    unsafe fn create_swap_chain(&self, phys_dev: &PhysicalDevice, create_info: &SwapChainDesc) -> Result<(SwapChainInterfaceHandle, SwapChainResultInfo)>;
     unsafe fn create_command_pool(&self, list_type: CommandListType, flags: CommandPoolFlags) -> Result<CommandPoolInterfaceHandle>;
     unsafe fn create_fence(&self) -> Result<FenceInterfaceHandle>;
+
+    unsafe fn create_shader(&self, code: &[u8], shader_type: ShaderType) -> Result<ShaderInterfaceHandle>;
+    unsafe fn create_pipeline_layout(&self, desc: &PipelineLayoutDesc) -> Result<PipelineLayoutInterfaceHandle>;
+    unsafe fn create_graphics_pipeline(&self, desc: &GraphicsPipelineDesc) -> Result<PipelineInterfaceHandle>;
 
     /// QueuePriotiry count needs to be 2, and QueueType count needs to be 3
     unsafe fn flush(&self, queues: &[[CommandQueueHandle; 2]; 3]) -> Result<()>;
@@ -23,6 +27,8 @@ pub struct Device {
     phys_dev:       PhysicalDevice,
     /// Command queues
     command_queues: [[CommandQueueHandle; QueuePriority::COUNT]; QueueType::COUNT],
+    /// Weak handle to self
+    weak:           WeakHandle<Self>,
 }
 
 pub type DeviceHandle = Handle<Device>;
@@ -30,10 +36,11 @@ pub type DeviceHandle = Handle<Device>;
 impl Device {
     /// Create a new device
     pub(crate) fn new(handle: DeviceInterfaceHandle, phys_dev: PhysicalDevice, command_queues: [[CommandQueueHandle; QueuePriority::COUNT]; QueueType::COUNT]) -> Handle<Self> {
-        Handle::new(Self {
+        Handle::new_cyclic(|weak| Self {
             handle,
             phys_dev,
             command_queues,
+            weak,
         })
     }
 
@@ -49,8 +56,8 @@ impl Device {
 
     /// Create a swap chain
     pub fn create_swap_chain(&self, create_info: SwapChainDesc) -> Result<SwapChainHandle> {
-        let result_info = unsafe { self.handle.create_swap_chain(&self.phys_dev, &create_info)? };
-        Ok(Handle::new(SwapChain::new(create_info, result_info)))
+        let (handle, result_info) = unsafe { self.handle.create_swap_chain(&self.phys_dev, &create_info)? };
+        Ok(Handle::new(SwapChain::new(&self.weak, create_info, handle, result_info)))
     }
 
     /// Create a `GraphicsCommandPool`
@@ -79,6 +86,24 @@ impl Device {
         let handle = unsafe { self.handle.create_command_pool(CommandListType::Bundle, flags)? };
         let queue_idx = self.command_queues[QueueType::Graphics as usize][0].index;
         Ok(BundleCommandPool::new(handle, flags, queue_idx))
+    }
+
+    /// Create a shader from a binary blob and a type
+    pub fn create_shader(&self, code: &[u8], shader_type: ShaderType) -> Result<ShaderHandle> {
+        let handle = unsafe { self.handle.create_shader(code, shader_type)? };
+        Ok(Handle::new(Shader::new(handle, shader_type)))
+    }
+
+    /// Create a pipeline layout
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDesc) -> Result<PipelineLayoutHandle> {
+        let handle = unsafe { self.handle.create_pipeline_layout(desc)? };
+        Ok(Handle::new(PipelineLayout::new(handle, desc)))
+    }
+
+    /// Create a graphics pipeline (vertex)
+    pub fn create_graphics_pipeline(&self, desc: &GraphicsPipelineDesc) -> Result<PipelineHandle> {
+        let handle = unsafe { self.handle.create_graphics_pipeline(desc)? };
+        Ok(Handle::new(Pipeline::new(handle, desc.pipeline_layout.clone())))
     }
 
     /// Flush all work on the device

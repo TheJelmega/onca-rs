@@ -11,5 +11,17 @@ Cargo.lock
 
 
 # Added by cargo
-
 /target
+
+
+# Editor
+/.vscode
+
+# Built shader binaries
+*.dxil
+*.spirv
+
+
+# Manual
+/on_hold
+/crates/onca_simd/benches

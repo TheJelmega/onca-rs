@@ -344,14 +344,15 @@ fn check_limits(vk_options: &VulkanOptions) -> ral::Result<()> {
     check_require_at_least!(vk_options.props.limits, max_bound_descriptor_sets                                 , MAX_PIPELINE_BOUND_DESCRIPTORS);
     check_require_at_least!(vk_options.props.limits, max_push_constants_size                                   , MAX_PIPELINE_PUSH_CONSTANT_SIZE);
 
-    check_require_at_least!(vk_options.props.limits, max_vertex_input_attributes      , MAX_VERTEX_INPUT_ATTRIBUTES);
-    check_require_at_least!(vk_options.props.limits, max_vertex_input_bindings        , MAX_VERTEX_INPUT_BUFFERS);
-    check_require_at_least!(vk_options.props.limits, max_vertex_input_binding_stride  , MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE);
-    check_require_at_least!(vk_options.props.limits, max_vertex_input_attribute_offset, MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET);
-    check_require_at_least!(vk_options.props.limits, max_vertex_output_components     , MAX_VERTEX_OUTPUT_COMPONENTS);
+    check_require_at_least!(vk_options.props.limits             , max_vertex_input_attributes      , MAX_VERTEX_INPUT_ATTRIBUTES);
+    check_require_at_least!(vk_options.props.limits             , max_vertex_input_bindings        , MAX_VERTEX_INPUT_BUFFERS);
+    check_require_at_least!(vk_options.props.limits             , max_vertex_input_binding_stride  , MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE);
+    check_require_at_least!(vk_options.props.limits             , max_vertex_input_attribute_offset, MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET);
+    check_require_at_least!(vk_options.props.limits             , max_vertex_output_components     , MAX_VERTEX_OUTPUT_COMPONENTS);
+    check_require_at_least!(vk_options.vertex_attr_divisor_props, max_vertex_attrib_divisor        , MAX_VERTEX_ATTRIBUTE_PER_INSTANCE_STEP_RATE);
 
     check_require_at_least!(vk_options.props.limits, max_fragment_input_components     , MAX_PIXEL_INPUT_COMPONENTS);
-    check_require_at_least!(vk_options.props.limits, max_fragment_output_attachments   , MAX_PIXEL_OUTPUT_ATTACHMENTS);
+    check_require_at_least!(vk_options.props.limits, max_fragment_output_attachments   , MAX_RENDERTARGETS);
     check_require_at_least!(vk_options.props.limits, max_fragment_dual_src_attachments , MAX_PIXEL_DUAL_SRC_OUTPUT_ATTACHMENTS);
 
     check_require_at_least!(      vk_options.props.limits, max_compute_shared_memory_size    , MAX_COMPUTE_SHARED_MEMORY as u32);
@@ -461,6 +462,9 @@ fn check_capabilities(vk_options: &VulkanOptions) -> ral::Result<()> {
     check_required_feature!(vk_options.props.limits, timestamp_compute_and_graphics);
     // Writeable MSAA storage textures
     check_required_feature!(vk_options.feats, shader_storage_image_multisample);
+    // Per-instance step rate
+    check_required_feature!(vk_options.vertex_attr_divisor_feats, vertex_attribute_instance_rate_divisor);
+    check_required_feature!(vk_options.vertex_attr_divisor_feats, vertex_attribute_instance_rate_zero_divisor);
 
     Ok(())
 }
@@ -968,27 +972,29 @@ fn get_queue_infos(instance: &Instance, phys_dev: vk::PhysicalDevice) -> ral::Re
 
 struct VulkanOptions {
     // Properties
-    props               : vk::PhysicalDeviceProperties,
-    props11             : vk::PhysicalDeviceVulkan11Properties,
-    props12             : vk::PhysicalDeviceVulkan12Properties,
-    props13             : vk::PhysicalDeviceVulkan13Properties,
-    accel_struct_props  : vk::PhysicalDeviceAccelerationStructurePropertiesKHR,
-    rt_pipeline_props   : vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
-    rt_reorder_props    : vk::PhysicalDeviceRayTracingInvocationReorderPropertiesNV,
-    sample_loc_props    : vk::PhysicalDeviceSampleLocationsPropertiesEXT,
-    conservative_raster : vk::PhysicalDeviceConservativeRasterizationPropertiesEXT,
-    mesh_shader_props   : vk::PhysicalDeviceMeshShaderPropertiesEXT,
-    vrs_props           : vk::PhysicalDeviceFragmentShadingRatePropertiesKHR,
+    props:                     vk::PhysicalDeviceProperties,
+    props11:                   vk::PhysicalDeviceVulkan11Properties,
+    props12:                   vk::PhysicalDeviceVulkan12Properties,
+    props13:                   vk::PhysicalDeviceVulkan13Properties,
+    accel_struct_props:        vk::PhysicalDeviceAccelerationStructurePropertiesKHR,
+    rt_pipeline_props:         vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
+    rt_reorder_props:          vk::PhysicalDeviceRayTracingInvocationReorderPropertiesNV,
+    sample_loc_props:          vk::PhysicalDeviceSampleLocationsPropertiesEXT,
+    conservative_raster:       vk::PhysicalDeviceConservativeRasterizationPropertiesEXT,
+    mesh_shader_props:         vk::PhysicalDeviceMeshShaderPropertiesEXT,
+    vrs_props:                 vk::PhysicalDeviceFragmentShadingRatePropertiesKHR,
+    vertex_attr_divisor_props: vk::PhysicalDeviceVertexAttributeDivisorPropertiesEXT,
     // Features
-    feats               : vk::PhysicalDeviceFeatures,
-    accel_struct_feats  : vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
-    rt_pipeline_feats   : vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
-    ray_query_feats     : vk::PhysicalDeviceRayQueryFeaturesKHR,
-    rt_maintenance1     : vk::PhysicalDeviceRayTracingMaintenance1FeaturesKHR,
-    rt_reorder_feats    : vk::PhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-    multiview_feats     : vk::PhysicalDeviceMultiviewFeatures,
-    mesh_shader_feats   : vk::PhysicalDeviceMeshShaderFeaturesEXT,
-    vrs_feats           : vk::PhysicalDeviceFragmentShadingRateFeaturesKHR,
+    feats:                     vk::PhysicalDeviceFeatures,
+    accel_struct_feats:        vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
+    rt_pipeline_feats:         vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
+    ray_query_feats:           vk::PhysicalDeviceRayQueryFeaturesKHR,
+    rt_maintenance1:           vk::PhysicalDeviceRayTracingMaintenance1FeaturesKHR,
+    rt_reorder_feats:          vk::PhysicalDeviceRayTracingInvocationReorderFeaturesNV,
+    multiview_feats:           vk::PhysicalDeviceMultiviewFeatures,
+    mesh_shader_feats:         vk::PhysicalDeviceMeshShaderFeaturesEXT,
+    vrs_feats:                 vk::PhysicalDeviceFragmentShadingRateFeaturesKHR,
+    vertex_attr_divisor_feats: vk::PhysicalDeviceVertexAttributeDivisorFeaturesEXT,
 
 
     /// Extensions and Layers
@@ -1008,8 +1014,10 @@ impl VulkanOptions {
         let mut conservative_raster = vk::PhysicalDeviceConservativeRasterizationPropertiesEXT::default();
         let mut mesh_shader_props = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
         let mut vrs_props = vk::PhysicalDeviceFragmentShadingRatePropertiesKHR::default();
+        let mut vertex_attr_divisor_props = vk::PhysicalDeviceVertexAttributeDivisorPropertiesEXT::default();
         
         let mut props = vk::PhysicalDeviceProperties2::builder()
+            .push_next(&mut vertex_attr_divisor_props)
             .push_next(&mut vrs_props)
             .push_next(&mut mesh_shader_props)
             .push_next(&mut conservative_raster)
@@ -1031,8 +1039,10 @@ impl VulkanOptions {
         let mut multiview_feats = vk::PhysicalDeviceMultiviewFeatures::default();
         let mut mesh_shader_feats = vk::PhysicalDeviceMeshShaderFeaturesEXT::default();
         let mut vrs_feats = vk::PhysicalDeviceFragmentShadingRateFeaturesKHR::default();
+        let mut vertex_attr_divisor_feats = vk::PhysicalDeviceVertexAttributeDivisorFeaturesEXT::default();
 
         let mut feats = vk::PhysicalDeviceFeatures2::builder()
+            .push_next(&mut vertex_attr_divisor_feats)
             .push_next(&mut vrs_feats)
             .push_next(&mut mesh_shader_feats)
             .push_next(&mut multiview_feats)
@@ -1076,6 +1086,7 @@ impl VulkanOptions {
             conservative_raster,
             mesh_shader_props,
             vrs_props,
+            vertex_attr_divisor_props,
 
             feats: feats.features,
             accel_struct_feats,
@@ -1086,6 +1097,7 @@ impl VulkanOptions {
             multiview_feats,
             mesh_shader_feats,
             vrs_feats,
+            vertex_attr_divisor_feats,
 
             extensions,
             layers

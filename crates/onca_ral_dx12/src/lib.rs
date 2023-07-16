@@ -13,6 +13,7 @@ use onca_ral as ral;
 
 const LOG_CAT : LogCategory = LogCategory::new("DX12 RAL");
 
+mod dx12_types;
 mod dx12_ral;
 mod debug;
 mod utils;
@@ -25,6 +26,8 @@ mod texture;
 mod command_list;
 mod descriptors;
 mod fence;
+mod shader;
+mod pipeline;
 
 use dx12_ral::Dx12Ral;
 

@@ -1,10 +1,10 @@
 use core::{mem::{ManuallyDrop, MaybeUninit}, num::NonZeroU16};
 
-use onca_core::{prelude::*, sync::RwLock, collections::BitSet};
+use onca_core::{prelude::*, sync::RwLock, collections::{BitSet, StaticDynArray}};
 use onca_ral as ral;
 use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl, TextureSubresourceRange};
 use windows::Win32::{Graphics::Direct3D12::*, Foundation::RECT};
-use crate::{utils::*, device::Device, texture::{texture_layout_to_dx, Texture, RenderTargetView}};
+use crate::{utils::*, device::Device, texture::{texture_layout_to_dx, Texture, RenderTargetView}, pipeline::{PipelineLayout, Pipeline}};
 
 pub struct CommandPool {
     pub alloc:     ID3D12CommandAllocator,
@@ -115,14 +115,10 @@ impl ral::CommandListInterface for CommandList {
                 }),
                 ral::Barrier::Buffer { before, after } => todo!(),
                 ral::Barrier::Texture { before, after, texture, subresource_range, .. } => {
-                    let resource = texture.interface().as_concrete_type::<Texture>().resource.clone();
+                    let resource = &texture.interface().as_concrete_type::<Texture>().resource;
                     
                     // Since this will not be dropped, make sure we get a copy without incrementing the reference count
-                    let non_drop_resource = {
-                        let mut non_drop_resource = MaybeUninit::uninit();
-                        non_drop_resource.write(resource);
-                        ManuallyDrop::new(Some(non_drop_resource.assume_init()))
-                    };
+                    let non_drop_resource = ManuallyDrop::new(Some(unsafe { core::ptr::read(resource as *const ID3D12Resource) }));
 
                     texture_barriers.push(D3D12_TEXTURE_BARRIER {
                         SyncBefore: sync_point_to_dx(before.sync_point, before.access),
@@ -176,6 +172,20 @@ impl ral::CommandListInterface for CommandList {
 
         self.list.Barrier(&dx_barriers);
     }
+    
+    //==============================================================================================================================
+
+    unsafe fn bind_compute_pipeline_layout(&self, pipeline_layout: &ral::PipelineLayoutHandle) {
+        let root_sig = &pipeline_layout.interface().as_concrete_type::<PipelineLayout>().root_sig;
+        self.list.SetComputeRootSignature(root_sig);
+    }
+
+    unsafe fn bind_compute_pipeline(&self, pipeline: &ral::PipelineHandle) {
+        let pso = &pipeline.interface().as_concrete_type::<Pipeline>().pso;
+        self.list.SetPipelineState(pso);
+    }
+
+    //==============================================================================================================================
 
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) -> (BitSet<8>, bool, bool) {
         scoped_alloc!(UseAlloc::TlsTemp);
@@ -338,7 +348,45 @@ impl ral::CommandListInterface for CommandList {
         dynamic.rendering_dsv_subresources.clear();
     }
 
-    
+    unsafe fn bind_graphics_pipeline_layout(&self, pipeline_layout: &ral::PipelineLayoutHandle) {
+        let root_sig = &pipeline_layout.interface().as_concrete_type::<PipelineLayout>().root_sig;
+        self.list.SetGraphicsRootSignature(root_sig);
+    }
+
+    unsafe fn bind_graphics_pipeline(&self, pipeline: &ral::PipelineHandle) {
+        let pso = &pipeline.interface().as_concrete_type::<Pipeline>().pso;
+        self.list.SetPipelineState(pso);
+    }
+
+    unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
+        const MAX_VIEWPORTS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
+        let mut dx_viewports = StaticDynArray::<_, MAX_VIEWPORTS>::new();
+
+        for viewport in viewports {
+            dx_viewports.push(viewport.to_dx());
+        }
+        
+        self.list.RSSetViewports(&dx_viewports);
+    }
+
+    unsafe fn set_scissors(&self, scissors: &[ral::ScissorRect]) {
+        const MAX_SCISSORS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
+        let mut dx_scissors = StaticDynArray::<_, MAX_SCISSORS>::new();
+        for scissor in scissors {
+            dx_scissors.push(scissor.to_dx());
+        }
+
+        self.list.RSSetScissorRects(&dx_scissors);
+    }
+
+    unsafe fn set_primitive_topology(&self, topology: ral::PrimitiveTopology) {
+        self.list.IASetPrimitiveTopology(topology.to_dx());
+    }
+
+    unsafe fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
+        self.list.DrawInstanced(vertex_count, instance_count, start_vertex, start_instance)
+    }
+
 }
 
 

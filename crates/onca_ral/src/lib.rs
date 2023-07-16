@@ -39,6 +39,10 @@ mod descriptor;
 mod command_list;
 mod fence;
 mod renderpass;
+mod shader;
+mod pipeline;
+
+pub mod api;
 
 pub use common::*;
 pub use result::*;
@@ -53,6 +57,8 @@ pub use descriptor::*;
 pub use command_list::*;
 pub use fence::*;
 pub use renderpass::*;
+pub use shader::*;
+pub use pipeline::*;
 
 // https://devblogs.microsoft.com/directx/directx12agility/
 #[macro_export]

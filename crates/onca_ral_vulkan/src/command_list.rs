@@ -1,11 +1,11 @@
-use onca_core::{prelude::*, collections::BitSet};
+use onca_core::{prelude::*, collections::{BitSet, StaticDynArray}};
 use onca_ral as ral;
 use ash::vk;
 use ral::{CommandListType, CommandListBeginFlags, HandleImpl};
 
 use crate::{
     vulkan::AllocationCallbacks,
-    utils::*, texture::{texture_layout_to_vk, Texture, RenderTargetView}, device::Device,
+    utils::*, texture::{texture_layout_to_vk, Texture, RenderTargetView}, device::Device, pipeline::Pipeline,
 };
 
 
@@ -175,7 +175,22 @@ impl ral::CommandListInterface for CommandList {
         device.cmd_pipeline_barrier2(self.buffer, &dependency_info);
     }
 
-//==============================================================================================================================
+    //==============================================================================================================================
+
+    
+    unsafe fn bind_compute_pipeline_layout(&self, _pipeline_layout: &ral::PipelineLayoutHandle) {
+        // Nothing to do here for now
+    }
+
+    unsafe fn bind_compute_pipeline(&self, pipeline: &ral::PipelineHandle) {
+        let pipeline = pipeline.interface().as_concrete_type::<Pipeline>().pipeline;
+
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_bind_pipeline(self.buffer, vk::PipelineBindPoint::COMPUTE, pipeline);
+    }
+
+
+    //==============================================================================================================================
 
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) -> (BitSet<8>, bool, bool) {
         scoped_alloc!(UseAlloc::TlsTemp);
@@ -294,4 +309,48 @@ impl ral::CommandListInterface for CommandList {
         let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_end_rendering(self.buffer);
     }
+
+    unsafe fn bind_graphics_pipeline_layout(&self, _pipeline_layout: &ral::PipelineLayoutHandle) {
+        // Nothing to do here for now
+    }
+
+    unsafe fn bind_graphics_pipeline(&self, pipeline: &ral::PipelineHandle) {
+        let pipeline = pipeline.interface().as_concrete_type::<Pipeline>().pipeline;
+
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_bind_pipeline(self.buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+    }
+
+    unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
+        const MAX_VIEWPORTS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
+        let mut vk_viewports = StaticDynArray::<_, MAX_VIEWPORTS>::new();
+        for viewport in viewports {
+            vk_viewports.push(viewport.to_vulkan());
+        }
+
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_set_viewport_with_count(self.buffer, &vk_viewports);
+    }
+
+    unsafe fn set_scissors(&self, scissors: &[ral::ScissorRect]) {
+        const MAX_SCISSORS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
+        let mut vk_scissors = StaticDynArray::<_, MAX_SCISSORS>::new();
+        for scissor in scissors {
+            vk_scissors.push(scissor.to_vulkan());
+        }
+
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_set_scissor_with_count(self.buffer, &vk_scissors);
+    }
+
+    unsafe fn set_primitive_topology(&self, topology: ral::PrimitiveTopology) {
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_set_primitive_topology(self.buffer, topology.to_vulkan());
+    }
+
+    unsafe fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
+        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        device.cmd_draw(self.buffer, vertex_count, instance_count, start_vertex, start_instance);
+    }
+
 }

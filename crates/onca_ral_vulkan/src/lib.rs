@@ -28,6 +28,8 @@ mod swap_chain;
 mod texture;
 mod command_list;
 mod fence;
+mod shader;
+mod pipeline;
 
 
 #[no_mangle]

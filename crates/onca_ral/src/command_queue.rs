@@ -75,12 +75,12 @@ fn submit_info_to_batch_and_validate<'a, T: AsRef<Handle<CommandList>>>(submit_i
     {
         for list in submit_info.command_lists {
             let list = list.as_ref();
-            let mut dynamic = list.dynamic.write();
+            let mut validation = list.validation.lock();
 
-            if dynamic.state != CommandListState::Closed {
+            if validation.state != CommandListState::Closed {
                 return Err(Error::CommandList("Cannot submit a command buffer that isn't closed"));
             }
-            dynamic.state = CommandListState::Submitted;
+            validation.state = CommandListState::Submitted;
         }
     }
 

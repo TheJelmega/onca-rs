@@ -1,7 +1,9 @@
 use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16}, default};
-use onca_core::prelude::*;
-use onca_core_macros::{flags, EnumCount, EnumDisplay};
-use crate::{Result, Error, Handle, Texture, QueueIndex, TextureHandle, RenderTargetViewHandle, constants, CommandList, Fence, FenceHandle, CommandQueue};
+use onca_core::{prelude::*, collections::HashSet};
+use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
+use crate::{Result, Error, Handle, Texture, QueueIndex, TextureHandle, RenderTargetViewHandle, constants, CommandList, Fence, FenceHandle, CommandQueue, ShaderHandle, Shader, PipelineLayoutHandle};
+
+extern crate static_assertions as sa;
 
 mod format;
 pub use format::*;
@@ -556,6 +558,1093 @@ pub enum ShaderTypeMask {
     Miss,
     // Callable shader
     Callable,
+}
+
+//==============================================================================================================================
+// PIPELINE
+//==============================================================================================================================
+
+/// Viewport
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Viewport {
+    /// Top-left x coordinate
+    pub x:         f32,
+    /// Top-left y coordinate
+    pub y:         f32,
+    /// Width
+    pub width:     f32,
+    /// Height
+    pub height:    f32,
+    /// Minimum depth
+    pub min_depth: f32,
+    /// Maximum depth
+    pub max_depth: f32,
+}
+
+/// Scissor rect
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct ScissorRect {
+    /// Top-left x coordinate
+    pub x:      u16,
+    /// Top-left y coordinate
+    pub y:      u16,
+    /// Width
+    pub width:  u16,
+    /// Height
+    pub height: u16,
+}
+
+/// Pipeline layout flags
+#[flags]
+pub enum PipelineLayoutFlags {
+    /// Pipelines created with this flag can contain input layouts
+    /// 
+    /// On certain hardware, this can allow space to be saved in the pipeline layout
+    ContainsInputLayout,
+}
+
+/// Pipeline layout description
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PipelineLayoutDesc {
+    /// Flags
+    pub flags: PipelineLayoutFlags,
+}
+
+
+
+/// Primitive topology type
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum PrimitiveTopologyType {
+    /// Data will be interpreted as points
+    Point,
+    /// Data will be interpreted as lines
+    Line,
+    /// Data will be interpreted as triangles
+    Triangle,
+}
+
+/// Primitive topology
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay)]
+pub enum PrimitiveTopology {
+    /// Data represents a list of points
+    /// 
+    /// e.g. `[V0, V1, V2]` will result in 3 points: `V0`, `V1` and `V2`
+    PointList,
+    /// Data represents a list of lines
+    /// 
+    /// e.g. `[V0, V1, V2, V3]` will result in 2 lines: `(V0, V1)` and `(V2, V3)`
+    LineList,
+    /// Data represents a strip of lines, where the last vertex will be used as the first vertex of the next line
+    /// 
+    /// e.g. `[V0, V1, V2, V3]` will result in 3 lines: `(V0, V1)`, `(V1, V2)` and `(V2, V3)`
+    LineStrip,
+    /// Data represents a list of triangles
+    /// 
+    /// e.g. `[V0, V1, V2, V3, V4, V5]` will result in 2 triangles: `(V0, V1, V2)` and `(V3, V4, V5)`
+    TriangleList,
+    /// Data represents a strip of triangles, where the last 2 vertices of the previous triangle will be used as the first 2 vertices of the next triangle
+    /// 
+    /// e.g. `[V0, V1, V2, V3]` will result in 2 triangles: `(V0, V1, V2)` and `(V1, V2, V3)`
+    TriangleStrip,
+    /// Data represents a fan of triangles, where the first vertex is a common vertex for all triangles, and the last vertex of the previous triangle will be the second vertex of the next triangle.
+    /// This happens until a `cut` is introduced, where the fan will restart.
+    /// 
+    /// e.g. `[V0, V1, V2, V3, V4]` will result in 3 triangles: `(V0, V1, V2)`, `(V0, V2, V3)` and `(V0, V3, V4)`
+    TriangleFan,
+}
+
+impl PrimitiveTopology {
+    /// Get the primitive topology type the topology is part of
+    pub fn get_type(&self) -> PrimitiveTopologyType {
+        match self {
+            PrimitiveTopology::PointList     => PrimitiveTopologyType::Point,
+            PrimitiveTopology::LineList      => PrimitiveTopologyType::Line,
+            PrimitiveTopology::LineStrip     => PrimitiveTopologyType::Line,
+            PrimitiveTopology::TriangleList  => PrimitiveTopologyType::Triangle,
+            PrimitiveTopology::TriangleStrip => PrimitiveTopologyType::Triangle,
+            PrimitiveTopology::TriangleFan   => PrimitiveTopologyType::Triangle,
+        }
+    }
+
+    pub fn get_default_for_type(topology_type: PrimitiveTopologyType) -> Self {
+        match topology_type {
+            PrimitiveTopologyType::Point    => Self::PointList,
+            PrimitiveTopologyType::Line     => Self::LineList,
+            PrimitiveTopologyType::Triangle => Self::TriangleList,
+        }
+    }
+}
+
+/// Primitive fill mode
+/// 
+/// This is only used for triangle topologies, lines will always be rendererd as lines and points as points
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum FillMode {
+    /// Triangles will be filled in
+    Fill,
+    /// Triangles will be rendered as wireframe
+    Wireframe,
+}
+
+/// Cull mode
+/// 
+/// THis is only used for triangles, lines and points will never be culled, as they don't have a winding order
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum CullMode { 
+    /// No triangles will be culled
+    #[default]
+    None,
+    /// The front face of the triangle will be culled
+    Front,
+    /// The back face of the triangle will be culled
+    Back,
+}
+
+/// Winding order
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum WindingOrder {
+    /// Clockwise winding
+    CW,
+    /// Counter-clockwise winding
+    #[default]
+    CCW,
+}
+
+/// Conservative rasterization mode
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay)]
+pub enum ConservativeRasterMode {
+    /// Conservative rasterization is disabled
+    #[default]
+    None,
+    /// Use conservative rasterization in overestimation mode
+    Overestimate,
+    /// Use conservative rasterization in underestimation mode
+    /// 
+    /// This mode also requires a shader to use the `inner_coverage()`
+    Underestimate,
+}
+
+/// Line rasterization mode
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay)]
+pub enum LineRasterizationMode {
+    /// Bresenham lines (aliased)
+    Bresenham,
+    /// Antialiased rectangular lines
+    /// 
+    /// When not supported, `Aliased` will be used
+    RectangularSmooth,
+    /// Wide rectangular lines, width of 1.4 pixels
+    /// 
+    /// When not supported, `Aliased` will be used
+    /// 
+    /// The width of 1.4 is a holdover from older DirectX versions, where it was arbitrarily chosen
+    RectangularWide,
+    /// Narrow rectangular lines, width of 1 pixel
+    /// 
+    /// When not supported, `Aliased` will be used
+    RectangularNarrow,
+}
+
+/// Depth bias
+/// 
+/// A depth bias can be used to make coplanar polygons appear as if they were not coplanar.
+/// An example of this could be a decal on a wall, both would be rendered on the same plane, the decal could appear to be behind the wall or depth artifact can appear (like z-fighting).
+/// A depth bias can be used to offset the rendering of the decal so it appears in front of the wall.
+/// 
+/// The calculation that is used to resolve the final depth is the following:
+/// ```
+///     /// - `r` represents the minimal resolvable value > 0 that depends on the depth attachment represenation and depth
+///     /// - `m` represents the mximum of the horizontal and vertical slopes of the depth for the given pixel
+///     /// - `bias` is the depth bias defined in the rasterizer state
+///     fn depth_bias(r: f32, m: f32, bias: DepthBias) -> f32 {
+///         let value = r * bias.scale + m * bias.slope;
+///         if bias.clamp > 0 {
+///             value.min(bias.clamp)
+///         } else if bias.clamp < 0 {
+///             value.max(bias.clamp)
+///         } else {
+///             value
+///         }
+///     }
+/// ```
+/// 
+/// Depth bias is applied after any culling happens, and will therefore not affect geometric clipping.
+/// 
+/// Depth bias will be applied on triangles regardless of [`FillMode`], and ___may___ be applied on lines and points, depending on API and/or IHV
+/// 
+/// Additional information can be found in the respective DX and vulkan documentation
+/// - DX: https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-output-merger-stage-depth-bias
+/// - Vulkan: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap28.html#primsrast-depthbias-computation
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct DepthBias {
+    /// Depth bias scale
+    pub scale: f32,
+    /// Depth bias clamp
+    pub clamp: f32,
+    /// Depth bias slope
+    pub slope: f32,
+}
+
+/// Description specifying a rasterizer state
+// TODO: Vulkan supports depth clamp, but not DX12, but could this be handled via depth-bounds, which both APIs support? And if we decide to write all shaders via an abstraction, can we just add a depth clamp at the end of the shader somehow?
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct RasterizerState {
+    /// Fill mode
+    pub fill_mode:               FillMode,
+    /// Winding order
+    pub winding_order:           WindingOrder,
+    /// Cull mode
+    pub cull_mode:               CullMode,
+    /// Depth-bias, [`None`] indicated depth bias is disabled.
+    /// 
+    /// See [`DepthBias`] for more info
+    pub depth_bias:              Option<DepthBias>,
+    /// Is primitive clipping enabled?
+    pub depth_clip_enable:       bool,
+    /// Conservative rasterization mode
+    pub conservative_raster:     ConservativeRasterMode,
+    /// Line raster mode
+    pub line_raster_mode:        LineRasterizationMode,
+}
+
+/// Depth write mask
+/// 
+/// The value can also be read as a set of 3 bit flags
+/// - bit 0: less then
+/// - bit 1: equal to
+/// - bit 2: greater then
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum CompareOp {
+    /// Depth never passes
+    #[default]
+    Never,
+    /// Depth passes if the result is less than the current depth
+    Less,
+    /// Depth passes if the result is equal to the current depth
+    Equal,
+    /// Depth passes if the result is less then or equal to the current depth
+    LessEqual,
+    /// Depth passes if the result is greater than the current depth
+    Greater,
+    /// Depth passes if the result is not equal to than the current depth, i.e. less or greater than
+    NotEqual,
+    /// Depth passes if the result is greater then or equal to the current depth
+    GreaterEqual,
+    /// Dpeht always passes, i.e. less than, equal to, or greater than
+    Always,
+}
+
+/// Stencil operation
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum StencilOp {
+    /// Keep the current stencil
+    #[default]
+    Keep,
+    /// Set the stencil to 0
+    Zero,
+    /// Replace the stencil with a new value
+    Replace,
+    /// Increment the stencil, clamping to at maximum 255
+    IncrementClamp,
+    /// Decrement the stencil, clamping to at minimum 0
+    DecrementClamp,
+    /// Bit-invert the current stencil state
+    Invert,
+    /// Increment the stencil, with wrapping
+    IncrementWrap,
+    /// Decrement the stencil, with wrapping
+    DecrementWrap,
+}
+
+/// Stencil op state
+// Encoding
+// 0b00000000_00000000_00000000_00000111 ( 0- 3) -> fail op
+// 0b00000000_00000000_00000000_00111000 ( 3- 6) -> depth fail op
+// 0b00000000_00000000_00000001_11000000 ( 6- 9) -> pass op
+// 0b00000000_00000000_00001110_00000000 ( 9-12) -> compare op
+// 0b00000000_00001111_11110000_00000000 (12-20) -> read mask
+// 0b00001111_11110000_00000000_00000000 (20-28) -> write mask
+// 0b11110000_00000000_00000000_00000000 (28-32) -> unused (this is relied on when packing it into the depth-stencil state)
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+//pub struct StencilOpState {
+//    state:      u16,
+//    pub read_mask:  u8,
+//    pub write_mask: u8,
+//}
+pub struct StencilOpState(u32);
+
+impl StencilOpState {
+    const STENCIL_OP_MASK :    u32 = 0x07;
+    const FAIL_OP_SHIFT:       u32 = 0;
+    const FAIL_OP_CLEAR:       u32 = !(Self::STENCIL_OP_MASK << Self::FAIL_OP_SHIFT);
+    const DEPTH_FAIL_OP_SHIFT: u32 = 3;
+    const DEPTH_FAIL_OP_CLEAR: u32 = !(Self::STENCIL_OP_MASK << Self::DEPTH_FAIL_OP_SHIFT);
+    const PASS_OP_SHIFT:       u32 = 6;
+    const PASS_OP_CLEAR:       u32 = !(Self::STENCIL_OP_MASK << Self::PASS_OP_SHIFT);
+
+    const COMPARISON_OP_MASK:  u32 = 0x7;
+    const COMPARISON_OP_SHIFT: u32 = 9;
+    const COMPARISON_OP_CLEAR: u32 = !(Self::COMPARISON_OP_MASK << Self::COMPARISON_OP_SHIFT);
+
+    const MASK_MASK:           u32 = u8::MAX as u32;
+    const READ_MASK_SHIFT:     u32 = 12;
+    const READ_MASK_CLEAR:     u32 = !(Self::MASK_MASK << Self::READ_MASK_SHIFT);
+    const WRITE_MASK_SHIFT:    u32 = 20;
+    const WRITE_MASK_CLEAR:    u32 = !(Self::MASK_MASK << Self::WRITE_MASK_SHIFT);
+
+    pub fn new(fail_op: StencilOp, depth_fail_op: StencilOp, pass_op: StencilOp, comparison_op: CompareOp, read_mask: u8, write_mask: u8) -> Self {
+        Self(
+            (fail_op       as u32 & Self::STENCIL_OP_MASK   ) << Self::FAIL_OP_SHIFT       |
+            (depth_fail_op as u32 & Self::STENCIL_OP_MASK   ) << Self::DEPTH_FAIL_OP_SHIFT |
+            (pass_op       as u32 & Self::STENCIL_OP_MASK   ) << Self::PASS_OP_SHIFT       |
+            (comparison_op as u32 & Self::COMPARISON_OP_MASK) << Self::COMPARISON_OP_SHIFT |
+            (read_mask     as u32 & Self::MASK_MASK         ) << Self::READ_MASK_SHIFT     |
+            (write_mask    as u32 & Self::MASK_MASK         ) << Self::WRITE_MASK_SHIFT
+        )
+    }
+
+    /// Get the stencil state op when the stencil test fail
+    pub fn fail_op(&self) -> StencilOp {
+        let idx = (self.0 >> Self::FAIL_OP_SHIFT) & Self::STENCIL_OP_MASK;
+        unsafe { StencilOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the stencil op state when the stencil test fails
+    pub fn set_fail_op(&mut self, op: StencilOp) {
+        self.0 &= Self::FAIL_OP_CLEAR;
+        self.0 |= (op as u32) << Self::FAIL_OP_SHIFT;
+    }
+
+    /// Get the stencil op state when the stencil test passes, but the depth test fails
+    pub fn depth_fail_op(&self) -> StencilOp {
+        let idx = (self.0 >> Self::DEPTH_FAIL_OP_SHIFT) & Self::STENCIL_OP_MASK;
+        unsafe { StencilOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the stencil op state when the stencil test passes, but the depth test fails
+    pub fn set_depth_fail_op(&mut self, op: StencilOp) {
+        self.0 &= Self::DEPTH_FAIL_OP_CLEAR;
+        self.0 |= (op as u32) << Self::DEPTH_FAIL_OP_SHIFT;
+    }
+
+    /// Get the stencil op state when both the stencil and depth test pass
+    pub fn pass_op(&self) -> StencilOp {
+        let idx = (self.0 >> Self::PASS_OP_SHIFT) & Self::STENCIL_OP_MASK;
+        unsafe { StencilOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the stencil op state when both the stencil and depth test pass
+    pub fn set_pass_op(&mut self, op: StencilOp) {
+        self.0 &= Self::PASS_OP_CLEAR;
+        self.0 |= (op as u32) << Self::PASS_OP_SHIFT;
+    }
+
+    /// Get the stencil comparison op
+    pub fn compare_op(&self) -> CompareOp {
+        let idx = (self.0 >> Self::COMPARISON_OP_SHIFT) & Self::COMPARISON_OP_MASK;
+        unsafe { CompareOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the stencil op state when both the stencil and depth test pass
+    pub fn set_compare_op(&mut self, op: CompareOp) {
+        self.0 &= Self::COMPARISON_OP_CLEAR;
+        self.0 |= (op as u32) << Self::COMPARISON_OP_SHIFT;
+    }
+
+    /// Get the read mask
+    pub fn read_mask(&self) -> u8 {
+        ((self.0 >> Self::READ_MASK_SHIFT) & Self::MASK_MASK) as u8
+    }
+
+    /// Set the read mask
+    pub fn set_read_mask(&mut self, mask: u8) {
+        self.0 &= Self::READ_MASK_CLEAR;
+        self.0 |= (mask as u32) << Self::READ_MASK_SHIFT;
+    }
+
+    /// Get the write mask
+    pub fn write_mask(&self) -> u8 {
+        ((self.0 >> Self::WRITE_MASK_SHIFT) & Self::MASK_MASK) as u8
+    }
+
+    /// Set the write mask
+    pub fn set_write_mask(&mut self, mask: u8) {
+        self.0 &= Self::WRITE_MASK_CLEAR;
+        self.0 |= (mask as u32) << Self::WRITE_MASK_SHIFT;
+    }
+}
+
+sa::const_assert!(StencilOp::COUNT                - 1 <= StencilOpState::STENCIL_OP_MASK as usize);
+sa::const_assert!(CompareOp::COUNT - 1 <= StencilOpState::COMPARISON_OP_MASK as usize);
+
+/// Depth stencil state
+/// 
+/// ## Limitations:
+/// 
+/// Because of API limitation, both front and back faces use the same stencil read and write mask. The stencil ref also cannot be set separately for each side, and is set via a command list
+//
+// Encoding (Little-endian)
+//          7        6        5        4        3        2        1        0
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001 ( 0- 1) -> depth enable
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000010 ( 1- 2) -> depth write enable
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00011100 ( 2- 5) -> depth comparison op
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00100000 ( 5- 6) -> depth bounds enabled
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01000000 ( 6- 7) -> stencil enable
+// 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_10000000 ( 7- 8) -> Reserved
+// 0b00000000_00000000_00000000_00001111_11111111_11111111_11111111_00000000 ( 8-36) -> front face stencil op state
+// 0b11111111_11111111_11111111_11110000_00000000_00000000_00000000_00000000 (36-64) -> back face stencil op state
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DepthStencilState(u64);
+
+impl DepthStencilState {
+    const BOOL_MASK:                    u64 = 0x1;
+    const DEPTH_ENABLE_SHIFT:           u64 = 0;
+    const DEPTH_ENABLE_CLEAR:           u64 = !(Self::BOOL_MASK << Self::DEPTH_ENABLE_SHIFT);
+    const DEPTH_WRITE_ENABLE_SHIFT:     u64 = 1;
+    const DEPTH_WRITE_ENABLE_CLEAR:     u64 = !(Self::BOOL_MASK << Self::DEPTH_WRITE_ENABLE_SHIFT);
+    const DEPTH_COMPARISON_OP_MASK:     u64 = 0x7;
+    const DEPTH_COMPARISON_OP_SHIFT:    u64 = 2;
+    const DEPTH_COMPARISON_OP_CLEAR:    u64 = !(Self::DEPTH_COMPARISON_OP_MASK << Self::DEPTH_COMPARISON_OP_SHIFT);
+    const DEPTH_BOUNDS_SHIFT:           u64 = 5;
+    const DEPTH_BOUNDS_CLEAR:           u64 = !(Self::BOOL_MASK << Self::STENCIL_ENABLE_SHIFT);
+    const STENCIL_ENABLE_SHIFT:         u64 = 6;
+    const STENCIL_ENABLE_CLEAR:         u64 = !(Self::BOOL_MASK << Self::STENCIL_ENABLE_SHIFT);
+
+    const STENCIL_OP_STATE_MASK:        u64 = 0x0FFFFFFF;
+    const FRONT_STENCIL_OP_STATE_SHIFT: u64 = 8;
+    const FRONT_STENCIL_OP_STATE_CLEAR: u64 = !(Self::STENCIL_OP_STATE_MASK << Self::FRONT_STENCIL_OP_STATE_SHIFT);
+    const BACK_STENCIL_OP_STATE_SHIFT:  u64 = 36;
+    const BACK_STENCIL_OP_STATE_CLEAR:  u64 = !(Self::STENCIL_OP_STATE_MASK << Self::BACK_STENCIL_OP_STATE_SHIFT);
+
+    pub fn new(
+        depth_enable: bool,
+        depth_write_enable: bool,
+        depth_comparison_op: CompareOp,
+        depth_bounds_enable: bool,
+        stencil_enable: bool,
+        front_face: StencilOpState,
+        back_face: StencilOpState
+    ) -> Self {
+        Self (
+            (depth_enable        as u64) << Self::DEPTH_ENABLE_SHIFT |
+            (depth_write_enable  as u64) << Self::DEPTH_WRITE_ENABLE_SHIFT |
+            (depth_comparison_op as u64) << Self::DEPTH_COMPARISON_OP_SHIFT |
+            (depth_bounds_enable as u64) << Self::DEPTH_BOUNDS_SHIFT |
+            (stencil_enable      as u64) << Self::STENCIL_ENABLE_SHIFT |
+            (front_face.0        as u64) << Self::FRONT_STENCIL_OP_STATE_SHIFT |
+            (back_face.0         as u64) << Self::BACK_STENCIL_OP_STATE_SHIFT
+        )
+    }
+
+    pub fn new_depth_only(write: bool, bounds: bool, comparison_op: CompareOp) -> Self {
+        Self::new(true, write, comparison_op, bounds, false, StencilOpState::default(), StencilOpState::default())
+    }
+
+    /// Check if the depth test is enabled
+    pub fn depth_enable(&self) -> bool {
+        (self.0 >> Self::DEPTH_ENABLE_SHIFT) & Self::BOOL_MASK != 0
+    }
+    
+    /// Set if the depth test is enabled
+    pub fn set_depth_enable(&mut self, enable: bool) {
+        self.0 &= Self::DEPTH_ENABLE_CLEAR;
+        self.0 |= (enable as u64) << Self::DEPTH_ENABLE_SHIFT;
+    }
+
+    /// Check if the depth write is enabled
+    pub fn depth_write_enable(&self) -> bool {
+        (self.0 >> Self::DEPTH_WRITE_ENABLE_SHIFT) & Self::BOOL_MASK != 0
+    }
+    
+    /// Set if the depth test is enabled
+    pub fn set_depth_write_enable(&mut self, enable: bool) {
+        self.0 &= Self::DEPTH_WRITE_ENABLE_CLEAR;
+        self.0 |= (enable as u64) << Self::DEPTH_WRITE_ENABLE_SHIFT;
+    }
+
+    /// Get the depth comparison op
+    pub fn depth_comparison_op(&self) -> CompareOp {
+        let idx = (self.0 >> Self::DEPTH_COMPARISON_OP_SHIFT) & Self::BOOL_MASK;
+        unsafe { CompareOp::from_idx_unchecked(idx as usize) }
+    }
+    
+    /// Set the depth comparison op
+    pub fn set_depth_comparison_op(&mut self, comparison_op: CompareOp) {
+        self.0 &= Self::DEPTH_COMPARISON_OP_CLEAR;
+        self.0 |= (comparison_op as u64) << Self::DEPTH_COMPARISON_OP_SHIFT;
+    }
+
+    /// Check if the depth test is enabled
+    pub fn depth_bounds_enable(&self) -> bool {
+        (self.0 >> Self::DEPTH_BOUNDS_SHIFT) & Self::BOOL_MASK != 0
+    }
+    
+    /// Set if the depth test is enabled
+    pub fn set_depth_bounds_enable(&mut self, enable: bool) {
+        self.0 &= Self::DEPTH_BOUNDS_CLEAR;
+        self.0 |= (enable as u64) << Self::DEPTH_BOUNDS_SHIFT;
+    }
+
+    /// Check if the stencil test is enabled
+    pub fn stencil_enable(&self) -> bool {
+        (self.0 >> Self::STENCIL_ENABLE_SHIFT) & Self::BOOL_MASK != 0
+    }
+    
+    /// Set if the stencil test is enabled
+    pub fn set_stencil_enable(&mut self, enable: bool) {
+        self.0 &= Self::STENCIL_ENABLE_CLEAR;
+        self.0 |= (enable as u64) << Self::STENCIL_ENABLE_SHIFT;
+    }
+
+    /// Get the front stencil op state
+    pub fn front_stencil_op_state(&self) -> StencilOpState {
+        let raw = (self.0 >> Self::FRONT_STENCIL_OP_STATE_SHIFT) & Self::STENCIL_OP_STATE_MASK;
+        StencilOpState(raw as u32)
+    }
+
+    /// Set the front stencil op state
+    pub fn set_front_stencil_op_state(&mut self, stencil_op_state: StencilOpState) {
+        self.0 &= Self::FRONT_STENCIL_OP_STATE_CLEAR;
+        self.0 |= (stencil_op_state.0 as u64) << Self::FRONT_STENCIL_OP_STATE_SHIFT;
+    }
+
+    /// Get the back stencil op state
+    pub fn back_stencil_op_state(&self) -> StencilOpState {
+        let raw = (self.0 >> Self::BACK_STENCIL_OP_STATE_SHIFT) & Self::STENCIL_OP_STATE_MASK;
+        StencilOpState(raw as u32)
+    }
+
+    /// Set the back stencil op state
+    pub fn set_back_stencil_op_state(&mut self, stencil_op_state: StencilOpState) {
+        self.0 &= Self::BACK_STENCIL_OP_STATE_CLEAR;
+        self.0 |= (stencil_op_state.0 as u64) << Self::BACK_STENCIL_OP_STATE_SHIFT;
+    }
+}
+
+sa::const_assert!(CompareOp::COUNT - 1 <= DepthStencilState::DEPTH_COMPARISON_OP_MASK as usize);
+
+
+/// Render target blend logic operations
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum LogicOp {
+    /// The destination will be cleared (all 0s).
+    Clear,
+    /// The destination will be set to max (all 1s).
+    Set,
+    /// The source will be copied to the destination (`s`).
+    #[default]
+    Copy,
+    /// The source will be inverted and copied to the destination (`!s`).
+    CopyInverted,
+    /// The destination will be preserved (`d`).
+    Noop,
+    /// The destination will be inverted (`!d`).
+    Invert,
+    /// The source will be ANDed with the destination (`s & d`).
+    And,
+    /// The source will be NANDed with the destination (`!(s & d)`).
+    Nand,
+    /// The source will be ORed with the destination (`s | d`).
+    Or,
+    /// The source will be NORed with the destination (`!(s | d)`).
+    Nor,
+    /// The source will be XORed with the destination (`s ^ d`).
+    Xor,
+    /// The source will be EQUALed with the destination, i.e. XNORed (`!(s ^ d)`).
+    Equivalent,
+    /// The source will be ANDed with the reverse of the desination (`s & !d`).
+    AndReverse,
+    /// The inverse of the source will be ANDed with the destination (`!s & d`).
+    AndInverted,
+    /// The source will be ORed with the reverse of the desination (`s & !d`).
+    OrReverse,
+    /// The inverse of the ORed will be ANDed with the destination (`!s & d`).
+    OrInverted,
+}
+
+/// Blend factor
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum BlendFactor {
+    /// The blend factor is all 0s: (0, 0, 0, 0), i.e. no pre-blend operation
+    #[default]
+    Zero,
+    /// The blend factor is all 1s: (1, 1, 1, 1), i.e. no pre-blend operation
+    One,
+    /// The blend factor is the source color: (Rs, Gs, Bs, As)
+    SrcColor,
+    /// The blend factor is the inverted source color: (1-Rs, 1-Gs, 1-Bs, 1-As)
+    InvSrcColor,
+    /// The blend factor is the source alpha value: (As, As, As, As)
+    SrcAlpha,
+    /// The blend factor is the inverted source alpha value: (1-As, 1-As, 1-As, 1-As)
+    InvSrcAlpha,
+    /// The blend factor is the saturated source alpha value: (f, f, f, 1), where `f = min (As, 1-Ad)`
+    SourceAlphaSaturate,
+    /// The blend factor is the source destination value: (Ad, Ad, Ad, Ad)
+    DstAlpha,
+    /// The blend factor is the inverted destination alpha value: (1-Ad, 1-Ad, 1-Ad, 1-Ad)
+    InvDstAlpha,
+    /// The blend factor is the destination color: (Rd, Gd, Bd, Ad)
+    DstColor,
+    /// The blend factor is the inverted destination color: (1-Rd, 1-Gd, 1-Bs, 1-Ad)
+    InvDstColor,
+    /// The blend factor is the user-defined blend factor (Rb, Gb, Bb, Ab)
+    ConstantColor,
+    /// The blend factor is the inverted user-defined blend factor (1-Rb, 1-Gb, 1-Bb, 1-Ab)
+    InvConstantColor,
+    /// The blend factor is the source dual-color: (Rs1, Gs1, Bs1, As1)
+    Src1Color,
+    /// The blend factor is the inverted dual-source color: (1-Rs1, 1-Gs1, 1-Bs1, 1-As1)
+    InvSrc1COlor,
+    /// The blend factor is the dual-source alpha value: (As1, As1, As1, As1)
+    Src1Alpha,
+    /// The blend factor is the inverted dual-source alpha value: (1-As1, 1-As1, 1-As1, 1-As1)
+    IvSrc1Alpha,
+    /// The blend factor is the user-defined alpha factor: (Ab, Ab, Ab, Ab)
+    ConstantAlpha,
+    /// The blend factor is the inverted user-defined alpha factor: (1-Ab, 1-Ab, 1-Ab, 1-Ab)
+    InvConstantAlpha,
+}
+
+// Blend operation
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay, EnumCount, EnumFromIndex)]
+pub enum BlendOp {
+    /// Add source 1 and source 2
+    #[default]
+    Add,
+    /// Subtract source 1 from source 2
+    Subtract,
+    /// Subtract source 2 from source 1
+    ReverseSubtract,
+    /// Get the minimum value between source 1 and source 1
+    Min,
+    /// Get the maximum value between source 1 and source 1
+    Max,
+}
+
+/// Color write mask
+#[flags]
+pub enum ColorWriteMask {
+    R,
+    G,
+    B,
+    A
+}
+
+/// Per rendertarget blend state
+// Encoding
+// 0b00000000_00000000_00000000_00000001 ( 0- 1) -> enable
+// 0b00000000_00000000_00000000_00111110 ( 1- 6) -> src color factor
+// 0b00000000_00000000_00000111_11000000 ( 6-11) -> dst color factor
+// 0b00000000_00000000_00111000_00000000 (11-14) -> color blend
+// 0b00000000_00000111_11000000_00000000 (14-19) -> src alpha factor
+// 0b00000000_11111000_00000000_00000000 (19-24) -> dst alpha factor
+// 0b00000111_00000000_00000000_00000000 (24-27) -> alpha blend
+// 0b01111000_00000000_00000000_00000000 (27-31) -> mask
+// 0b10000000_00000000_00000000_00000000 (31-32) -> reserved
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct RenderTargetBlendState(u32);
+
+impl RenderTargetBlendState {
+    const BOOL_MASK:              u32 = 0x01;
+    const BLEND_FACTOR_MASK:      u32 = 0x1F;
+    const BLEND_OP_MASK:          u32 = 0x07;
+    const WRITE_MASK_MASK:        u32 = 0x0F;
+
+    const BLEND_ENABLE_SHIFT:     u32 = 0;
+    const BLEND_ENABLE_CLEAR:     u32 = !(Self::BOOL_MASK << Self::BLEND_ENABLE_SHIFT);
+    const SRC_COLOR_FACTOR_SHIFT: u32 = 1;
+    const SRC_COLOR_FACTOR_CLEAR: u32 = !(Self::BLEND_FACTOR_MASK << Self::SRC_COLOR_FACTOR_SHIFT);
+    const DST_COLOR_FACTOR_SHIFT: u32 = 6;
+    const DST_COLOR_FACTOR_CLEAR: u32 = !(Self::BLEND_FACTOR_MASK << Self::DST_COLOR_FACTOR_SHIFT);
+    const COLOR_BLEND_OP_SHIFT:   u32 = 11;
+    const COLOR_BLEND_OP_CLEAR:   u32 = !(Self::BLEND_OP_MASK << Self::COLOR_BLEND_OP_SHIFT);
+    const SRC_ALPHA_FACTOR_SHIFT: u32 = 14;
+    const SRC_ALPHA_FACTOR_CLEAR: u32 = !(Self::BLEND_FACTOR_MASK << Self::SRC_ALPHA_FACTOR_SHIFT);
+    const DST_ALPHA_FACTOR_SHIFT: u32 = 19;
+    const DST_ALPHA_FACTOR_CLEAR: u32 = !(Self::BLEND_FACTOR_MASK << Self::DST_ALPHA_FACTOR_SHIFT);
+    const ALPHA_BLEND_OP_SHIFT:   u32 = 24;
+    const ALPHA_BLEND_OP_CLEAR:   u32 = !(Self::BLEND_OP_MASK << Self::ALPHA_BLEND_OP_SHIFT);
+    const WRITE_MASK_SHIFT:       u32 = 27;
+    const WRITE_MASK_CLEAR:       u32 = !(Self::WRITE_MASK_MASK << Self::WRITE_MASK_SHIFT);
+
+    pub fn new(
+        enable: bool,
+        src_color_factor: BlendFactor,
+        dst_color_factor: BlendFactor,
+        color_blend_op: BlendOp,
+        src_alpha_factor: BlendFactor,
+        dst_alpha_factor: BlendFactor,
+        alpha_blend_op: BlendOp,
+        write_mask: ColorWriteMask
+    ) -> Self {
+        Self(
+            (enable            as u32) << Self::BLEND_ENABLE_SHIFT     |
+            (src_color_factor  as u32) << Self::SRC_COLOR_FACTOR_SHIFT |
+            (dst_color_factor  as u32) << Self::DST_COLOR_FACTOR_SHIFT |
+            (color_blend_op    as u32) << Self::COLOR_BLEND_OP_SHIFT   |
+            (src_alpha_factor  as u32) << Self::SRC_ALPHA_FACTOR_SHIFT |
+            (dst_alpha_factor  as u32) << Self::DST_ALPHA_FACTOR_SHIFT |
+            (alpha_blend_op    as u32) << Self::ALPHA_BLEND_OP_SHIFT   |
+            (write_mask.bits() as u32) << Self::WRITE_MASK_SHIFT
+        )
+    }
+
+    /// Check if blending is enabled
+    pub fn blend_enabled(&self) -> bool {
+        ((self.0 >> Self::BLEND_ENABLE_SHIFT) & Self::BOOL_MASK) != 0
+    }
+
+    /// Set if blending is enabled
+    pub fn set_blend_enable(&mut self, enable: bool) {
+        self.0 &= Self::BLEND_ENABLE_CLEAR;
+        self.0 &= (enable as u32) << Self::BLEND_ENABLE_SHIFT;
+    }
+    
+    /// Get the source color factor
+    pub fn src_color_factor(&self) -> BlendFactor {
+        let idx = (self.0 >> Self::SRC_COLOR_FACTOR_SHIFT) & Self::BLEND_FACTOR_MASK;
+        unsafe { BlendFactor::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the source color factor
+    pub fn set_src_color_factor(&mut self, factor: BlendFactor) {
+        self.0 &= Self::SRC_COLOR_FACTOR_CLEAR;
+        self.0 &= (factor as u32) << Self::SRC_COLOR_FACTOR_SHIFT;
+    }
+    
+    /// Get the destination color factor
+    pub fn dst_color_factor(&self) -> BlendFactor {
+        let idx = (self.0 >> Self::DST_COLOR_FACTOR_SHIFT) & Self::BLEND_FACTOR_MASK;
+        unsafe { BlendFactor::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the destination color factor
+    pub fn set_dst_color_factor(&mut self, factor: BlendFactor) {
+        self.0 &= Self::DST_COLOR_FACTOR_CLEAR;
+        self.0 &= (factor as u32) << Self::DST_COLOR_FACTOR_SHIFT;
+    }
+    
+    /// Get the color blend op
+    pub fn color_blend_op(&self) -> BlendOp {
+        let idx = (self.0 >> Self::COLOR_BLEND_OP_SHIFT) & Self::BLEND_OP_MASK;
+        unsafe { BlendOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the color blend op
+    pub fn set_color_blend_op(&mut self, op: BlendOp) {
+        self.0 &= Self::COLOR_BLEND_OP_CLEAR;
+        self.0 &= (op as u32) << Self::COLOR_BLEND_OP_SHIFT;
+    }
+    
+    /// Get the source alpha factor
+    pub fn src_alpha_factor(&self) -> BlendFactor {
+        let idx = (self.0 >> Self::SRC_ALPHA_FACTOR_SHIFT) & Self::BLEND_FACTOR_MASK;
+        unsafe { BlendFactor::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the source alpha factor
+    pub fn set_src_alpha_factor(&mut self, factor: BlendFactor) {
+        self.0 &= Self::SRC_ALPHA_FACTOR_CLEAR;
+        self.0 &= (factor as u32) << Self::SRC_ALPHA_FACTOR_SHIFT;
+    }
+    
+    /// Get the destination alpha factor
+    pub fn dst_alpha_factor(&self) -> BlendFactor {
+        let idx = (self.0 >> Self::DST_ALPHA_FACTOR_SHIFT) & Self::BLEND_FACTOR_MASK;
+        unsafe { BlendFactor::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the destination alpha factor
+    pub fn set_dst_alpha_factor(&mut self, factor: BlendFactor) {
+        self.0 &= Self::DST_ALPHA_FACTOR_CLEAR;
+        self.0 &= (factor as u32) << Self::DST_ALPHA_FACTOR_SHIFT;
+    }
+    
+    /// Get the alpha blend op
+    pub fn alpha_blend_op(&self) -> BlendOp {
+        let idx = (self.0 >> Self::ALPHA_BLEND_OP_SHIFT) & Self::BLEND_OP_MASK;
+        unsafe { BlendOp::from_idx_unchecked(idx as usize) }
+    }
+
+    /// Set the alpha blend op
+    pub fn set_alpha_blend_op(&mut self, op: BlendOp) {
+        self.0 &= Self::ALPHA_BLEND_OP_CLEAR;
+        self.0 &= (op as u32) << Self::ALPHA_BLEND_OP_SHIFT;
+    }
+    
+    /// Get the write mask 
+    pub fn write_mask(&self) -> ColorWriteMask {
+        let bit_mask = (self.0 >> Self::WRITE_MASK_SHIFT) & Self::WRITE_MASK_MASK;
+        ColorWriteMask::new(bit_mask as u8)
+    }
+
+    /// Set the write mask 
+    pub fn set_write_mask(&mut self, op: BlendOp) {
+        self.0 &= Self::WRITE_MASK_CLEAR;
+        self.0 &= (op as u32) << Self::WRITE_MASK_SHIFT;
+    }
+}
+
+sa::const_assert!(BlendFactor::COUNT - 1 <= RenderTargetBlendState::BLEND_FACTOR_MASK as usize);
+sa::const_assert!(BlendOp::COUNT - 1 <= RenderTargetBlendState::BLEND_OP_MASK as usize);
+sa::const_assert!(ColorWriteMask::all().bits() <= RenderTargetBlendState::WRITE_MASK_MASK as u8);
+
+/// Blend state
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BlendState {
+    /// No blending
+    None,
+    /// Logic operation
+    LogicOp(LogicOp),
+    /// Per rendertarget blend state
+    Blend([RenderTargetBlendState; constants::MAX_RENDERTARGETS as usize])
+}
+
+impl BlendState {
+    pub fn new_blend(rt_states: &[RenderTargetBlendState]) -> Self {
+        let mut states = [RenderTargetBlendState::default(); constants::MAX_RENDERTARGETS as usize];
+        for (idx, rt_state) in rt_states.iter().take(constants::MAX_RENDERTARGETS as usize).enumerate() {
+            states[idx] = *rt_state;
+        }
+        Self::Blend(states)
+    }
+}
+
+/// Input layout step rate
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum InputLayoutStepRate {
+    /// The data steps per vertex
+    /// 
+    /// ## Note
+    /// 
+    /// Unlike per instance step rate, the vertex step rate is always 1
+    PerVertex,
+    /// The data steps per instance
+    PerInstance(u32),
+}
+
+/// Input layout element
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct InputLayoutElement {
+    /// Semantic
+    pub semantic:       String,
+    /// Semantic index
+    pub semantic_index: u8,
+    /// Vertex buffer input slot
+    pub input_slot:     u8,
+    /// Format the data is encoded as
+    pub format:         Format,
+    /// Data offset in the vertex data
+    pub offset:         u16,
+    /// Step rate
+    pub step_rate:      InputLayoutStepRate,
+}
+
+/// Input layout
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct InputLayout {
+    /// Elements
+    pub elements: DynArray<InputLayoutElement>,
+}
+
+impl InputLayout {
+    pub fn validate(&self) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            if self.elements.len() > constants::MAX_VERTEX_INPUT_ATTRIBUTES as usize {
+                return Err(Error::InvalidParameter(onca_format!("Number of vertex attributes `{}` must not exceed exceeed MAX_VERTEX_INPUT_ATTRIBUTES ({})", self.elements.len(), constants::MAX_VERTEX_INPUT_ATTRIBUTES)));
+            }
+
+            let mut encountered_semantics = HashSet::<(String, u8)>::new();
+            let mut strides = [0u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize];
+
+            for element in &self.elements {
+                if element.input_slot as u32 >= constants::MAX_VERTEX_INPUT_BUFFERS {
+                    return Err(Error::InvalidParameter(onca_format!("input layout element slot `{}` must not exceed MAX_VERTEX_INPUT_BUFFERS ({})", element.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
+                }
+
+                if !encountered_semantics.insert((element.semantic.clone(), element.semantic_index)) {
+                    return Err(Error::InvalidParameter(onca_format!("Duplicate vertex attribute `{}` found in an input layout as slot `{}`", element.semantic, element.input_slot)));
+                }
+
+                if element.semantic_index as u32 >= constants::MAX_VERTEX_INPUT_ATTRIBUTES {
+                    return Err(Error::InvalidParameter(onca_format!("Input element semantic index `{}` must not exceed MAX_VERTEX_INPUT_ATTRIBUTES ({})", element.semantic_index, constants::MAX_VERTEX_INPUT_ATTRIBUTES)))
+                }
+
+                if element.offset as u32 >= constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET {
+                    return Err(Error::InvalidParameter(onca_format!("Vertex input element offset out of bounds `{}` as slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET ({})", element.offset, element.input_slot, constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET)));
+                }
+
+                let elem_size = element.format.num_bytes();
+
+                if elem_size == 2 && element.offset & 0x1 != 0 {
+                    return Err(Error::InvalidParameter(onca_format!("Invalid offset `{}`, vertex input attributes that require 2 bytes need to have their offset aligned to 2 bytes", element.offset)));
+                } else if elem_size != 1 && element.offset & 0x3 != 0 {
+                    return Err(Error::InvalidParameter(onca_format!("Invalid offset `{}`, vertex input attributes that require more than 2 bytes need to have their offset aligned to 4 bytes", element.offset)));
+                }
+
+                strides[element.input_slot as usize] = strides[element.input_slot as usize].max(element.offset + elem_size as u16);
+            }
+
+            for (idx, stride) in strides.iter().enumerate() {
+                if *stride as u32 > constants::MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE {
+                    return Err(Error::InvalidParameter(onca_format!("Vertex input stride `{}` out of bound for slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE ({})", stride, idx, constants::MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE)));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn calculate_strides(&self) -> [u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize] {
+        let mut strides = [0u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize];
+        for element in &self.elements {
+            let format_bytes = element.format.num_bytes() as u16;
+            strides[element.input_slot as usize] = strides[element.input_slot as usize].max(element.offset + format_bytes);
+        }
+
+        strides
+    }
+}
+
+/// Multisample state
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct MultisampleState {
+    /// Number of samples
+    pub samples:           SampleCount,
+    /// Sample mask
+    // Only needs 16 bits, as we only support up to 16 samples
+    pub sample_mask:       u16,
+    /// Alpha to coverage
+    pub alpha_to_coverage: bool,
+}
+
+impl Default for MultisampleState {
+    fn default() -> Self {
+        Self {
+            samples: Default::default(),
+            sample_mask: 0xFFFF,
+            alpha_to_coverage: Default::default()
+        }
+    }
+}
+
+/// Primitive restart
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum PrimitiveRestart {
+    /// Primitve restart is disabled
+    #[default]
+    None,
+    /// Primitive restart will be cut at an index with the max u16 value: 0xFFFF
+    U16,
+    /// Primitive restart will be cut at an index with the max u32 value: 0xFFFF_FFFF
+    U32,
+}
+
+/// Graphics pipeline description
+///
+/// This description represents a graphics pipeline with a vertex and pixel shader
+#[derive(Clone)]
+pub struct GraphicsPipelineDesc {
+    /// Primitive topology
+    pub topology:             PrimitiveTopology,
+    /// Is primitive restart used, and if so, what value will the cut be at (needs to match index buffer type)?
+    pub primitive_restart:    PrimitiveRestart,
+    /// Rasterizer state
+    pub rasterizer_state:     RasterizerState,
+    /// Depth stencil state
+    pub depth_stencil_state:  DepthStencilState,
+    /// Blend state
+    pub blend_state:          BlendState,
+    /// Multisample state
+    pub multisample_state:    MultisampleState,
+    /// Vertex input state
+    pub vertex_input_layout:  InputLayout,
+    /// Render targer formats
+    pub rendertarget_formats: [Option<Format>; constants::MAX_RENDERTARGETS as usize],
+    /// Depth stencil formats
+    pub depth_stencil_format: Option<Format>,
+    /// View mask
+    pub view_mask:            Option<u8>,
+    /// Vertex shader
+    pub vertex_shader:        ShaderHandle,
+    /// Pixel shader
+    pub pixel_shader:         ShaderHandle,
+    /// Pipeline layout
+    pub pipeline_layout:      PipelineLayoutHandle,
+}
+
+impl GraphicsPipelineDesc {
+    pub fn validate(&self) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            if !self.vertex_input_layout.elements.is_empty() &&
+                !self.pipeline_layout.flags().is_set(PipelineLayoutFlags::ContainsInputLayout)
+            {
+                return Err(Error::InvalidParameter("Pipeline description contains input layout, but pipeline layout does not support it".to_onca_string()));
+            }
+
+            self.vertex_input_layout.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl PartialEq for GraphicsPipelineDesc {
+    fn eq(&self, other: &Self) -> bool {
+        self.topology == other.topology &&
+        self.primitive_restart == other.primitive_restart &&
+        self.rasterizer_state == other.rasterizer_state &&
+        self.depth_stencil_state == other.depth_stencil_state &&
+        self.blend_state == other.blend_state &&
+        self.multisample_state == other.multisample_state &&
+        self.vertex_input_layout == other.vertex_input_layout &&
+        Handle::ptr_eq(&self.vertex_shader, &other.vertex_shader) &&
+        Handle::ptr_eq(&self.pixel_shader, &other.pixel_shader)
+    }
+}
+
+/// Mesh graphics pipeline description
+#[derive(Clone)]
+pub struct MeshPipelineDescription {
+    /// Rasterizer state
+    pub rasterizer_state:     RasterizerState,
+    /// Depth stencil state
+    pub depth_stencil_state:  DepthStencilState,
+    /// Blend state
+    pub blend_state:          BlendState,
+    /// Multisample state
+    pub multisample_state:    MultisampleState,
+    /// Render targer formats
+    pub rendertarget_formats: [Option<Format>; constants::MAX_RENDERTARGETS as usize],
+    /// Depth stencil formats
+    pub depth_stencil_format: Option<Format>,
+    /// View mask
+    pub view_mask:            Option<u8>,
+    /// Task shader
+    pub task_shader:          Option<ShaderHandle>,
+    /// Mesh shader
+    pub mesh_shader:          ShaderHandle,
+    /// Pixel shader
+    pub pixel_shader:         ShaderHandle,
+    /// Pipeline layout
+    pub pipeline_layout:      PipelineLayoutHandle,
+}
+
+
+impl PartialEq for MeshPipelineDescription {
+    fn eq(&self, other: &Self) -> bool {
+        self.rasterizer_state == other.rasterizer_state &&
+        self.depth_stencil_state == other.depth_stencil_state &&
+        self.blend_state == other.blend_state &&
+        self.multisample_state == other.multisample_state &&
+        Handle::ptr_eq(&self.mesh_shader, &other.mesh_shader) &&
+        Handle::ptr_eq(&self.pixel_shader, &other.pixel_shader) &&
+        self.task_shader.as_ref().map_or(false, |task0| other.task_shader.as_ref().map_or(false, |task1| Handle::ptr_eq(task0, task1)))
+    }
 }
 
 //==============================================================================================================================
@@ -1306,8 +2395,9 @@ impl SupportedSampleCounts {
 }
 
 /// Sample count
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum SampleCount {
+    #[default]
     Sample1,
     Sample2,
     Sample4,
@@ -1754,23 +2844,4 @@ impl fmt::Display for InvocationReorderMode {
             InvocationReorderMode::Reorder => f.write_str("reorder"),
         }
     }
-}
-
-
-//==============================================================================================================================
-// API IMPL ABSTRACTIONS
-//==============================================================================================================================
-
-/// Module containing abstractions for RAL implementation, if you are not implementing a RAL, these will not be used
-pub mod api {
-    use onca_core::prelude::*;
-    use crate::{FenceWaitSubmitInfo, FenceSignalSubmitInfo, CommandList, Handle};
-
-
-    pub struct SubmitBatch<'a> {
-        pub wait_fences:   &'a [FenceWaitSubmitInfo],
-        pub signal_fences: &'a [FenceSignalSubmitInfo],
-        pub command_lists: DynArray<Handle<CommandList>>,
-    }
-
 }

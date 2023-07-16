@@ -213,7 +213,7 @@ impl Ral {
         unsafe { self.ral.as_ref().unwrap_unchecked() }
     }
 
-    pub fn get_settings(&self) -> &Settings {
+    pub fn settings(&self) -> &Settings {
         self.get().get_settings()
     }
 

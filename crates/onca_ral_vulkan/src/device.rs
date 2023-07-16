@@ -15,7 +15,7 @@ use crate::{
     swap_chain::SwapChain,
     texture::{Texture, RenderTargetView},
     command_list::CommandPool,
-    fence::Fence,
+    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout},
 };
 
 cfg_if!{
@@ -40,11 +40,13 @@ pub struct Device {
 }
 
 impl Device {
-    pub const REQUIRED_EXTENSIONS : [&str; 10] = [
+    pub const REQUIRED_EXTENSIONS : [&str; 12] = [
         "VK_EXT_conservative_rasterization\0",
-        "VK_EXT_mesh_shader\0",
-        "VK_EXT_sample_locations\0",
         "VK_EXT_memory_budget\0",
+        "VK_EXT_mesh_shader\0",
+        "VK_EXT_line_rasterization\0",
+        "VK_EXT_sample_locations\0",
+        "VK_EXT_vertex_attribute_divisor\0",
         "VK_KHR_acceleration_structure\0",
         "VK_KHR_deferred_host_operations\0",
         "VK_KHR_fragment_shading_rate\0",
@@ -110,6 +112,17 @@ impl Device {
             .dynamic_rendering(true)
             .build();
 
+        let mut line_rasterization = vk::PhysicalDeviceLineRasterizationFeaturesEXT::builder()
+            .rectangular_lines(true)
+            .bresenham_lines(true)
+            .smooth_lines(true)
+            .build();
+
+        let mut vertex_attribure_divisor = vk::PhysicalDeviceVertexAttributeDivisorFeaturesEXT::builder()
+            .vertex_attribute_instance_rate_divisor(true)
+            .vertex_attribute_instance_rate_zero_divisor(true)
+        .build();
+
         let mut extensions : DynArray<&str> = Self::REQUIRED_EXTENSIONS.into_iter().collect();
         if vk_phys_dev.vk_rt_props.maintenance1 {
             extensions.push("VK_KHR_ray_tracing_maintenance1");
@@ -169,6 +182,8 @@ impl Device {
             .queue_create_infos(&queue_create_infos)
             .push_next(&mut sync2_features)
             .push_next(&mut dynamic_rendering_features)
+            .push_next(&mut line_rasterization)
+            .push_next(&mut vertex_attribure_divisor)
             .build();
 
         let instance = match vk_phys_dev.instance.upgrade() {
@@ -212,7 +227,7 @@ impl Device {
 }
 
 impl ral::DeviceInterface for Device {
-    unsafe fn create_swap_chain(&self, phys_dev: &ral::PhysicalDevice, desc: &ral::SwapChainDesc) -> ral::Result<ral::SwapChainResultInfo> {
+    unsafe fn create_swap_chain(&self, phys_dev: &ral::PhysicalDevice, desc: &ral::SwapChainDesc) -> ral::Result<(ral::SwapChainInterfaceHandle, ral::api::SwapChainResultInfo)> {
         SwapChain::new(self, phys_dev, desc)
     }
 
@@ -224,11 +239,21 @@ impl ral::DeviceInterface for Device {
         Fence::new(self).map(|fence| ral::FenceInterfaceHandle::new(fence))
     }
 
+    unsafe fn create_shader(&self, code: &[u8], _shader_type: ral::ShaderType) -> ral::Result<ral::ShaderInterfaceHandle> {
+        Shader::new(self, code)
+    }
+
+    unsafe fn create_pipeline_layout(&self, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
+        PipelineLayout::new(self, desc)
+    }
+
+    unsafe fn create_graphics_pipeline(&self, desc: &ral::GraphicsPipelineDesc) -> ral::Result<ral::PipelineInterfaceHandle> {
+        Pipeline::new_graphics(self, desc)
+    }
+
     unsafe fn flush(&self, _queues: &[[ral::CommandQueueHandle; ral::QueuePriority::COUNT]; ral::QueueType::COUNT]) -> ral::Result<()> {
         self.device.device_wait_idle().map_err(|err| err.to_ral_error())
     }
-
-      
 }
 
 impl Drop for Device {

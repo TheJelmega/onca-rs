@@ -11,5 +11,26 @@
         </Expand>
     </Type>
 
+    <Type Name="onca_ral::common::DepthStencilState">
+        <Expand>
+            <Item Name="[depth enable]">(bool)(state&amp;1)</Item>
+            <Item Name="[depth write enable]">(bool)((state&lt;&lt;1)&amp;1)</Item>
+            <Item Name="[depth comparison op]">(onca_ral::common::DepthStencilCompareOp)((state&gt;&gt;2)&amp;3)</Item>
+            <Item Name="[depth bounds enabled]">(bool)((state&gt;&gt;5)&amp;1)</Item>
+            <Item Name="[stencil enabled]">(bool)((state&gt;&gt;6)&amp;1)</Item>
+            <Item Name="[stencil read mask]">stencil_read_mask</Item>
+            <Item Name="[stencil write mask]">stencil_write_mask</Item>
+            <Item Name="[stencil front]">front_face</Item>
+            <Item Name="[stencil back]">back_face</Item>
+        </Expand>
+    </Type>
+    <Type Name="onca_ral::common::StencilOpState">
+        <Expand>
+            <Item Name="[fail op]">(onca_ral::common::StencilOp)(__0&amp;0xF)</Item>
+            <Item Name="[depth fail op]">(onca_ral::common::StencilOp)((__0&gt;&gt;4)&amp;0xF)</Item>
+            <Item Name="[pass op]">(onca_ral::common::StencilOp)((__0&gt;&gt;8)&amp;0xF)</Item>
+            <Item Name="[compare op]">(onca_ral::common::DepthStencilCompareOp)((__0&gt;&gt;12)&amp;0x7)</Item>
+        </Expand>
+    </Type>
 
 </AutoVisualizer>

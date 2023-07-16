@@ -1,6 +1,9 @@
+use onca_core::prelude::Arc;
 use onca_ral as ral;
 use ral::CommandListType;
 use windows::Win32::Graphics::Direct3D12::*;
+
+use crate::descriptors::RTVAndDSVDescriptorHeap;
 
 
 //==============================================================================================================================
@@ -9,7 +12,7 @@ use windows::Win32::Graphics::Direct3D12::*;
 
 
 pub struct Texture {    
-    pub resource : ID3D12Resource
+    pub resource: ID3D12Resource
 }
 
 impl ral::TextureInterface for Texture {
@@ -20,11 +23,18 @@ impl ral::TextureInterface for Texture {
 //==============================================================================================================================
 
 pub struct RenderTargetView {
-    pub cpu_descriptor : D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub cpu_descriptor: D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub rtv_heap:       Arc<RTVAndDSVDescriptorHeap>,
 }
 
 impl ral::RenderTargetViewInterface for RenderTargetView {
 
+}
+
+impl Drop for RenderTargetView {
+    fn drop(&mut self) {
+        unsafe { self.rtv_heap.free(self.cpu_descriptor) };
+    }
 }
 
 //==============================================================================================================================

@@ -11,6 +11,7 @@ onca_core_macros = { path = "../onca_core_macros" }
 onca_logging = { path = "../onca_logging" }
 onca_toml = { path = "../onca_toml" }
 onca_window = { path = "../onca_window" }
+static_assertions = "1.1.0"
 
 [features]
 default = ["validation"]

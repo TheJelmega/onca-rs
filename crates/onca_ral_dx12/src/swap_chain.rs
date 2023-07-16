@@ -1,6 +1,6 @@
 use core::{ptr::null_mut, time::Duration};
 
-use onca_core::{prelude::*, sync::{RwLock, Mutex}};
+use onca_core::{prelude::*, sync::Mutex};
 use onca_ral as ral;
 use ral::{FenceInterface, HandleImpl};
 use windows::{Win32::{Graphics::Dxgi::{*, Common::DXGI_SAMPLE_DESC}, Foundation::{RECT, POINT, FALSE}}, core::ComInterface};
@@ -9,7 +9,6 @@ use crate::{utils::*, device::Device, physical_device::PhysicalDevice, texture::
 
 pub struct SwapchainDynamic {
     pub frame_values: DynArray<u64>,
-    pub first_frame:  bool,
     pub cur_fence_value:  u64,
 }
 
@@ -20,7 +19,9 @@ pub struct SwapChain {
 }
 
 impl SwapChain {
-    pub unsafe fn new(device: &Device, phys_dev: &ral::PhysicalDevice, create_info: &ral::SwapChainDesc) -> ral::Result<ral::SwapChainResultInfo> {
+    const FLAGS: u32 = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32;
+
+    pub unsafe fn new(device: &Device, phys_dev: &ral::PhysicalDevice, create_info: &ral::SwapChainDesc) -> ral::Result<(ral::SwapChainInterfaceHandle, ral::api::SwapChainResultInfo)> {
         let dx_phys_dev = phys_dev.handle.as_concrete_type::<PhysicalDevice>();
 
         let mut swapchain_format = None;
@@ -46,7 +47,7 @@ impl SwapChain {
             Scaling: DXGI_SCALING_NONE,
             SwapEffect: if create_info.preserve_after_present { DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL } else { DXGI_SWAP_EFFECT_FLIP_DISCARD },
             AlphaMode: create_info.alpha_mode.to_dx(),
-            Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32,
+            Flags: Self::FLAGS,
         };
 
         let dx_queue = &create_info.queue.interface().as_concrete_type::<CommandQueue>().queue;
@@ -58,11 +59,10 @@ impl SwapChain {
 
         let mut backbuffers = DynArray::with_capacity(create_info.num_backbuffers as usize);
 
-        let mut rtv_heap = device.rtv_heap.lock();
         for i in 0..create_info.num_backbuffers as u32 {
             let resource = swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
             
-            let descriptor = rtv_heap.allocate()?;
+            let descriptor = device.rtv_heap.allocate()?;
             device.device.CreateRenderTargetView(&resource, None, descriptor);
 
             backbuffers.push((
@@ -70,7 +70,8 @@ impl SwapChain {
                     resource
                 }),
                 ral::RenderTargetViewInterfaceHandle::new(RenderTargetView {
-                    cpu_descriptor: descriptor
+                    cpu_descriptor: descriptor,
+                    rtv_heap: device.rtv_heap.clone(),
                 })
             ));
         }
@@ -84,24 +85,24 @@ impl SwapChain {
 
         let dynamic = Mutex::new(SwapchainDynamic{
             frame_values,
-            first_frame: true,
             cur_fence_value: 0,
         });
 
-        Ok(ral::SwapChainResultInfo {
-            handle: ral::SwapChainInterfaceHandle::new(SwapChain{
+        Ok((ral::SwapChainInterfaceHandle::new(SwapChain{
                 swap_chain,
                 fence,
                 dynamic,
             }),
-            backbuffers,
-            width: create_info.width,
-            height: create_info.height,
-            num_backbuffers: create_info.num_backbuffers,
-            format: format,
-            backbuffer_usages: usages,
-            present_mode: create_info.present_mode,
-        })
+            ral::api::SwapChainResultInfo {
+                backbuffers,
+                width: create_info.width,
+                height: create_info.height,
+                num_backbuffers: create_info.num_backbuffers,
+                format: format,
+                backbuffer_usages: usages,
+                present_mode: create_info.present_mode,
+            }
+        ))
     }
 }
 
@@ -120,12 +121,7 @@ impl ral::SwapChainInterface for SwapChain {
         };
         let flags = match present_mode {
             ral::PresentMode::Immediate => DXGI_PRESENT_ALLOW_TEARING,
-            ral::PresentMode::Mailbox => if dynamic.first_frame {
-                dynamic.first_frame = false;
-                0
-            } else {
-                DXGI_PRESENT_DO_NOT_SEQUENCE
-            },
+            ral::PresentMode::Mailbox => 0,
             ral::PresentMode::Fifo => 0,
         };
 
@@ -193,5 +189,48 @@ impl ral::SwapChainInterface for SwapChain {
         Ok(index as u8)
     }
 
+    fn needs_present_mode_recreate(&self) -> bool {
+        false
+    }
+
+    unsafe fn recreate_swapchain(&self, _device: &ral::Device, _params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResultInfo> {
+        Err(ral::Error::NotImplemented("DX12 doesn't need any recreation of a swapchain, therefore this function should never be able to be called"))
+    }
     
+    unsafe fn resize(&self, device: &ral::Device, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
+        let mut dynamic = self.dynamic.lock();
+        // Set wait value for all backbuffers
+        let cur_fence_value = *dynamic.frame_values.iter().reduce(|a, b| a.max(b)).unwrap();
+        for fence_value in &mut dynamic.frame_values {
+            *fence_value = cur_fence_value;
+        }
+
+        self.swap_chain.ResizeBuffers(params.num_backbuffers as u32, params.width as u32, params.height as u32, params.format.to_dx(), Self::FLAGS).map_err(|err| err.to_ral_error())?;
+
+        let dx_device = device.interface().as_concrete_type::<Device>();
+
+        let mut backbuffers = DynArray::with_capacity(params.num_backbuffers as usize);
+        for i in 0..params.num_backbuffers as u32 {
+            let resource = self.swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
+            
+            let descriptor = dx_device.rtv_heap.allocate()?;
+            dx_device.device.CreateRenderTargetView(&resource, None, descriptor);
+
+            backbuffers.push((
+                ral::TextureInterfaceHandle::new(Texture {
+                    resource
+                }),
+                ral::RenderTargetViewInterfaceHandle::new(RenderTargetView {
+                    cpu_descriptor: descriptor,
+                    rtv_heap: dx_device.rtv_heap.clone(),
+                })
+            ));
+        }
+
+        Ok(ral::api::SwapChainResizeResultInfo {
+            backbuffers,
+            width: params.width,
+            height: params.height,
+        })
+    }
 }

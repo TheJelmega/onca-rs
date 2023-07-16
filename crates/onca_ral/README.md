@@ -231,9 +231,13 @@ Vertex shaders have some limits regarding input and output, other than these, th
 - Max input attribute stride: 2048
     - DX12 allows up to 2048
     - Vulkan allows up to 2048 on NVIDIA and AMD, and 4095 on Intel
-    - DX12 allows up to 128 (32 4-component types)
 - Max output components: 128
+    - DX12 allows up to 128 (32 4-component types)
     - Vulkan allows up to 128 on all devices
+- Max input attribute per-instance step rate: 268'435'455
+    - DX12 has no limit
+    - Vulkan allows up to 4'294'867'295 on NVIDA and AMD, and 268'435'455 on Intel
+
 
 ### Tesselation and geometry shaders
 

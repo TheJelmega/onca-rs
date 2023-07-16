@@ -133,6 +133,8 @@ pub const MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET : u32 = 2047;
 pub const MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE : u32 = 2048;
 /// Maximum number of components that can be output by a vertex shader. Each element is expected to pad until the next boundary of 4 components, so this ends up being 32 elements.
 pub const MAX_VERTEX_OUTPUT_COMPONENTS      : u32 = 128;
+/// Maximum per-instance step rate for vertex attributes
+pub const MAX_VERTEX_ATTRIBUTE_PER_INSTANCE_STEP_RATE : u32 = 268_435_455;
 
 //==============================================================================================================================
 // PIXEL SHADER LIMITS
@@ -141,7 +143,7 @@ pub const MAX_VERTEX_OUTPUT_COMPONENTS      : u32 = 128;
 /// Maximum number of components that can be input into a pixel shader. Each element is expected to pad until the next boundary of 4 components, so this ends up being 32 elements.
 pub const MAX_PIXEL_INPUT_COMPONENTS : u32 = 128;
 /// Maximum number of output attachments a pixel shader can output to.
-pub const MAX_PIXEL_OUTPUT_ATTACHMENTS : u32 = 8;
+pub const MAX_RENDERTARGETS : u32 = 8;
 /// Maximum number of dual-source output attachments a pixel shader can output to.
 pub const MAX_PIXEL_DUAL_SRC_OUTPUT_ATTACHMENTS : u32 = 1;
 

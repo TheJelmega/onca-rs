@@ -1,6 +1,6 @@
-use core::{mem::MaybeUninit, ptr::null, sync::atomic::AtomicU64};
+use core::{mem::MaybeUninit, sync::atomic::AtomicU64};
 
-use onca_core::{utils::EnumCount, prelude::DynArray, sync::Mutex};
+use onca_core::{utils::EnumCount, prelude::*};
 use onca_ral as ral;
 
 use ral::{constants::{MAX_RENDER_TARGET_VIEWS, MAX_DEPTH_STENCIL_VIEWS}};
@@ -28,13 +28,13 @@ use crate::{
     descriptors::RTVAndDSVDescriptorHeap,
     swap_chain::SwapChain,
     command_list::CommandPool,
-    fence::Fence,
+    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout},
 };
 
 pub struct Device {
     pub device:   ID3D12Device10,
-    pub rtv_heap: Mutex<RTVAndDSVDescriptorHeap>,
-    pub dsv_heap: Mutex<RTVAndDSVDescriptorHeap>,
+    pub rtv_heap: Arc<RTVAndDSVDescriptorHeap>,
+    pub dsv_heap: Arc<RTVAndDSVDescriptorHeap>,
 }
 
 impl Device {
@@ -65,13 +65,13 @@ impl Device {
             }
         }
 
-        let rtv_heap = Mutex::new(RTVAndDSVDescriptorHeap::new(&device, false, MAX_RENDER_TARGET_VIEWS)?);
-        let dsv_heap = Mutex::new(RTVAndDSVDescriptorHeap::new(&device, true , MAX_DEPTH_STENCIL_VIEWS)?);
+        let rtv_heap = RTVAndDSVDescriptorHeap::new(&device, false, MAX_RENDER_TARGET_VIEWS)?;
+        let dsv_heap = RTVAndDSVDescriptorHeap::new(&device, true , MAX_DEPTH_STENCIL_VIEWS)?;
     
         Ok((ral::DeviceInterfaceHandle::new(Device {
                 device,
-                rtv_heap,
-                dsv_heap,
+                rtv_heap: Arc::new(rtv_heap),
+                dsv_heap: Arc::new(dsv_heap),
             }),
             command_queues.assume_init()
         ))
@@ -79,7 +79,7 @@ impl Device {
 }
 
 impl ral::DeviceInterface for Device {
-    unsafe fn create_swap_chain(&self, phys_dev: &ral::PhysicalDevice, create_info: &ral::SwapChainDesc) -> ral::Result<ral::SwapChainResultInfo> {
+    unsafe fn create_swap_chain(&self, phys_dev: &ral::PhysicalDevice, create_info: &ral::SwapChainDesc) -> ral::Result<(ral::SwapChainInterfaceHandle, ral::api::SwapChainResultInfo)> {
         SwapChain::new(self, phys_dev, create_info)
     }
 
@@ -91,6 +91,18 @@ impl ral::DeviceInterface for Device {
         Ok(ral::FenceInterfaceHandle::new(Fence::new(&self.device)?))
     }
 
+    unsafe fn create_shader(&self, code: &[u8], _shader_type: ral::ShaderType) -> ral::Result<ral::ShaderInterfaceHandle> {
+        Shader::new(code)
+    }
+
+    unsafe fn create_graphics_pipeline(&self, desc: &ral::GraphicsPipelineDesc) -> ral::Result<ral::PipelineInterfaceHandle> {
+        Pipeline::new_graphics(self, desc)
+    }
+
+    unsafe fn create_pipeline_layout(&self, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
+        PipelineLayout::new(self, desc)
+    }
+
     unsafe fn flush(&self, queues: &[[ral::CommandQueueHandle; ral::QueuePriority::COUNT]; ral::QueueType::COUNT]) -> ral::Result<()> {
         // There is no function for this, so just flush all queues
         for arr in queues {
@@ -100,7 +112,5 @@ impl ral::DeviceInterface for Device {
         }
         Ok(())
     }
-
-    
 }
 

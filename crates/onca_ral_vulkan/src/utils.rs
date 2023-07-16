@@ -262,6 +262,7 @@ impl ToVulkan for ral::Access {
             if self.is_set(ral::Access::VideoDecodeRead) {
                 flags |= vk::AccessFlags2::VIDEO_DECODE_READ_KHR;
             }
+            #[allow(unreachable_code)]
             if self.is_set(ral::Access::VideoProcessRead) {
                 flags |= todo!("Video processing is currently unsupported");
             }
@@ -299,6 +300,7 @@ impl ToVulkan for ral::Access {
             if self.is_set(ral::Access::VideoEncodeWrite) {
                 flags |= vk::AccessFlags2::VIDEO_ENCODE_WRITE_KHR;
             }
+            #[allow(unreachable_code)]
             if self.is_set(ral::Access::VideoProcessWrite) {
                 flags |=  todo!("Video processing is currently unsupported");
             }
@@ -399,6 +401,7 @@ impl ToVulkan for ral::SyncPoint {
         if self.is_set(ral::SyncPoint::VideoDecode) {
             stages |= vk::PipelineStageFlags2::VIDEO_DECODE_KHR;
         }
+        #[allow(unreachable_code)]
         if self.is_set(ral::SyncPoint::VideoProcess) {
             stages |= todo!("Video processing is currently unsupported");
         }
@@ -443,6 +446,306 @@ impl ToVulkan for ral::SwapChainAlphaMode {
             ral::SwapChainAlphaMode::Premultiplied  => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
             ral::SwapChainAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
             ral::SwapChainAlphaMode::Unspecified    => vk::CompositeAlphaFlagsKHR::INHERIT,
+        }
+    }
+}
+
+impl ToVulkan for ral::ShaderType {
+    type VkType = vk::ShaderStageFlags;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::ShaderType::Vertex       => vk::ShaderStageFlags::VERTEX,
+            ral::ShaderType::Pixel        => vk::ShaderStageFlags::FRAGMENT,
+            ral::ShaderType::Task         => vk::ShaderStageFlags::TASK_EXT,
+            ral::ShaderType::Mesh         => vk::ShaderStageFlags::MESH_EXT,
+            ral::ShaderType::RayGen       => vk::ShaderStageFlags::RAYGEN_KHR,
+            ral::ShaderType::Intersection => vk::ShaderStageFlags::INTERSECTION_KHR,
+            ral::ShaderType::AnyHit       => vk::ShaderStageFlags::ANY_HIT_KHR,
+            ral::ShaderType::ClosestHit   => vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+            ral::ShaderType::Miss         => vk::ShaderStageFlags::MISS_KHR,
+            ral::ShaderType::Callable     => vk::ShaderStageFlags::CALLABLE_KHR,
+        }
+    }
+}
+
+impl ToVulkan for ral::InputLayoutStepRate {
+    type VkType = (vk::VertexInputRate, u32);
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::InputLayoutStepRate::PerVertex         => (vk::VertexInputRate::VERTEX, 0),
+            ral::InputLayoutStepRate::PerInstance(rate) => (vk::VertexInputRate::INSTANCE, *rate),
+        }
+    }
+}
+
+impl ToVulkan for ral::PrimitiveTopology {
+    type VkType = vk::PrimitiveTopology;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::PrimitiveTopology::PointList     => vk::PrimitiveTopology::POINT_LIST,
+            ral::PrimitiveTopology::LineList      => vk::PrimitiveTopology::LINE_LIST,
+            ral::PrimitiveTopology::LineStrip     => vk::PrimitiveTopology::LINE_STRIP,
+            ral::PrimitiveTopology::TriangleList  => vk::PrimitiveTopology::TRIANGLE_LIST,
+            ral::PrimitiveTopology::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
+            ral::PrimitiveTopology::TriangleFan   => vk::PrimitiveTopology::TRIANGLE_FAN,
+        }
+    }
+}
+
+impl ToVulkan for ral::FillMode {
+    type VkType = vk::PolygonMode;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::FillMode::Fill      => vk::PolygonMode::FILL,
+            ral::FillMode::Wireframe => vk::PolygonMode::LINE,
+        }
+    }
+}
+
+impl ToVulkan for ral::CullMode {
+    type VkType = vk::CullModeFlags;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::CullMode::None    => vk::CullModeFlags::NONE,
+            ral::CullMode::Front   => vk::CullModeFlags::FRONT,
+            ral::CullMode::Back    => vk::CullModeFlags::BACK,
+        }
+    }
+}
+
+impl ToVulkan for ral::WindingOrder {
+    type VkType = vk::FrontFace;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::WindingOrder::CW  => vk::FrontFace::CLOCKWISE,
+            ral::WindingOrder::CCW => vk::FrontFace::COUNTER_CLOCKWISE,
+        }
+    }
+}
+
+impl ToVulkan for ral::ConservativeRasterMode {
+    type VkType = vk::ConservativeRasterizationModeEXT;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::ConservativeRasterMode::None          => vk::ConservativeRasterizationModeEXT::DISABLED,
+            ral::ConservativeRasterMode::Overestimate  => vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
+            ral::ConservativeRasterMode::Underestimate => vk::ConservativeRasterizationModeEXT::UNDERESTIMATE,
+        }
+    }
+}
+
+impl ToVulkan for ral::LineRasterizationMode {
+    type VkType = vk::LineRasterizationModeEXT;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::LineRasterizationMode::Bresenham         => vk::LineRasterizationModeEXT::BRESENHAM,
+            ral::LineRasterizationMode::RectangularSmooth => vk::LineRasterizationModeEXT::RECTANGULAR_SMOOTH,
+            ral::LineRasterizationMode::RectangularWide   => vk::LineRasterizationModeEXT::RECTANGULAR,
+            ral::LineRasterizationMode::RectangularNarrow => vk::LineRasterizationModeEXT::RECTANGULAR,
+        }
+    }
+}
+
+impl ToVulkan for ral::CompareOp {
+    type VkType = vk::CompareOp;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::CompareOp::Never        => vk::CompareOp::NEVER,
+            ral::CompareOp::Less         => vk::CompareOp::LESS,
+            ral::CompareOp::Equal        => vk::CompareOp::EQUAL,
+            ral::CompareOp::LessEqual    => vk::CompareOp::LESS_OR_EQUAL,
+            ral::CompareOp::Greater      => vk::CompareOp::GREATER,
+            ral::CompareOp::NotEqual     => vk::CompareOp::NOT_EQUAL,
+            ral::CompareOp::GreaterEqual => vk::CompareOp::GREATER_OR_EQUAL,
+            ral::CompareOp::Always       => vk::CompareOp::ALWAYS,
+        }
+    }
+}
+
+impl ToVulkan for ral::StencilOp {
+    type VkType = vk::StencilOp;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::StencilOp::Keep                => vk::StencilOp::KEEP,
+            ral::StencilOp::Zero                => vk::StencilOp::ZERO,
+            ral::StencilOp::Replace             => vk::StencilOp::REPLACE,
+            ral::StencilOp::IncrementClamp => vk::StencilOp::INCREMENT_AND_CLAMP,
+            ral::StencilOp::DecrementClamp      => vk::StencilOp::DECREMENT_AND_CLAMP,
+            ral::StencilOp::Invert              => vk::StencilOp::INVERT,
+            ral::StencilOp::IncrementWrap       => vk::StencilOp::INCREMENT_AND_WRAP,
+            ral::StencilOp::DecrementWrap       => vk::StencilOp::DECREMENT_AND_WRAP,
+        }
+    }
+}
+
+impl ToVulkan for ral::StencilOpState {
+    type VkType = vk::StencilOpState;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::StencilOpState::builder()
+            .fail_op(self.fail_op().to_vulkan())
+            .pass_op(self.pass_op().to_vulkan())
+            .depth_fail_op(self.depth_fail_op().to_vulkan())
+            .compare_op(self.compare_op().to_vulkan())
+            .write_mask(self.write_mask() as u32)
+            .compare_mask(self.read_mask() as u32)
+            .build()
+    }
+}
+
+impl ToVulkan for ral::DepthStencilState {
+    type VkType = vk::PipelineDepthStencilStateCreateInfo;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(self.depth_enable())
+            .depth_write_enable(self.depth_write_enable())
+            .depth_compare_op(self.depth_comparison_op().to_vulkan())
+            .depth_bounds_test_enable(self.depth_bounds_enable())
+            .stencil_test_enable(self.stencil_enable())
+            .front(self.front_stencil_op_state().to_vulkan())
+            .back(self.back_stencil_op_state().to_vulkan())
+            .build()
+    }
+}
+
+impl ToVulkan for ral::LogicOp {
+    type VkType = vk::LogicOp;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::LogicOp::Clear        => vk::LogicOp::CLEAR,
+            ral::LogicOp::Set          => vk::LogicOp::SET,
+            ral::LogicOp::Copy         => vk::LogicOp::COPY,
+            ral::LogicOp::CopyInverted => vk::LogicOp::COPY_INVERTED,
+            ral::LogicOp::Noop         => vk::LogicOp::NO_OP,
+            ral::LogicOp::Invert       => vk::LogicOp::INVERT,
+            ral::LogicOp::And          => vk::LogicOp::AND,
+            ral::LogicOp::Nand         => vk::LogicOp::NAND,
+            ral::LogicOp::Or           => vk::LogicOp::OR,
+            ral::LogicOp::Nor          => vk::LogicOp::NOR,
+            ral::LogicOp::Xor          => vk::LogicOp::XOR,
+            ral::LogicOp::Equivalent   => vk::LogicOp::EQUIVALENT,
+            ral::LogicOp::AndReverse   => vk::LogicOp::AND_REVERSE,
+            ral::LogicOp::AndInverted  => vk::LogicOp::AND_INVERTED,
+            ral::LogicOp::OrReverse    => vk::LogicOp::OR_REVERSE,
+            ral::LogicOp::OrInverted   => vk::LogicOp::OR_INVERTED,
+        }
+    }
+}
+
+impl ToVulkan for ral::BlendFactor {
+    type VkType = vk::BlendFactor;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::BlendFactor::Zero                => vk::BlendFactor::ZERO,
+            ral::BlendFactor::One                 => vk::BlendFactor::ONE,
+            ral::BlendFactor::SrcColor            => vk::BlendFactor::SRC_COLOR,
+            ral::BlendFactor::InvSrcColor         => vk::BlendFactor::ONE_MINUS_SRC_COLOR,
+            ral::BlendFactor::SrcAlpha            => vk::BlendFactor::SRC_ALPHA,
+            ral::BlendFactor::InvSrcAlpha         => vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            ral::BlendFactor::SourceAlphaSaturate => vk::BlendFactor::SRC_ALPHA_SATURATE,
+            ral::BlendFactor::DstAlpha            => vk::BlendFactor::DST_ALPHA,
+            ral::BlendFactor::InvDstAlpha         => vk::BlendFactor::ONE_MINUS_DST_ALPHA,
+            ral::BlendFactor::DstColor            => vk::BlendFactor::DST_COLOR,
+            ral::BlendFactor::InvDstColor         => vk::BlendFactor::ONE_MINUS_DST_COLOR,
+            ral::BlendFactor::ConstantColor       => vk::BlendFactor::CONSTANT_COLOR,
+            ral::BlendFactor::InvConstantColor    => vk::BlendFactor::ONE_MINUS_CONSTANT_COLOR,
+            ral::BlendFactor::Src1Color           => vk::BlendFactor::SRC1_COLOR,
+            ral::BlendFactor::InvSrc1COlor        => vk::BlendFactor::ONE_MINUS_SRC1_COLOR,
+            ral::BlendFactor::Src1Alpha           => vk::BlendFactor::SRC1_ALPHA,
+            ral::BlendFactor::IvSrc1Alpha         => vk::BlendFactor::ONE_MINUS_SRC1_ALPHA,
+            ral::BlendFactor::ConstantAlpha       => vk::BlendFactor::CONSTANT_ALPHA,
+            ral::BlendFactor::InvConstantAlpha    => vk::BlendFactor::ONE_MINUS_CONSTANT_ALPHA,
+        }
+    }
+}
+
+impl ToVulkan for ral::BlendOp {
+    type VkType = vk::BlendOp;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::BlendOp::Add             => vk::BlendOp::ADD,
+            ral::BlendOp::Subtract        => vk::BlendOp::SUBTRACT,
+            ral::BlendOp::ReverseSubtract => vk::BlendOp::REVERSE_SUBTRACT,
+            ral::BlendOp::Min             => vk::BlendOp::MIN,
+            ral::BlendOp::Max             => vk::BlendOp::MAX,
+        }
+    }
+}
+
+impl ToVulkan for ral::ColorWriteMask {
+    type VkType = vk::ColorComponentFlags;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        let mut mask = vk::ColorComponentFlags::empty();
+        if self.is_set(ral::ColorWriteMask::R) {
+            mask |= vk::ColorComponentFlags::R;
+        }
+        if self.is_set(ral::ColorWriteMask::G) {
+            mask |= vk::ColorComponentFlags::G;
+        }
+        if self.is_set(ral::ColorWriteMask::B) {
+            mask |= vk::ColorComponentFlags::B;
+        }
+        if self.is_set(ral::ColorWriteMask::A) {
+            mask |= vk::ColorComponentFlags::A;
+        }
+        mask
+    }
+}
+
+impl ToVulkan for ral::RenderTargetBlendState {
+    type VkType = vk::PipelineColorBlendAttachmentState;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(self.blend_enabled())
+            .src_color_blend_factor(self.src_color_factor().to_vulkan())
+            .dst_color_blend_factor(self.dst_color_factor().to_vulkan())
+            .color_blend_op(self.color_blend_op().to_vulkan())
+            .src_alpha_blend_factor(self.src_alpha_factor().to_vulkan())
+            .dst_alpha_blend_factor(self.dst_alpha_factor().to_vulkan())
+            .alpha_blend_op(self.alpha_blend_op().to_vulkan())
+            .color_write_mask(self.write_mask().to_vulkan())
+            .build()
+    }
+}
+
+impl ToVulkan for ral::Viewport {
+    type VkType = vk::Viewport;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::Viewport {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+            min_depth: self.min_depth,
+            max_depth: self.max_depth,
+        }
+    }
+}
+
+impl ToVulkan for ral::ScissorRect {
+    type VkType = vk::Rect2D;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::Rect2D {
+            offset: vk::Offset2D { x: self.y as i32, y: self.x as i32 },
+            extent: vk::Extent2D { width: self.width as u32, height: self.height as u32 },
         }
     }
 }

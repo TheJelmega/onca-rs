@@ -53,7 +53,7 @@ impl Instance {
         let app_info = vk::ApplicationInfo::builder()
             .application_name(unsafe { CStr::from_ptr(app_name.as_ptr() as *const _) })
             .application_version(app_version.to_vulkan())
-            .engine_name(unsafe { CStr::from_ptr(&"Onca Engine\0" as *const _ as *const _) })
+            .engine_name(unsafe { CStr::from_ptr("Onca Engine\0".as_ptr() as *const _) })
             .engine_version(Version::new(0, 1, 0).to_vulkan())
             .api_version(Version::new(1, 3, 0).to_vulkan())
         .build();

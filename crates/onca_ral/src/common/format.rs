@@ -417,6 +417,35 @@ impl Format {
         BITS_PER_PIXEL[self as usize]
     }
 
+    /// Get the size of an element in bytes
+    pub fn num_bytes(self) -> u8 {
+        FORMAT_BYTE_SIZE[self as usize]
+    }
+
+    /// Does the format contain a depth component
+    pub fn contains_depth(self) -> bool {
+        match self {
+            Format::D32SFloat |
+            Format::D24UNorm |
+            Format::D16UNorm |
+            Format::D32SFloatS8UInt |
+            Format::D24UNormS8UInt |
+            Format::D16UNormS8UInt => true,
+            _ => false
+        }
+    }
+
+    /// Does the format contain a stencil component
+    pub fn contains_stencil(self) -> bool {
+        match self {
+            Format::D32SFloatS8UInt |
+            Format::D24UNormS8UInt |
+            Format::D16UNormS8UInt |
+            Format::S8UInt => true,
+            _ => false
+        }
+    }
+
     /// Call a closure for each format.
     pub fn for_each<F>(mut f: F)
     where
@@ -1010,6 +1039,177 @@ const BITS_PER_PIXEL : [u16; Format::COUNT] = [
     /* BC7Srgb                        */ 8,
 
     // Opaque format that are not meant to be stored
+    /* SamplerFeedbackMinMipOpaque    */ 0,
+    /* SamplerFeedbackMipRegionOpaque */ 0,
+];
+
+const FORMAT_BYTE_SIZE : [u8; Format::COUNT] = [
+    /* R64G64B64A64Typeless           */ 32,
+    /* R64G64B64A64SFloat             */ 32,
+    /* R64G64B64A64UInt               */ 32,
+    /* R64G64B64A64SInt               */ 32,
+    /* R64G64B64Typeless              */ 24,
+    /* R64G64B64SFloat                */ 24,
+    /* R64G64B64UInt                  */ 24,
+    /* R64G64B64SInt                  */ 24,
+    /* R64G64Typeless                 */ 16,
+    /* R64G64SFloat                   */ 16,
+    /* R64G64UInt                     */ 16,
+    /* R64G64SInt                     */ 16,
+    /* R64Typeless                    */ 8,
+    /* R64SFloat                      */ 8,
+    /* R64UInt                        */ 8,
+    /* R64SInt                        */ 8,
+    /* R32G32B32A32Typeless           */ 16,
+    /* R32G32B32A32SFloat             */ 16,
+    /* R32G32B32A32UInt               */ 16,
+    /* R32G32B32A32SInt               */ 16,
+    /* R32G32B32Typeless              */ 12,
+    /* R32G32B32SFloat                */ 12,
+    /* R32G32B32UInt                  */ 12,
+    /* R32G32B32SInt                  */ 12,
+    /* R32G32Typeless                 */ 8,
+    /* R32G32SFloat                   */ 8,
+    /* R32G32UInt                     */ 8,
+    /* R32G32SInt                     */ 8,
+    /* R32Typeless                    */ 4,
+    /* R32SFloat                      */ 4,
+    /* R32UInt                        */ 4,
+    /* R32SInt                        */ 4,
+    /* R16G16B16A16Typeless           */ 8,
+    /* R16G16B16A16SFloat             */ 8,
+    /* R16G16B16A16UInt               */ 8,
+    /* R16G16B16A16SInt               */ 8,
+    /* R16G16B16A16UNorm              */ 8,
+    /* R16G16B16A16SNorm              */ 8,
+    /* R16G16B16A16UScaled            */ 8,
+    /* R16G16B16A16SScaled            */ 8,
+    /* R16G16B16Typeless              */ 6,
+    /* R16G16B16SFloat                */ 6,
+    /* R16G16B16UInt                  */ 6,
+    /* R16G16B16SInt                  */ 6,
+    /* R16G16B16UNorm                 */ 6,
+    /* R16G16B16SNorm                 */ 6,
+    /* R16G16B16UScaled               */ 6,
+    /* R16G16B16SScaled               */ 6,
+    /* R16G16Typeless                 */ 4,
+    /* R16G16SFloat                   */ 4,
+    /* R16G16UInt                     */ 4,
+    /* R16G16SInt                     */ 4,
+    /* R16G16UNorm                    */ 4,
+    /* R16G16SNorm                    */ 4,
+    /* R16G16UScaled                  */ 4,
+    /* R16G16SScaled                  */ 4,
+    /* R16Typeless                    */ 2,
+    /* R16SFloat                      */ 2,
+    /* R16UInt                        */ 2,
+    /* R16SInt                        */ 2,
+    /* R16UNorm                       */ 2,
+    /* R16SNorm                       */ 2,
+    /* R16UScaled                     */ 2,
+    /* R16SScaled                     */ 2, 
+    /* R8G8B8A8Typeless               */ 4,
+    /* R8G8B8A8UInt                   */ 4,
+    /* R8G8B8A8SInt                   */ 4,
+    /* R8G8B8A8UNorm                  */ 4,
+    /* R8G8B8A8SNorm                  */ 4,
+    /* R8G8B8A8UScaled                */ 4,
+    /* R8G8B8A8SScaled                */ 4,
+    /* R8G8B8A8Srgb                   */ 4,
+    /* R8G8B8Typeless                 */ 3,
+    /* R8G8B8UInt                     */ 3,
+    /* R8G8B8SInt                     */ 3,
+    /* R8G8B8UNorm                    */ 3,
+    /* R8G8B8SNorm                    */ 3,
+    /* R8G8B8UScaled                  */ 3,
+    /* R8G8B8SScaled                  */ 3,
+    /* R8G8B8Srgb                     */ 3,
+    /* R8G8Typeless                   */ 2,
+    /* R8G8UInt                       */ 2,
+    /* R8G8SInt                       */ 2,
+    /* R8G8UNorm                      */ 2,
+    /* R8G8SNorm                      */ 2,
+    /* R8G8UScaled                    */ 2,
+    /* R8G8SScaled                    */ 2,
+    /* R8G8Srgb                       */ 2,
+    /* R8Typeless                     */ 1,
+    /* R8UInt                         */ 1,
+    /* R8SInt                         */ 1,
+    /* R8UNorm                        */ 1,
+    /* R8SNorm                        */ 1,
+    /* R8UScaled                      */ 1,
+    /* R8SScaled                      */ 1,
+    /* R8Srgb                         */ 1,
+    /* B8G8R8A8Typeless               */ 4,
+    /* B8G8R8A8UInt                   */ 4,
+    /* B8G8R8A8SInt                   */ 4,
+    /* B8G8R8A8UNorm                  */ 4,
+    /* B8G8R8A8SNorm                  */ 4,
+    /* B8G8R8A8UScaled                */ 4,
+    /* B8G8R8A8SScaled                */ 4,
+    /* B8G8R8A8Srgb                   */ 4,
+    /* B8G8R8Typeless                 */ 3,
+    /* B8G8R8UInt                     */ 3,
+    /* B8G8R8SInt                     */ 3,
+    /* B8G8R8UNorm                    */ 3,
+    /* B8G8R8SNorm                    */ 3,
+    /* B8G8R8UScaled                  */ 3,
+    /* B8G8R8SScaled                  */ 3,
+    /* B8G8R8Srgb                     */ 3,
+    /* R4G4B4A4UNorm                  */ 2,
+    /* B4G4R4A4UNorm                  */ 2,
+    /* R4G4UNorm                      */ 1,
+    /* R5G6B5UNorm                    */ 2,
+    /* B5G6R5UNorm                    */ 2,
+    /* R5G5B5A1UNorm                  */ 2,
+    /* B5G5R5A1UNorm                  */ 2,
+    /* A1R5G5B5UNorm                  */ 2,
+    /* R10G10B10A2Typeless            */ 4,
+    /* R10G10B10A2UInt                */ 4,
+    /* R10G10B10A2SInt                */ 4,
+    /* R10G10B10A2UNorm               */ 4,
+    /* R10G10B10A2SNorm               */ 4,
+    /* R10G10B10A2UScaled             */ 4,
+    /* R10G10B10A2SScaled             */ 4,
+    /* B10G10R10A2Typeless            */ 4,
+    /* B10G10R10A2UInt                */ 4,
+    /* B10G10R10A2SInt                */ 4,
+    /* B10G10R10A2UNorm               */ 4,
+    /* B10G10R10A2SNorm               */ 4,
+    /* B10G10R10A2UScaled             */ 4,
+    /* B10G10R10A2SScaled             */ 4,
+    /* R11G11B10UFloat                */ 4,
+    /* R9G9B9E5UFloat                 */ 4,
+    /* D32SFloat                      */ 4,
+    /* D24UNorm                       */ 3,
+    /* D16UNorm                       */ 2,
+    /* D32SFloatS8UInt                */ 5,
+    /* D24UNormS8UInt                 */ 4,
+    /* D16UNormS8UInt                 */ 3,
+    /* S8UInt                         */ 1,
+
+    // Invalid types
+    /* BC1Typeless                    */ 0,
+    /* BC1UNorm                       */ 0,
+    /* BC1Srgb                        */ 0,
+    /* BC2Typeless                    */ 0,
+    /* BC2UNorm                       */ 0,
+    /* BC2Srgb                        */ 0,
+    /* BC3Typeless                    */ 0,
+    /* BC3UNorm                       */ 0,
+    /* BC3Srgb                        */ 0,
+    /* BC4Typeless                    */ 0,
+    /* BC4UNorm                       */ 0,
+    /* BC4SNorm                       */ 0,
+    /* BC5Typeless                    */ 0,
+    /* BC5UNorm                       */ 0,
+    /* BC5SNorm                       */ 0,
+    /* BC6HTypeless                   */ 0,
+    /* BC6HSFloat                     */ 0,
+    /* BC6HUFloat                     */ 0,
+    /* BC7Typeless                    */ 0,
+    /* BC7UNorm                       */ 0,
+    /* BC7Srgb                        */ 0,
     /* SamplerFeedbackMinMipOpaque    */ 0,
     /* SamplerFeedbackMipRegionOpaque */ 0,
 ];

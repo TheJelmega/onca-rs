@@ -44,10 +44,12 @@ pub enum Error {
     InvalidCount(&'static str, usize),
     /// Invalid queue submit
     InvalidQueueSubmit{ found: QueueIndex, expected: QueueIndex },
+    /// Invalid shader code
+    InvalidShaderCode(&'static str),
 
 
     /// Generic invalid parameter
-    InvalidParameter(&'static str),
+    InvalidParameter(String),
     /// Feature is not implemented
     NotImplemented(&'static str),
     /// Other error
@@ -82,6 +84,7 @@ impl fmt::Display for Error {
             Error::InvalidClearColor(clear_color, format)     => f.write_fmt(format_args!("Invalid clear color '{clear_color}' for format '{format}'")),
             Error::InvalidCount(reason, count)                => f.write_fmt(format_args!("Invalid count '{reason}', found {count}")),
             Error::InvalidQueueSubmit{ found, expected }      => f.write_fmt(format_args!("Command list submitted to unsupported queue, found '{found}', expected '{expected}'")),
+            Error::InvalidShaderCode(s)                       => f.write_fmt(format_args!("Invalid shader code: {s}")),
 
             Error::InvalidParameter(s)                        => f.write_fmt(format_args!("Invalid paramter: {s}")),
             Error::NotImplemented(s)                          => f.write_fmt(format_args!("Not implemented: {s}")),

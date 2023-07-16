@@ -658,6 +658,7 @@ unsafe extern "system" fn wnd_proc(
                 window.id
             );
             window.send_window_event(WindowEvent::BeginMoveResize);
+            window.settings.flags.set(Flags::InSizeMove, true);
             PROCESSED
         }
         WM_EXITSIZEMOVE => {
@@ -717,7 +718,6 @@ unsafe extern "system" fn wnd_proc(
                 window.send_window_event(WindowEvent::Resized(size));
             }
 
-            window.settings.flags.set(Flags::InSizeMove, true);
             window.send_window_event(WindowEvent::EndMoveResize);
             PROCESSED
         }
