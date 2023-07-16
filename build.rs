@@ -1,5 +1,5 @@
 use core::str::FromStr;
-use std::{env, process::Command, path::{PathBuf, Path}, fs};
+use std::{env, process::Command, path::{PathBuf, Path}, fs, ffi::OsStr};
 
 use embed_manifest::{
     manifest::{ActiveCodePage, SupportedOS::{Windows10}, Setting, DpiAwareness},
@@ -17,8 +17,25 @@ fn copy_and_write_rerun(file: &str, profile: &str) {
     println!("cargo:rerun-if-changed={file}");
 }
 
-fn _compile_shader(file: &str, output_dir: &Path, entry_point: &str, target_profile: &str, to_spirv: bool) -> bool {
-    let mut command = Command::new("dxc");
+fn get_dxc_path() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    let (os_dir, exec) = ("windows", "dxc.exe");
+    #[cfg(target_os = "linux")]
+    let (os_dir, exec) = ("linux", "dxc");
+
+    let mut buf = PathBuf::new();
+    buf.push(env::var("CARGO_MANIFEST_DIR").unwrap());
+    buf.push("dxc");
+    buf.push(os_dir);
+    buf.push("dxc_2023_03_01");
+    buf.push("bin");
+    buf.push("x64");
+    buf.push(exec);
+    buf
+}
+
+fn _compile_shader(dxc: &Path, file: &str, output_dir: &Path, entry_point: &str, target_profile: &str, to_spirv: bool) -> bool {
+    let mut command = Command::new(dxc);
     command.args(["-E", entry_point])
         .args(["-HV", "2021"])
         .args(["-T", target_profile])
@@ -63,23 +80,28 @@ fn _compile_shader(file: &str, output_dir: &Path, entry_point: &str, target_prof
     !stderr.is_empty()
 }
 
-fn compile_shader(file: &str, output_dir: &Path, entry_point: &str, shader_type: ShaderType) {
+fn compile_shader(dxc_path: &Path, file: &str, output_dir: &Path, entry_point: &str, shader_type: ShaderType) {
     let target_profile = match shader_type {
         ShaderType::Vertex => "vs_6_7",
         ShaderType::Pixel => "ps_6_7",
     };
 
-    println!("Compiling: {file}");
+    println!("cargo:warning=Compiling: {file}");
 
-    _compile_shader(file, output_dir, entry_point, target_profile, false);
-    _compile_shader(file, output_dir, entry_point, target_profile, true);
+    _compile_shader(dxc_path, file, output_dir, entry_point, target_profile, false);
+    _compile_shader(dxc_path, file, output_dir, entry_point, target_profile, true);
 }
 
 fn get_output_path() -> PathBuf {
-    //<root or manifest path>/target/<profile>/
     let manifest_dir_string = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let build_type = env::var("PROFILE").unwrap();
-    let path = Path::new(&manifest_dir_string).join("target").join(build_type);
+
+    // Path when working directory is executable folder <root or manifest path>/target/<profile>/
+    //let build_type = env::var("PROFILE").unwrap();
+    //let path = Path::new(&manifest_dir_string).join("target").join(build_type);
+
+    // Path when the working directory is the cargo directory: <root or manifest path>/
+    let path = Path::new(&manifest_dir_string);
+
     return PathBuf::from(path);
 }
 
@@ -101,19 +123,26 @@ fn main() {
     
     // Settings files copy
     let profile = env::var("PROFILE").unwrap();
-    copy_and_write_rerun("ral.toml", &profile);
     copy_and_write_rerun("D3D12", &profile);
 
+    // Only needed when the working directory is not the cargo root
+    //copy_and_write_rerun("ral.toml", &profile);
+
     let mut shader_output_dir = get_output_path();
+    shader_output_dir.push(Path::new("data"));
     shader_output_dir.push(Path::new("shaders"));
-    println!("CARGO_TARGET_DIR: {}", shader_output_dir.to_str().unwrap());
+    println!("cargo:warning=CARGO_TARGET_DIR: {}", shader_output_dir.to_str().unwrap());
     
 
 
-    println!("Compiling shaders");
-    _ = fs::create_dir(&shader_output_dir);
-    compile_shader("data/shaders/tri.vs.hlsl", &shader_output_dir, "main", ShaderType::Vertex);
-    compile_shader("data/shaders/tri.ps.hlsl", &shader_output_dir, "main", ShaderType::Pixel);
+    println!("cargo:warning=Compiling shaders");
+    _ = fs::create_dir_all(&shader_output_dir);
+
+    let dxc_path = get_dxc_path();
+    println!("cargo:warning=DXC is located at: {}", dxc_path.to_str().unwrap());
+
+    compile_shader(&dxc_path, "data/shaders/tri.vs.hlsl", &shader_output_dir, "main", ShaderType::Vertex);
+    compile_shader(&dxc_path, "data/shaders/tri.ps.hlsl", &shader_output_dir, "main", ShaderType::Pixel);
 
     #[cfg(windows)]
     println!("cargo:rustc-link-arg=/DEF:D3D12\\agility.def");
