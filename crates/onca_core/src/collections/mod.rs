@@ -14,6 +14,8 @@ mod hash_set;
 
 mod bitset;
 
+mod byte_buffer;
+
 
 pub use static_dyn_array::StaticDynArray;
 pub use dyn_array::DynArray;
@@ -28,15 +30,30 @@ pub use hash_set::HashSet;
 
 pub use bitset::BitSet;
 
+pub use byte_buffer::ByteBuffer;
+
 use core::ops::Range;
 
 //--------------------------------------------------------------
 
+macro_rules! impl_slice_partial_eq_generic {
+    ([$($vars:tt)*] $lhs:ty, $rhs:ty $(where $ty:ty: $bound:ident)?) => {
+        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs  where
+            T : PartialEq<U>,
+            $($ty: $bound)?
+        {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool { self[..] == other[..] }
+            #[inline]
+            fn ne(&self, other: &$rhs) -> bool { self[..] != other[..] }
+        }
+    };
+}
+use impl_slice_partial_eq_generic;
+
 macro_rules! impl_slice_partial_eq {
     ([$($vars:tt)*] $lhs:ty, $rhs:ty $(where $ty:ty: $bound:ident)?) => {
-        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs
-        where
-            T : PartialEq<U>,
+        impl<$($vars)*> PartialEq<$rhs> for $lhs where
             $($ty: $bound)?
         {
             #[inline]

@@ -15,7 +15,7 @@ use core::{
 use std::collections::TryReserveError;
 use crate::{
     alloc::{Layout, ScopedAlloc, UseAlloc},
-    collections::{ExtendFunc, ExtendElement, ExtendWith, SetLenOnDrop, SpecExtendFromWithin, SpecCloneFrom, SpecExtend, IsZero, SpecFromIterNested, SpecFromIter, impl_slice_partial_eq},
+    collections::{ExtendFunc, ExtendElement, ExtendWith, SetLenOnDrop, SpecExtendFromWithin, SpecCloneFrom, SpecExtend, IsZero, SpecFromIterNested, SpecFromIter, impl_slice_partial_eq_generic},
 };
 
 
@@ -1171,19 +1171,19 @@ impl<T, B: DynArrayBuffer<T>, const N: usize> TryFrom<DynArray<T, B>> for [T; N]
 
 //------------------------------------------------------------------------------------------------------------------------------
 
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>, C: DynArrayBuffer<U>] DynArray<T, B>, DynArray<U, C> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>] DynArray<T, B>, [U] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>] DynArray<T, B>, &[U] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>] DynArray<T, B>, &mut [U] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, [U; N] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, &[U; N] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, &mut [U; N] }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>] [T], DynArray<U, B> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>] &[T], DynArray<U, B> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>] &mut [T], DynArray<U, B> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>, const N: usize] [T; N], DynArray<U, B> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>, const N: usize] &[T; N], DynArray<U, B> }
-impl_slice_partial_eq!{ [B: DynArrayBuffer<U>, const N: usize] &mut [T; N], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>, C: DynArrayBuffer<U>] DynArray<T, B>, DynArray<U, C> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>] DynArray<T, B>, [U] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>] DynArray<T, B>, &[U] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>] DynArray<T, B>, &mut [U] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, [U; N] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, &[U; N] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<T>, const N: usize] DynArray<T, B>, &mut [U; N] }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>] [T], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>] &[T], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>] &mut [T], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>, const N: usize] [T; N], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>, const N: usize] &[T; N], DynArray<U, B> }
+impl_slice_partial_eq_generic!{ [B: DynArrayBuffer<U>, const N: usize] &mut [T; N], DynArray<U, B> }
 
 impl<T: Eq, B: DynArrayBuffer<T>> Eq for DynArray<T, B> {}
 

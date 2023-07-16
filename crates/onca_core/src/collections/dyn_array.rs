@@ -16,7 +16,7 @@ use crate::{
     KiB,
 };
 
-use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
+use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq_generic, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
 use imp::DynArrayBuffer;
 
@@ -248,17 +248,17 @@ impl<T> DynArray<T> {
     }
 
     #[inline]
-    pub fn try_reserve(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), std::collections::TryReserveError> {
         self.0.try_reserve(additional).map(|_| ())
     }
 
     #[inline]
-    pub fn reserve_exact(&mut self, additional:usize) {
+    pub fn reserve_exact(&mut self, additional: usize) {
         self.0.reserve_exact(additional);
     }
 
     #[inline]
-    pub fn try_reserve_exact(&mut self, additional:usize) -> Result<(), std::collections::TryReserveError> {
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), std::collections::TryReserveError> {
         self.0.try_reserve_exact(additional).map(|_| ())
     }
 
@@ -513,7 +513,7 @@ impl<T: Hash> Hash for DynArray<T> {
     }
 }
 
-impl<T: Hash, I: SliceIndex<[T]>> Index<I> for DynArray<T> {
+impl<T, I: SliceIndex<[T]>> Index<I> for DynArray<T> {
     type Output = I::Output;
 
     #[inline]
@@ -522,7 +522,7 @@ impl<T: Hash, I: SliceIndex<[T]>> Index<I> for DynArray<T> {
     }
 }
 
-impl<T: Hash, I: SliceIndex<[T]>> IndexMut<I> for DynArray<T> {
+impl<T, I: SliceIndex<[T]>> IndexMut<I> for DynArray<T> {
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         self.0.index_mut(index)
@@ -665,19 +665,19 @@ impl<T, const N: usize> TryFrom<DynArray<T>> for [T; N] {
 //------------------------------------------------------------------------------------------------------------------------------
 
 
-impl_slice_partial_eq!{ [] DynArray<T>, DynArray<U> }
-impl_slice_partial_eq!{ [] DynArray<T>, [U] }
-impl_slice_partial_eq!{ [] DynArray<T>, &[U] }
-impl_slice_partial_eq!{ [] DynArray<T>, &mut [U] }
-impl_slice_partial_eq!{ [const M: usize] DynArray<T>, [U; M] }
-impl_slice_partial_eq!{ [const M: usize] DynArray<T>, &[U; M] }
-impl_slice_partial_eq!{ [const M: usize] DynArray<T>, &mut [U; M] }
-impl_slice_partial_eq!{ [] [T], DynArray<U> }
-impl_slice_partial_eq!{ [] &[T], DynArray<U> }
-impl_slice_partial_eq!{ [] &mut [T], DynArray<U> }
-impl_slice_partial_eq!{ [const N: usize] [T; N], DynArray<U> }
-impl_slice_partial_eq!{ [const N: usize] &[T; N], DynArray<U> }
-impl_slice_partial_eq!{ [const N: usize] &mut [T; N], DynArray<U> }
+impl_slice_partial_eq_generic!{ [] DynArray<T>, DynArray<U> }
+impl_slice_partial_eq_generic!{ [] DynArray<T>, [U] }
+impl_slice_partial_eq_generic!{ [] DynArray<T>, &[U] }
+impl_slice_partial_eq_generic!{ [] DynArray<T>, &mut [U] }
+impl_slice_partial_eq_generic!{ [const M: usize] DynArray<T>, [U; M] }
+impl_slice_partial_eq_generic!{ [const M: usize] DynArray<T>, &[U; M] }
+impl_slice_partial_eq_generic!{ [const M: usize] DynArray<T>, &mut [U; M] }
+impl_slice_partial_eq_generic!{ [] [T], DynArray<U> }
+impl_slice_partial_eq_generic!{ [] &[T], DynArray<U> }
+impl_slice_partial_eq_generic!{ [] &mut [T], DynArray<U> }
+impl_slice_partial_eq_generic!{ [const N: usize] [T; N], DynArray<U> }
+impl_slice_partial_eq_generic!{ [const N: usize] &[T; N], DynArray<U> }
+impl_slice_partial_eq_generic!{ [const N: usize] &mut [T; N], DynArray<U> }
 
 
 impl<T: Eq> Eq for DynArray<T> {}

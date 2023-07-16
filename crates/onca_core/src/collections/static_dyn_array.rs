@@ -11,7 +11,7 @@ use core::{
 };
 use crate::alloc::Layout;
 
-use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
+use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq_generic, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
 
 struct StaticBuf<T, const N: usize> {
@@ -454,19 +454,19 @@ impl<T, const N: usize, const M: usize> TryFrom<StaticDynArray<T, N>> for [T; M]
 //------------------------------------------------------------------------------------------------------------------------------
 
 
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, [U] }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, &[U] }
-impl_slice_partial_eq!{ [const N: usize] StaticDynArray<T, N>, &mut [U] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, [U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &[U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &mut [U; M] }
-impl_slice_partial_eq!{ [const M: usize] [T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &[T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &mut [T], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] [T; N], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &[T; N], StaticDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &mut [T; N], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] StaticDynArray<T, N>, StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize] StaticDynArray<T, N>, [U] }
+impl_slice_partial_eq_generic!{ [const N: usize] StaticDynArray<T, N>, &[U] }
+impl_slice_partial_eq_generic!{ [const N: usize] StaticDynArray<T, N>, &mut [U] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] StaticDynArray<T, N>, [U; M] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &[U; M] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] StaticDynArray<T, N>, &mut [U; M] }
+impl_slice_partial_eq_generic!{ [const M: usize] [T], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const M: usize] &[T], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const M: usize] &mut [T], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] [T; N], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] &[T; N], StaticDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] &mut [T; N], StaticDynArray<U, M> }
 
 
 impl<T: Eq, const N: usize> Eq for StaticDynArray<T, N> {}

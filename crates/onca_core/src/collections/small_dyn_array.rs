@@ -11,7 +11,7 @@ use core::{
 };
 use crate::alloc::{UseAlloc, Layout, get_active_alloc, ScopedAlloc};
 
-use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq, imp::dyn_array::SliceToImpDynArray};
+use super::{ExtendFunc, ExtendElement, impl_slice_partial_eq_generic, imp::dyn_array::SliceToImpDynArray};
 use super::imp::dyn_array as imp;
 
 use imp::DynArrayBuffer;
@@ -611,19 +611,19 @@ impl<T, const N: usize, const M: usize> TryFrom<SmallDynArray<T, N>> for [T; M] 
 //------------------------------------------------------------------------------------------------------------------------------
 
 
-impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, [U] }
-impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, &[U] }
-impl_slice_partial_eq!{ [const N: usize] SmallDynArray<T, N>, &mut [U] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, [U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &[U; M] }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &mut [U; M] }
-impl_slice_partial_eq!{ [const M: usize] [T], SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &[T], SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const M: usize] &mut [T], SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] [T; N], SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &[T; N], SmallDynArray<U, M> }
-impl_slice_partial_eq!{ [const N: usize, const M: usize] &mut [T; N], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] SmallDynArray<T, N>, SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize] SmallDynArray<T, N>, [U] }
+impl_slice_partial_eq_generic!{ [const N: usize] SmallDynArray<T, N>, &[U] }
+impl_slice_partial_eq_generic!{ [const N: usize] SmallDynArray<T, N>, &mut [U] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] SmallDynArray<T, N>, [U; M] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &[U; M] }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] SmallDynArray<T, N>, &mut [U; M] }
+impl_slice_partial_eq_generic!{ [const M: usize] [T], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const M: usize] &[T], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const M: usize] &mut [T], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] [T; N], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] &[T; N], SmallDynArray<U, M> }
+impl_slice_partial_eq_generic!{ [const N: usize, const M: usize] &mut [T; N], SmallDynArray<U, M> }
 
 
 impl<T: Eq, const N: usize> Eq for SmallDynArray<T, N> {}

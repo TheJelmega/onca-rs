@@ -43,9 +43,8 @@ pub(crate) fn get_working_dir() -> io::Result<PathBuf> {
         let expected_len = GetCurrentDirectoryA(None) as usize;
         let mut dynarr = DynArray::with_capacity(expected_len);
         
-        dynarr.set_len(expected_len);
         let len = GetCurrentDirectoryA(Some(&mut *dynarr)) as usize;
-        debug_assert_eq!(len, expected_len);
+        dynarr.set_len(len);
 
         let res = String::from_utf8(dynarr).into();
         match res {

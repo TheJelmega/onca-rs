@@ -245,6 +245,41 @@ impl MemoryManager {
         }
     }
 
+    // TODO: Should we move `grow` and `shrink` to just `realloc`
+    /// Reallocate a given allocator to a newly provided size
+    ///
+    /// Alignment of the new layout needs to match that of the old
+    /// 
+    /// If new memory was unable to be allocated, the result will contain an `Err(...)` with the original allocator
+    pub fn realloc<T>(&self, ptr: Allocation<T>, new_layout: Layout, grow_init: AllocInitState) -> Result<Allocation<T>, Allocation<T>> {
+        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(ptr.layout().alloc_id()));
+
+        if ptr.ptr() == core::ptr::null() {
+            return match self.alloc_raw(grow_init, new_layout) {
+                Some(mem) => Ok(mem.cast()),
+                None => Err(ptr)
+            };
+        }
+
+        let new_size = new_layout.size();
+        if new_size == 0 {
+            self.dealloc(ptr);
+            return Ok(unsafe{ Allocation::<T>::const_null() });
+        }
+
+        let old_size = ptr.layout().size();
+        let count = old_size.min(new_size);
+        let grow_init = if old_size > new_size { AllocInitState::Uninitialized } else { grow_init };
+        match self.alloc_raw(grow_init, new_layout) {
+            Some(mem) => unsafe {
+                copy_nonoverlapping(ptr.ptr() as *const u8, mem.ptr_mut(), count);
+                self.dealloc(ptr);
+                Ok(mem.cast())
+            },
+            None => Err(ptr)
+        }
+    }
+
     fn get_tls_alloc() -> Option<&'static dyn Allocator> {
         unsafe {
             let is_init = TLS_TEMP_ALLOC.with(|tls| (*tls.get()).is_initialized());
