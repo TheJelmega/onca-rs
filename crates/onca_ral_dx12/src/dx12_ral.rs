@@ -16,7 +16,7 @@ use crate::{
 pub struct Dx12Ral {
     settings     : Settings,
     alloc        : UseAlloc,
-    debug        : Dx12Debug,
+    _debug       : Dx12Debug,
     dxgi_factory : IDXGIFactory7,
 }
 
@@ -35,7 +35,7 @@ impl Dx12Ral {
         Ok(Self {
             settings,
             alloc,
-            debug,
+            _debug: debug,
             dxgi_factory
         })
     }
@@ -50,7 +50,6 @@ impl Interface for Dx12Ral {
         match physical_device::get_physical_devices(&self.dxgi_factory) {
             Ok(arr) => Ok(arr),
             Err(err) => {
-                // TODO
                 log_error!(LOG_CAT, &Self::get_physical_devices, "Failed to get physical devices, err: {}", err);
                 Err(ral::Error::Unknown)
             },

@@ -4,19 +4,9 @@ use onca_core::{utils::EnumCount, prelude::*};
 use onca_ral as ral;
 
 use ral::{constants::{MAX_RENDER_TARGET_VIEWS, MAX_DEPTH_STENCIL_VIEWS}};
-use windows::{
-    Win32::{
-        Graphics::{
-            Direct3D::*,
-            Direct3D12::*,
-            Dxgi::{
-                *,
-                Common::*
-            },
-        },
-        Foundation::FALSE, System::Threading::CreateEventA,
-    },
-    core::*,
+use windows::Win32::Graphics::{
+    Direct3D::*,
+    Direct3D12::*,
 };
 
 use crate::{
@@ -24,7 +14,6 @@ use crate::{
     utils::*,
     physical_device::PhysicalDevice,
     command_queue::CommandQueue,
-    texture::{Texture, RenderTargetView},
     descriptors::RTVAndDSVDescriptorHeap,
     swap_chain::SwapChain,
     command_list::CommandPool,

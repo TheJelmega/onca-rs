@@ -1,7 +1,7 @@
-use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16}, default};
+use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16}};
 use onca_core::{prelude::*, collections::HashSet};
 use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
-use crate::{Result, Error, Handle, Texture, QueueIndex, TextureHandle, RenderTargetViewHandle, constants, CommandList, Fence, FenceHandle, CommandQueue, ShaderHandle, Shader, PipelineLayoutHandle};
+use crate::*;
 
 extern crate static_assertions as sa;
 
@@ -1985,7 +1985,7 @@ impl ResourceState {
 
             // Check access flags for current enabled stages
             let top_bottom = SyncPoint::Top | SyncPoint::Bottom;
-            let all_commands = SyncPoint::All | SyncPoint::Top | SyncPoint::Bottom;
+            let all_commands = SyncPoint::All | top_bottom;
             let all_graphics = all_commands | SyncPoint::Graphics;
             let input_assembler = all_graphics | SyncPoint::InputAssembler | SyncPoint::Graphics;
             let all_shader = all_graphics | SyncPoint::Vertex | SyncPoint::Task  | SyncPoint::Mesh | SyncPoint::Pixel | SyncPoint::Compute | SyncPoint::RayTracing;

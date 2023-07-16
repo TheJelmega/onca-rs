@@ -1,9 +1,9 @@
-use core::{mem::{ManuallyDrop, MaybeUninit}, num::NonZeroU16};
+use core::mem::{ManuallyDrop, MaybeUninit};
 
 use onca_core::{prelude::*, sync::RwLock, collections::{BitSet, StaticDynArray}};
 use onca_ral as ral;
 use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl, TextureSubresourceRange};
-use windows::Win32::{Graphics::Direct3D12::*, Foundation::RECT};
+use windows::Win32::Graphics::Direct3D12::*;
 use crate::{utils::*, device::Device, texture::{texture_layout_to_dx, Texture, RenderTargetView}, pipeline::{PipelineLayout, Pipeline}};
 
 pub struct CommandPool {
@@ -292,7 +292,7 @@ impl ral::CommandListInterface for CommandList {
             });
         }
 
-        let mut opt_dx_rts = if rendering_info.render_targets.is_empty() { None } else { Some(dx_rts.as_slice()) };
+        let opt_dx_rts = if rendering_info.render_targets.is_empty() { None } else { Some(dx_rts.as_slice()) };
 
         let mut manual_depth_resolve = false;
         let mut manual_stencil_resolve = false;
@@ -331,12 +331,12 @@ impl ral::CommandListInterface for CommandList {
         self.list.EndRenderPass();
 
         if let Some(rt_resolve) = rt_resolve {
-            for rt in rt_resolve {
+            for _rt in rt_resolve {
                 unimplemented!();
             }
         }
 
-        if let Some(depth_stencil_resolve) = depth_stencil_resolve {
+        if let Some(_depth_stencil_resolve) = depth_stencil_resolve {
             unimplemented!();
         }
         

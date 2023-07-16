@@ -3,7 +3,10 @@ use core::{ffi::c_void, mem::ManuallyDrop};
 use onca_core::{collections::ByteBuffer, prelude::DynArray};
 use onca_ral as ral;
 use ral::HandleImpl;
-use windows::{Win32::Graphics::{Direct3D12::*, Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC, DXGI_FORMAT}}, core::PCSTR};
+use windows::Win32::Graphics::{
+    Direct3D12::*,
+    Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC, DXGI_FORMAT}
+};
 
 use crate::{device::Device, shader::Shader, utils::{ToDx, ToRalError}};
 

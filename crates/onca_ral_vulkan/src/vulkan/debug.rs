@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::{null, null_mut}};
+use core::{ffi::c_void, ptr::null};
 
 use onca_core::{
     prelude::*,

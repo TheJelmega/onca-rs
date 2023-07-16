@@ -4,13 +4,13 @@ use windows::Win32::Graphics::Direct3D12::*;
 use crate::utils::*;
 
 pub struct Dx12Debug {
-    debug: Option<ID3D12Debug5>
+    _debug: Option<ID3D12Debug5>
 }
 
 impl Dx12Debug {
     pub fn new(settings: &Settings) -> Result<Self> {
         if !settings.debug_enabled {
-            return Ok(Self{ debug: None });
+            return Ok(Self{ _debug: None });
         }
         
         let mut debug : Option<ID3D12Debug5> = None;
@@ -30,6 +30,6 @@ impl Dx12Debug {
             }
             debug.SetGPUBasedValidationFlags(gbv_flags);
         };
-        Ok(Self{ debug })
+        Ok(Self{ _debug: debug })
     }
 }

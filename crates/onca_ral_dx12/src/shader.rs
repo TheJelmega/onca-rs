@@ -2,7 +2,7 @@ use core::ffi::c_void;
 
 use onca_core::prelude::DynArray;
 use onca_ral as ral;
-use windows::Win32::Graphics::{Direct3D::ID3DBlob, Direct3D12::D3D12_SHADER_BYTECODE};
+use windows::Win32::Graphics::Direct3D12::D3D12_SHADER_BYTECODE;
 
 
 
