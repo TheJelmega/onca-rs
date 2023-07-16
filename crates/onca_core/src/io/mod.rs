@@ -120,7 +120,7 @@ where
         ret.and_then(|_| {
             Err(const_io_error!(
                 ErrorKind::InvalidData,
-                "strim did not contain valid UTF-8"
+                "stream did not contain valid UTF-8"
             ))
         })
     } else {
@@ -193,11 +193,11 @@ pub(crate) fn default_read_to_end<R: Read + ?Sized>(r: &mut R, buf: &mut DynArra
 }
 
 pub(crate) fn default_read_to_string<R: Read + ?Sized>(r: &mut R, buf: &mut String) -> Result<usize> {
-    // Note taht we do *not* call `r.read_to_end()` here.
+    // Note that we do *not* call `r.read_to_end()` here.
     // We are passing `&mut DynArray<u8>` (the raw contents of `buf`) into the `read_to_end` method to fill it up.
     // An arbitrary implementation could overwrite the entire contents of the dynarray, not just append to it (which is what we are expecting).
     //
-    // To prevent extraneously checking the UTF-8-ness of the entire buffer we pass it  to our hardcoded `default_read_to_end` implementation which we know is guaranteed to only read data into the end of the buffer.
+    // To prevent extraneously checking the UTF-8-ness of the entire buffer we pass it to our hardcoded `default_read_to_end` implementation which we know is guaranteed to only read data into the end of the buffer.
     unsafe{ append_to_string(buf, |b| default_read_to_end(r, b)) }
 }
 

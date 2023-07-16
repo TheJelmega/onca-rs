@@ -5,7 +5,7 @@ use onca_core::{
 	prelude::*,
 	collections::HashMap,
 };
-use onca_parser_utils::str_parser::*;
+use onca_parser_utils::{str_parser::*, ParserError};
 
 /// TOML parsing error
 #[derive(Clone, Copy, Debug)]

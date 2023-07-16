@@ -1,18 +1,12 @@
 use core::str::pattern::{Pattern, Searcher};
 
-/// Parser error
-#[derive(Clone, Copy, Debug)]
-pub struct ParserError {
-    pub line   : usize,
-    pub column : usize,
-    pub msg    : &'static str,
-}
+use crate::ParserError;
 
 /// Parser that can parse a `&str`
 pub struct StrParser<'a> {
-    pub line   : usize,
-    pub column : usize,
-    pub string : &'a str
+    pub line:   usize,
+    pub column: usize,
+    pub string: &'a str
 }
 
 impl<'a> StrParser<'a> {
