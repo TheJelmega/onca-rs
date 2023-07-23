@@ -95,7 +95,7 @@ pub fn enum_display(item: TokenStream) -> TokenStream {
         impl core::fmt::Display for #ident {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 match self {
-                    #(#ident::#members => f.write_str(#names),)*
+                    #(#ident::#members => #names.fmt(f),)*
                 }
             }
         }
