@@ -321,7 +321,7 @@ impl<'a> Parser<'a> {
 			return Ok(Item::Boolean(true));
 		} else if self.parser.string.starts_with("false") && self.parser.string.chars().nth(5).map_or(false, |c| !c.is_alphanumeric()) {
 			self.parser.consume_count(5);
-			return Ok(Item::Boolean(true));
+			return Ok(Item::Boolean(false));
 		}
 
 		// SAFETY: We only can reach here if there is still data to parse, so there is at least 1 character
