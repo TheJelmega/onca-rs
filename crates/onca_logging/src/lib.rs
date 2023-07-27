@@ -1,5 +1,11 @@
-use core::{fmt::{Display, Arguments}, ptr::null};
+#![feature(local_key_cell_methods)]
 
+use core::{
+    fmt::{Display, Arguments},
+    ptr::null,
+    sync::atomic::{AtomicU8, self},
+    cell::RefCell
+};
 use onca_core::{
     prelude::*,
     io::{self, prelude::*},
@@ -61,15 +67,15 @@ impl LogLevel {
 impl Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogLevel::Severe => f.write_str("SEVERE"),
-            LogLevel::Error => f.write_str("ERROR"),
-            LogLevel::Warning => f.write_str("WARNING"),
-            LogLevel::Info => f.write_str("INFO"),
-            LogLevel::Verbose => f.write_str("VERBOSE"),
-            LogLevel::Debug => f.write_str("DEBUG"),
+            LogLevel::Severe  => f.write_str("\x1B[1m\x1B[41m\x1B[30m[SEVERE ]\x1B[0m"),
+            LogLevel::Error   => f.write_str(               "\x1B[91m[ERROR  ]\x1B[0m"),
+            LogLevel::Warning => f.write_str(               "\x1B[93m[WARNING]\x1B[0m"),
+            LogLevel::Info    => f.write_str(               "\x1B[37m[INFO   ]\x1B[0m"),
+            LogLevel::Verbose => f.write_str(               "\x1B[90m[VERBOSE]\x1B[0m"),
+            LogLevel::Debug   => f.write_str(               "\x1B[94m[DEBUG  ]\x1B[0m"),
         }
     }
-}
+} 
 
 /// Log category
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -172,17 +178,63 @@ macro_rules! log_location {
 }
 
 pub struct LoggerState {
-    max_level : LogLevel,
-    writers   : [Option<HeapPtr<dyn io::Write>>; 8],
+    writers:   [Option<HeapPtr<dyn io::Write>>; 8],
+    cache:     Option<String>,
 }
 
 impl LoggerState {
+    const CACHE_FLUSH_LIMIT: usize = KiB(4);
+
     pub const fn new() -> Self {
         /// Workaround, as you can only initialize an array of `None`s, if it fulfills `Option<T> where T: Copy`
         const NONE: Option<HeapPtr<dyn io::Write>> = None;
-        Self { 
-            max_level: LogLevel::Debug,
+        Self {
             writers: [NONE; 8],
+            cache: None,
+        }
+    }
+
+    fn write_message(&mut self, message: &str) {
+        scoped_alloc!(UseAlloc::Malloc);
+        
+        if self.cache.is_none() {
+            self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));
+        }
+        
+        let cache = self.cache.as_mut().unwrap();
+        cache.push_str(&message);
+        self.flush_when_needed();
+    }
+
+    fn format_message(&mut self, fmt_args: Arguments) {
+        scoped_alloc!(UseAlloc::Malloc);
+        
+        if self.cache.is_none() {
+            self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));
+        }
+        
+        let cache = self.cache.as_mut().unwrap();
+        _ = cache.write_fmt(fmt_args);
+
+        self.flush_when_needed();
+    }
+
+    fn flush_when_needed(&mut self) {
+        if self.cache.as_ref().map_or(0, |cache| cache.len()) > Self::CACHE_FLUSH_LIMIT {
+            self.flush();
+        }
+    }
+
+    fn flush(&mut self) {
+        if let Some(cache) = &mut self.cache {
+            _ = Terminal::write(&cache);
+
+            for writer in &mut self.writers {
+                if let Some(writer) = writer {
+                    let _ = writer.write(cache.as_bytes());
+                }
+            }
+            cache.clear();
         }
     }
 }
@@ -191,17 +243,25 @@ impl LoggerState {
 /// 
 /// Supports up to 8 writers, e.g. terminal, file, in-game console, external tool, etc
 pub struct Logger {
-    state: Mutex<LoggerState>
+    state: Mutex<LoggerState>,
+    max_log_level: AtomicU8,
 }
 
 impl Logger {
+    thread_local! {
+        static FORMAT_CACHE: RefCell<Option<String>> = RefCell::new(None);
+    }
+
     pub const fn new() -> Self {
-        Self { state: Mutex::new(LoggerState::new()) }
+        Self { 
+            state: Mutex::new(LoggerState::new()),
+            max_log_level: AtomicU8::new(LogLevel::Debug as u8),
+        }
     }
 
     /// Set the maximum log level (severe == lowest, debug == highest)
     pub fn set_max_level(&mut self, level: LogLevel) {
-        self.state.lock().max_level = level;
+        self.max_log_level.store(level as u8, atomic::Ordering::Relaxed)
     }
 
     /// Add a writer. 
@@ -236,48 +296,32 @@ impl Logger {
 
     /// Log a message to the console
     pub fn log(&self, category: LogCategory, level: LogLevel, loc: LogLocation, text: &str) {
-        let mut state = self.state.lock();
-
-        if level as u8 <= state.max_level as u8 {
-            let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-
-            let mut formatted = String::new();
-
+        if level as u8 <= self.max_log_level.load(atomic::Ordering::Relaxed) {
             let loc_formatter = LogLocationFormatter::new(&loc, level);
             let timestamp = loc.timestamp();
-            let _ = write!(&mut formatted, "{timestamp} [{category}] {level}{loc_formatter}: {text}");
-
-            Self::write_message(&mut state, &formatted, level);
+            self.state.lock().format_message(format_args!("\x1B[38m{timestamp}\x1B[0m {level} [{category}] {loc_formatter}: {text}/n"));
         }
     }
 
     pub fn log_fmt(&self, category: LogCategory, level: LogLevel, loc: LogLocation, format: Arguments) {
-        let mut state = self.state.lock();
-
-        if level as u8 <= state.max_level as u8 {
-            let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
-
-            let mut formatted = String::new();
-
+        if level as u8 <= self.max_log_level.load(atomic::Ordering::Relaxed) as u8 {
             let loc_formatter = LogLocationFormatter::new(&loc, level);
             let timestamp = loc.timestamp();
-            let _ = write!(&mut formatted, "{timestamp} [{category}] {level}{loc_formatter}: ");
-            formatted = formatted.replace('\\', "/");
-            let _ = write!(&mut formatted, "{format}\n");
-
-            Self::write_message(&mut state, &formatted, level);
+            let mut state = self.state.lock();
+            state.format_message(format_args!("\x1B[38m{timestamp}\x1B[0m {level} [{category}] {loc_formatter}: "));
+            state.format_message(format);
+            state.write_message("\n");
         }
     }
 
-    fn write_message(state: &mut LoggerState, message: &str, level: LogLevel) {
-        let (fore, back, formatting) = level.get_terminal_color_and_fromatting();
-        let _ = Terminal::write_with(message, fore, back, formatting);
+    pub fn flush(&self) {
+        self.state.lock().flush()
+    }
+}
 
-        for writer in &mut state.writers {
-            if let Some(writer) = writer {
-                let _ = writer.write(message.as_bytes());
-            }
-        }
+impl Drop for Logger {
+    fn drop(&mut self) {
+        self.flush();
     }
 }
 

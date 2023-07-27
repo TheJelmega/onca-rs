@@ -1,89 +1,17 @@
+#![feature(local_key_cell_methods)]
+
+use core::{cell::RefCell, borrow::BorrowMut};
 use onca_core::{
     prelude::*,
     io::{self, prelude::*},
 };
 
+mod escape_codes;
+pub use escape_codes::*;
+
 mod os;
 use onca_core_macros::flags;
 use os::os_imp;
-
-#[derive(Clone, Copy)]
-pub enum TerminalColor {
-    Black,
-    DarkRed,
-    DarkGreen,
-    DarkYellow,
-    DarkBlue,
-    DarkMagenta,
-    DarkCyan,
-    DarkGray,
-    Gray,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
-    Custom(u8, u8, u8)
-}
-
-/// Cursor move direction
-pub enum CursorMove {
-    /// Move the cursor up by 'n' characters
-    Up(u32),
-    /// Move the cursor down by 'n' characters
-    Down(u32),
-    /// Move the cursor forward by 'n' characters
-    Forward(u32),
-    /// Move the cursor backward by 'n' characters
-    Backward(u32),
-    /// Move the cursor to an absolute position
-    Position(u32, u32),
-}
-
-/// Terminal cursor shape
-pub enum CursorShape {
-    /// User configured cursor shape
-    User,
-    /// Blinking block
-    BlinkingBlock,
-    /// Steady block
-    SteadyBlock,
-    /// Blinking underline
-    BlinkingUnderline,
-    /// Steady underline
-    SteadyUnderline,
-    /// Blinking bar
-    BlinkingBar,
-    /// Steady bar
-    SteadyBar,
-}
-
-/// Terminal text modification
-pub enum TextMod {
-    /// Insert `n` spaces at the current cursor position
-    Insert(u32),
-    /// Delete `n` characters
-    Delete(u32),
-    /// Erase `n` characters by overwritting them with a space
-    Erase(u32),
-    /// Insert `n` lines
-    InsertLine(u32),
-    /// Delete `n` lines
-    DeleteLine(u32),
-}
-
-/// Text formatting flags
-#[flags]
-pub enum TextFormatting {
-    /// Text is bold
-    Bold,
-    /// Text is underlined
-    Underline,
-    /// Foreground and background colors are inverted
-    Negative
-}
 
 /// Terminal I/O (currently only write is supported)
 pub struct Terminal;
@@ -102,12 +30,33 @@ impl Terminal {
 
     /// Write a string to the terminal, with the given colors and formatting
     pub fn write_with(text: &str, fore: TerminalColor, back: TerminalColor, formatting: TextFormatting) -> io::Result<usize> {
-        Self::write_foreground_color(fore);
-        Self::write_background_color(back);
-        Self::write_formatting(formatting);
-        let res = Self::write(text);
-        Self::reset_color_and_formatting();
-        res
+        scoped_alloc!(UseAlloc::Malloc);
+        thread_local! {
+            static CACHE_LINE: RefCell<Option<String>> = RefCell::new(None);
+        }
+
+        // Longest line of escape codes is: 24-bit fore color, 24-bit back color, disable bold, underline and negative, and reset at the end
+        const LONGEST_ESCAPE_CODES: &str = "\x1B[38;2;255;255;255m\x1B[48;2;255;255;255m\0x1B[22m\0x1B[24m\0x1B[27m\x1B[0m";
+        const MIN_ADDITONAL_SIZE: usize = LONGEST_ESCAPE_CODES.len();
+
+        CACHE_LINE.with_borrow_mut(|opt| {
+            if opt.is_none() {
+                *opt = Some(String::new());
+            }
+            let mut buf = opt.as_mut().unwrap();
+            buf.clear();
+            let needed_size = text.len() + MIN_ADDITONAL_SIZE;
+            if needed_size > buf.capacity() {
+                buf.reserve(needed_size - buf.capacity());
+            }
+
+            _ = fore.write_fore_escape_code(&mut buf);
+            _ = back.write_back_escape_code(&mut buf);
+            _ = formatting.write_escape_code(&mut buf);
+            buf.push_str(text);
+            buf.push_str("\x1B[0m");
+            Self::write(&buf)
+        })
     }
 
     /// Write bytes to the terminal
@@ -124,50 +73,21 @@ impl Terminal {
     /// Move the cursor
     pub fn move_cursor(cur_move: CursorMove) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = match cur_move {
-                CursorMove::Up(n) => write!(buf, "\0x1B[{n}A"),
-                CursorMove::Down(n) => write!(buf, "\0x1B[{n}B"),
-                CursorMove::Forward(n) => write!(buf, "\0x1B[{n}C"),
-                CursorMove::Backward(n) => write!(buf, "\0x1B[{n}D"),
-                CursorMove::Position(x, y) => write!(buf, "\0x1B[{y};{x}H"),
-            };
+            let _ = cur_move.write_escape_code(buf);
         })
     }
 
-    /// Set if the cursor is blinking
-    pub fn set_cursor_blinking(blinking: bool) {
+    /// Apply an action to the cursor
+    pub fn cursor_action(action: CursorAction) {
         Self::exec_terminal_sequence(|buf| {
-            if blinking {
-                let _ = write!(buf, "\x1B[?12h");
-            } else {
-                let _ = write!(buf, "\x1B[?12l");
-            };
-        })
-    }
-
-    /// Set if the cursor is shown
-    pub fn set_cursor_shown(show: bool) {
-        Self::exec_terminal_sequence(|buf| {
-            if show {
-                let _ = write!(buf, "\x1B[?25h");
-            } else {
-                let _ = write!(buf, "\x1B[?25l");
-            };
+            _ = action.write_escape_code(buf);
         })
     }
 
     /// Set the cursor shape
     pub fn set_cursor_shape(shape: CursorShape) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = match shape {
-                CursorShape::User              => write!(buf, "\x1B[0 q"),
-                CursorShape::BlinkingBlock     => write!(buf, "\x1B[1 q"),
-                CursorShape::SteadyBlock       => write!(buf, "\x1B[2 q"),
-                CursorShape::BlinkingUnderline => write!(buf, "\x1B[3 q"),
-                CursorShape::SteadyUnderline   => write!(buf, "\x1B[4 q"),
-                CursorShape::BlinkingBar       => write!(buf, "\x1B[5 q"),
-                CursorShape::SteadyBar         => write!(buf, "\x1B[6 q"),
-            };
+            _ = shape.write_escape_code(buf);
         })
     }
 
@@ -175,10 +95,10 @@ impl Terminal {
     pub fn scroll(n: i32) {
         Self::exec_terminal_sequence(|buf| {
             if n >= 0 {
-                let _ = write!(buf, "\x1B{n}S");
+                _ = write!(buf, "\x1B{n}S");
             } else {
                 let m = -n;
-                let _ = write!(buf, "\x1B{m}T"); 
+                _ = write!(buf, "\x1B{m}T"); 
             }
         })
     }
@@ -186,13 +106,7 @@ impl Terminal {
     /// Modify the text in the terminal
     pub fn text_mod(tmod: TextMod) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = match tmod {
-                TextMod::Insert(n)     => write!(buf, "\x1B[{n}@"),
-                TextMod::Delete(n)     => write!(buf, "\x1B[{n}P"),
-                TextMod::Erase(n)      => write!(buf, "\x1B[{n}X"),
-                TextMod::InsertLine(n) => write!(buf, "\x1B[{n}L"),
-                TextMod::DeleteLine(n) => write!(buf, "\x1B[{n}M"),
-            };
+            _ = tmod.write_escape_code(buf);
         })
     }
 
@@ -203,21 +117,7 @@ impl Terminal {
 
     fn write_formatting(formatting: TextFormatting) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = if formatting.is_set(TextFormatting::Bold) {
-                write!(buf, "\x1B[1m")
-            } else {
-                write!(buf, "\x1B[22m")
-            };
-            let _ = if formatting.is_set(TextFormatting::Underline) {
-                write!(buf, "\x1B[4m")
-            } else {
-                write!(buf, "\x1B[24m")
-            };
-            let _ = if formatting.is_set(TextFormatting::Negative) {
-                write!(buf, "\x1B[7m")
-            } else {
-                write!(buf, "\x1B[27m")
-            };
+            _ = formatting.write_escape_code(buf);
         })
     }
 
@@ -228,25 +128,7 @@ impl Terminal {
 
     fn write_foreground_color(color: TerminalColor) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = match color {
-                TerminalColor::Black           => write!(buf, "\x1B[30m"),
-                TerminalColor::DarkRed         => write!(buf, "\x1B[31m"),
-                TerminalColor::DarkGreen       => write!(buf, "\x1B[32m"),
-                TerminalColor::DarkYellow      => write!(buf, "\x1B[33m"),
-                TerminalColor::DarkBlue        => write!(buf, "\x1B[34m"),
-                TerminalColor::DarkMagenta     => write!(buf, "\x1B[35m"),
-                TerminalColor::DarkCyan        => write!(buf, "\x1B[36m"),
-                TerminalColor::DarkGray        => write!(buf, "\x1B[37m"),
-                TerminalColor::Gray            => write!(buf, "\x1B[90m"),
-                TerminalColor::Red             => write!(buf, "\x1B[91m"),
-                TerminalColor::Green           => write!(buf, "\x1B[92m"),
-                TerminalColor::Yellow          => write!(buf, "\x1B[93m"),
-                TerminalColor::Blue            => write!(buf, "\x1B[94m"),
-                TerminalColor::Magenta         => write!(buf, "\x1B[95m"),
-                TerminalColor::Cyan            => write!(buf, "\x1B[96m"),
-                TerminalColor::White           => write!(buf, "\x1B[97m"),
-                TerminalColor::Custom(r, g, b) => write!(buf, "\x1B[38;2;{r};{g};{b}m"),
-            };
+            _ = color.write_fore_escape_code(buf);
         })
     }
 
@@ -257,25 +139,7 @@ impl Terminal {
 
     fn write_background_color(color: TerminalColor) {
         Self::exec_terminal_sequence(|buf| {
-            let _ = match color {
-                TerminalColor::Black           => write!(buf, "\x1B[40m"),
-                TerminalColor::DarkRed         => write!(buf, "\x1B[41m"),
-                TerminalColor::DarkGreen       => write!(buf, "\x1B[42m"),
-                TerminalColor::DarkYellow      => write!(buf, "\x1B[43m"),
-                TerminalColor::DarkBlue        => write!(buf, "\x1B[44m"),
-                TerminalColor::DarkMagenta     => write!(buf, "\x1B[45m"),
-                TerminalColor::DarkCyan        => write!(buf, "\x1B[46m"),
-                TerminalColor::DarkGray        => write!(buf, "\x1B[47m"),
-                TerminalColor::Gray            => write!(buf, "\x1B[100m"),
-                TerminalColor::Red             => write!(buf, "\x1B[101m"),
-                TerminalColor::Green           => write!(buf, "\x1B[102m"),
-                TerminalColor::Yellow          => write!(buf, "\x1B[103m"),
-                TerminalColor::Blue            => write!(buf, "\x1B[104m"),
-                TerminalColor::Magenta         => write!(buf, "\x1B[105m"),
-                TerminalColor::Cyan            => write!(buf, "\x1B[106m"),
-                TerminalColor::White           => write!(buf, "\x1B[107m"),
-                TerminalColor::Custom(r, g, b) => write!(buf, "\x1B[48;2;{r};{g};{b}m"),
-            };
+            let _ = color.write_back_escape_code(buf);
         })
     }
 
