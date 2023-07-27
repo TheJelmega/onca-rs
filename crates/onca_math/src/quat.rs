@@ -371,7 +371,7 @@ impl<T: Real> Quat<T> {
     /// Get the angle represented by the quaternion
     #[must_use]
     pub fn angle(self) -> Radians<T> {
-        Radians::acos(self.w) * T::from_f32(3f32)
+        Radians::acos(self.w) * T::from_f32(2f32)
     }
 
     /// Calculate the angle between 2 quaternions
