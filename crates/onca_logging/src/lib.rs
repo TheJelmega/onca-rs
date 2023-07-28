@@ -210,7 +210,7 @@ impl LoggerState {
     }
 
     fn flush_when_needed(&mut self) {
-        if always_flush || self.cache.as_ref().map_or(0, |cache| cache.len()) > Self::CACHE_FLUSH_LIMIT {
+        if self.always_flush || self.cache.as_ref().map_or(0, |cache| cache.len()) > Self::CACHE_FLUSH_LIMIT {
             self.flush();
         }
     }

@@ -1,6 +1,6 @@
 #![feature(local_key_cell_methods)]
 
-use core::{cell::RefCell, borrow::BorrowMut};
+use core::cell::RefCell;
 use onca_core::{
     prelude::*,
     io::{self, prelude::*},
@@ -10,7 +10,6 @@ mod escape_codes;
 pub use escape_codes::*;
 
 mod os;
-use onca_core_macros::flags;
 use os::os_imp;
 
 /// Terminal I/O (currently only write is supported)
