@@ -11,9 +11,9 @@ use onca_core::{
     io::{self, prelude::*},
     sync::{RwLock, Mutex},
     mem::HeapPtr,
-    time::TimeStamp,
+    time::TimeStamp, collections::StaticDynArray,
 };
-use onca_terminal::{Terminal, TerminalColor, TextFormatting};
+use onca_terminal::Terminal;
 
 struct LoggerPtr(*const Logger);
 
@@ -49,19 +49,6 @@ pub enum LogLevel {
     Verbose,
     /// Debug info (includes verbose info)
     Debug,
-}
-
-impl LogLevel {
-    fn get_terminal_color_and_fromatting(&self) -> (TerminalColor, TerminalColor, TextFormatting) {
-        match self {
-            LogLevel::Severe  => (TerminalColor::Black , TerminalColor::DarkRed, TextFormatting::Bold),
-            LogLevel::Error   => (TerminalColor::Red   , TerminalColor::Black  , TextFormatting::None),
-            LogLevel::Warning => (TerminalColor::Yellow, TerminalColor::Black  , TextFormatting::None),
-            LogLevel::Info    => (TerminalColor::Gray  , TerminalColor::Black  , TextFormatting::None),
-            LogLevel::Verbose => (TerminalColor::Gray  , TerminalColor::Black  , TextFormatting::None),
-            LogLevel::Debug   => (TerminalColor::Blue  , TerminalColor::Black  , TextFormatting::None),
-        }
-    }
 }
 
 impl Display for LogLevel {
@@ -178,19 +165,22 @@ macro_rules! log_location {
 }
 
 pub struct LoggerState {
-    writers:   [Option<HeapPtr<dyn io::Write>>; 8],
-    cache:     Option<String>,
+    writers:      StaticDynArray<(HeapPtr<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
+    cache:        Option<String>,
+    writer_idx:   usize,
+    always_flush: bool
 }
 
 impl LoggerState {
+    const MAX_WRITERS: usize = 8;
     const CACHE_FLUSH_LIMIT: usize = KiB(4);
 
     pub const fn new() -> Self {
-        /// Workaround, as you can only initialize an array of `None`s, if it fulfills `Option<T> where T: Copy`
-        const NONE: Option<HeapPtr<dyn io::Write>> = None;
         Self {
-            writers: [NONE; 8],
+            writers: StaticDynArray::new(),
             cache: None,
+            writer_idx: 0,
+            always_flush: false
         }
     }
 
@@ -220,7 +210,7 @@ impl LoggerState {
     }
 
     fn flush_when_needed(&mut self) {
-        if self.cache.as_ref().map_or(0, |cache| cache.len()) > Self::CACHE_FLUSH_LIMIT {
+        if always_flush || self.cache.as_ref().map_or(0, |cache| cache.len()) > Self::CACHE_FLUSH_LIMIT {
             self.flush();
         }
     }
@@ -229,10 +219,8 @@ impl LoggerState {
         if let Some(cache) = &mut self.cache {
             _ = Terminal::write(&cache);
 
-            for writer in &mut self.writers {
-                if let Some(writer) = writer {
-                    let _ = writer.write(cache.as_bytes());
-                }
+            for (writer, _) in &mut self.writers {
+                _ = writer.write(cache.as_bytes());
             }
             cache.clear();
         }
@@ -260,8 +248,13 @@ impl Logger {
     }
 
     /// Set the maximum log level (severe == lowest, debug == highest)
-    pub fn set_max_level(&mut self, level: LogLevel) {
+    pub fn set_max_level(&self, level: LogLevel) {
         self.max_log_level.store(level as u8, atomic::Ordering::Relaxed)
+    }
+
+    /// Set whether the logger should flush after each write
+    pub fn set_always_flush(&self, always_flush: bool) {
+        self.state.lock().always_flush = always_flush;
     }
 
     /// Add a writer. 
@@ -272,26 +265,19 @@ impl Logger {
     pub fn add_writer(&self, writer: HeapPtr<dyn io::Write>) -> Result<usize, HeapPtr<dyn io::Write>> {
         let mut state = self.state.lock();
 
-        let mut index = None;
-        for i in 0..8 {
-            if let None = state.writers[i] {
-                index = Some(i);
-                break;
-            }
-        }
-
-        match index {
-            Some(idx) => {
-                state.writers[idx] = Some(writer);
-                Ok(idx)
-            },
-            None => Err(writer),
+        if state.writers.len() == LoggerState::MAX_WRITERS {
+            Err(writer)
+        } else {
+            let id = state.writer_idx;
+            state.writer_idx += 1;
+            state.writers.push((writer, id));
+            Ok(id)
         }
     }
 
     /// Remove a writer from the logger
     pub fn remove_writer(&self, index: usize) -> Option<HeapPtr<dyn io::Write>> {
-        core::mem::replace(&mut self.state.lock().writers[index], None)
+        self.state.lock().writers.remove_first_if(|(_, idx)| *idx == index).map(|(writer, _)| writer)
     }
 
     /// Log a message to the console

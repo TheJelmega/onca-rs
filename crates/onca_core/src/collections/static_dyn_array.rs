@@ -140,6 +140,14 @@ impl<T, const N: usize> StaticDynArray<T, N> {
         self.0.remove(index)
     }
 
+    /// Remove the first element for which the predicate results in `true`, return `None` if no element fullfills the predicate
+    #[inline]
+    pub fn remove_first_if<F>(&mut self, f: F) -> Option<T> where
+        F: FnMut(&T) -> bool
+    {
+        self.0.remove_first_if(f)
+    }
+
     #[inline]
     pub fn retain<F>(&mut self, pred: F) 
     where

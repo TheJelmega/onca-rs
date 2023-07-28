@@ -76,6 +76,16 @@
             </ArrayItems>
         </Expand>
     </Type>
+    <Type Name="onca_core::collections::static_dyn_array::StaticDynArray&lt;*,*&gt;">
+        <DisplayString>{{ len = {__0.len} }}</DisplayString>
+        <Expand>
+            <Item Name="[len]" ExcludeView="simple">__0.len</Item>
+            <ArrayItems>
+                <Size>__0.len</Size>
+                <ValuePointer>($T1*)&amp;__0.buf.buf.value</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
 
     <Type Name="onca_core::collections::hash_map::HashMap&lt;*,*,*&gt;">
         <DisplayString>{{ len = {__0.table.table.items} }}</DisplayString>

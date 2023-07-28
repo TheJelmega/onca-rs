@@ -204,6 +204,19 @@ impl<T, B: DynArrayBuffer<T>> DynArray<T, B> {
         }
     }
 
+    pub fn remove_first_if<F>(&mut self, mut f: F) -> Option<T> where
+        F: FnMut(&T) -> bool
+    {
+        let mut idx = None;
+        for (id, val) in self.iter().enumerate() {
+            if f(val) {
+                idx = Some(id);
+                break;
+            }
+        }
+        idx.map(|idx| self.remove(idx))
+    }
+
     pub fn retain<F>(&mut self, mut pred: F)
     where
         F : FnMut(&T) -> bool
