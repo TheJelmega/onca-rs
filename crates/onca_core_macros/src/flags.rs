@@ -120,8 +120,8 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			/// Create flags instance with all valid flags set.
 			#vis const fn all() -> Self {
-				const bits : #base_type = 0 #( | #flag_name::#idents.bits)*;
-				Self { bits }
+				const BITS : #base_type = 0 #( | #flag_name::#idents.bits)*;
+				Self { bits: BITS }
 			}
 
 			/// Get the flags' bits
