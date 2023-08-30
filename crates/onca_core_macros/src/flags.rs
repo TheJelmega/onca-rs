@@ -130,12 +130,24 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 
 			/// Check if a given flag(s) is/are set (if multiple flags are checked, all flags need to be set).
+			#[deprecated = "Use `contains` instead"]
 			#vis const fn is_set(&self, flag: #flag_name) -> bool {
 				self.bits & flag.bits == flag.bits
 			}
+			
+			/// Check if a given flag(s) is/are set (if multiple flags are checked, all flags need to be set).
+			#vis const fn contains(&self, flag: #flag_name) -> bool {
+				self.bits & flag.bits == flag.bits
+			}
+			
+			/// Check if any of the given flags are set.
+			#[deprecated = "Use `intersects` instead"]
+			#vis const fn is_any_set(&self, flag: #flag_name) -> bool {
+				self.bits & flag.bits != 0
+			}
 
 			/// Check if any of the given flags are set.
-			#vis const fn is_any_set(&self, flag: #flag_name) -> bool {
+			#vis const fn intersects(&self, flag: #flag_name) -> bool {
 				self.bits & flag.bits != 0
 			}
 
@@ -177,6 +189,26 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 			#vis fn disable(&mut self, flag: #flag_name) {
 				self.bits &= !flag.bits;
 			}
+
+			/// Const implementation of not
+			#vis const fn not(self) -> Self {
+				Self { bits: !self.bits }
+			}
+
+			/// Const implementation of bitand
+			#vis const fn bitand(self, rhs: Self) -> Self {
+				Self { bits: self.bits & rhs.bits }
+			}
+
+			/// Const implementation of bitor
+			#vis const fn bitor(self, rhs: Self) -> Self {
+				Self { bits: self.bits | rhs.bits }
+			}
+
+			// Const implementation of bitxor
+			#vis const fn bitxor(self, rhs: Self) -> Self {
+				Self { bits: self.bits ^ rhs.bits }
+			}
 		}
 
 		impl ::core::ops::Not for #flag_name {
@@ -189,7 +221,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 		impl ::core::ops::BitAnd for #flag_name {
 			type Output = Self;
 			fn bitand(self, rhs: Self) -> Self {
-				Self{ bits: self.bits.bitand(rhs.bits) }
+				Self { bits: self.bits.bitand(rhs.bits) }
 			}
 		}
 
@@ -202,7 +234,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 		impl ::core::ops::BitOr for #flag_name {
 			type Output = Self;
 			fn bitor(self, rhs: Self) -> Self {
-				Self{ bits: self.bits.bitor(rhs.bits) }
+				Self { bits: self.bits.bitor(rhs.bits) }
 			}
 		}
 
@@ -215,7 +247,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 		impl ::core::ops::BitXor for #flag_name {
 			type Output = Self;
 			fn bitxor(self, rhs: Self) -> Self {
-				Self{ bits: self.bits.bitxor(rhs.bits) }
+				Self { bits: self.bits.bitxor(rhs.bits) }
 			}
 		}
 
@@ -227,7 +259,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		impl From<#base_type> for #flag_name {
 			fn from(bits: #base_type) -> Self {
-				#flag_name{ bits }
+				#flag_name { bits }
 			}
 		}
 
@@ -249,7 +281,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 				let mut started = false;
 
 				#(
-					if flags.is_set(#flag_name::#idents) {
+					if flags.contains(#flag_name::#idents) {
 						if started {
 							f.write_str(" | ")?;
 						}
