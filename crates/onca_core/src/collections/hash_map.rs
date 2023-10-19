@@ -2,7 +2,7 @@ use core::{
     borrow::Borrow,
     hash::{Hash, BuildHasher},
     ops::{Index, IndexMut},
-    panic::UnwindSafe
+    panic::UnwindSafe, fmt
 };
 
 use hashbrown::TryReserveError;
@@ -343,3 +343,12 @@ impl<K, V, S> UnwindSafe for HashMap<K, V, S>
           V : UnwindSafe,
           S : UnwindSafe
 {}
+
+impl<K, V, S> fmt::Debug for HashMap<K, V, S> where
+    K: fmt::Debug,
+    V: fmt::Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
