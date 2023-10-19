@@ -1,9 +1,6 @@
 #![allow(non_snake_case)]
 
-use core::{
-    ptr::{null, null_mut},
-    ffi::{c_void, CStr}
-};
+use core::ffi::CStr;
 
 use onca_core::prelude::*;
 use onca_logging::{log_info, log_error};
@@ -55,16 +52,15 @@ impl Instance {
             .application_version(app_version.to_vulkan())
             .engine_name(unsafe { CStr::from_ptr("Onca Engine\0".as_ptr() as *const _) })
             .engine_version(Version::new(0, 1, 0).to_vulkan())
-            .api_version(Version::new(1, 3, 0).to_vulkan())
-        .build();
+            .api_version(Version::new(1, 3, 0).to_vulkan());
 
         // LAYERS & EXTENSIONS
         // -------------------------------------------------------------
         
         let (available_layers, available_extensions) = Self::enumerate_instance_layer_and_extension_properties(&entry)?;
 
-        let mut layers = DynArray::new();
-        let mut extensions = DynArray::new();
+        let mut layers = DynArray::<String>::new();
+        let mut extensions = DynArray::<String>::new();
 
         if settings.debug_enabled {
             layers.push(String::from_str("VK_LAYER_KHRONOS_validation"));
@@ -119,8 +115,6 @@ impl Instance {
         // CREATION
         // -------------------------------------------------------------
         
-        // Even if we don't have debugging enabled, the cost of creating this struct happens only once and is negligible
-        let mut debug_utils_messenger_create_info = create_debug_util_messenger_create_info(settings);
 
         let layer_cstrs = layers.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<DynArray<_>>();
         let extension_cstrs = extensions.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<DynArray<_>>();
@@ -130,7 +124,9 @@ impl Instance {
             .enabled_layer_names(unsafe { core::slice::from_raw_parts(layer_cstrs.as_ptr(), layer_cstrs.len()) })
             .enabled_extension_names(unsafe { core::slice::from_raw_parts(extension_cstrs.as_ptr(), extension_cstrs.len()) });
 
+        let mut debug_utils_messenger_create_info;
         if settings.debug_enabled {
+            debug_utils_messenger_create_info = create_debug_util_messenger_create_info(settings);
             create_info = create_info.push_next(&mut debug_utils_messenger_create_info);
         }
         let create_info = create_info.build();

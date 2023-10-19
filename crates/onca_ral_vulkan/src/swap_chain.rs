@@ -7,7 +7,7 @@ use onca_ral as ral;
 use ash::{vk, extensions::khr};
 use ral::{HandleImpl, CommandQueueHandle};
 
-use crate::{vulkan::AllocationCallbacks, utils::{ToVulkan, ToRalError, vulkan_to_texture_usage}, fence::Fence, command_queue::CommandQueue, device::{Device, SupportedExtensions}, texture::{Texture, RenderTargetView}, physical_device::PhysicalDevice};
+use crate::{vulkan::AllocationCallbacks, utils::{ToVulkan, ToRalError, vulkan_to_texture_usage}, fence::Fence, command_queue::CommandQueue, device::{Device, SupportedExtensions}, texture::Texture, physical_device::PhysicalDevice};
 
 const NUM_VULKAN_PRESENT_MODES : usize = 6;
 
@@ -90,8 +90,7 @@ impl SwapChain {
         let queue_index = desc.queue.index.get() as u32;
 
         let pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_index)
-            .build();
+            .queue_family_index(queue_index);
         let resize_command_pool = device.device.create_command_pool(&pool_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
         let (swapchain, backbuffers) = Self::create_swapchain(
@@ -127,8 +126,8 @@ impl SwapChain {
             alloc_callbacks: device.alloc_callbacks.clone(),
             present_wait_semaphore,
             acquire_fence,
-            support_incremental: device.supported_extensions.is_set(SupportedExtensions::SwapChainIncremental),
-            support_maintenance1: device.supported_extensions.is_set(SupportedExtensions::SwapChainMaintenance1),
+            support_incremental: device.supported_extensions.contains(SupportedExtensions::SwapChainIncremental),
+            support_maintenance1: device.supported_extensions.contains(SupportedExtensions::SwapChainMaintenance1),
             resize_command_pool,
         });
 
@@ -158,7 +157,7 @@ impl SwapChain {
         queue_index: u32,
         resize_command_pool: vk::CommandPool,
         queue: &CommandQueueHandle,
-    ) -> ral::Result<(vk::SwapchainKHR, DynArray<(ral::TextureInterfaceHandle, ral::RenderTargetViewInterfaceHandle)>)> {
+    ) -> ral::Result<(vk::SwapchainKHR, DynArray<ral::TextureInterfaceHandle>)> {
         // NOTE: If present queue is different from the graphics queue, we will need to specify the queue family indices and either set sharing move to concurrent, or manually change owndership
         let swap_chain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface)
@@ -172,8 +171,7 @@ impl SwapChain {
             .present_mode(present_mode)
             .pre_transform(current_transform)
             .composite_alpha(alpha_mode)
-            .clipped(true)
-            .build();
+            .clipped(true);
 
         let swapchain = ash_swapchain.create_swapchain(&swap_chain_create_info, alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
@@ -181,31 +179,14 @@ impl SwapChain {
         let mut backbuffers = DynArray::with_capacity(images.len());
         let mut initial_transition_barrier = DynArray::with_capacity(images.len());
         for image in images {
-
-            let image_view_create_info = vk::ImageViewCreateInfo::builder()
-                .image(image)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(swapchain_format)
-                .subresource_range(vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .level_count(1)
-                    .layer_count(1)
-                    .build())
-                .build();
-
-            let view = device.create_image_view(&image_view_create_info, alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
-
-            backbuffers.push((
+            backbuffers.push(
                 ral::TextureInterfaceHandle::new(Texture {
                     image,
-                    is_swap_chain_image: true
-                }),
-                ral::RenderTargetViewInterfaceHandle::new(RenderTargetView {
-                    view,
-                    device: Arc::downgrade(&device),
+                    device: Arc::downgrade(device),
                     alloc_callbacks: alloc_callbacks.clone(),
+                    is_swap_chain_image: true
                 })
-            ));
+            );
 
             initial_transition_barrier.push(vk::ImageMemoryBarrier2::builder()
                 .image(image)
@@ -248,18 +229,15 @@ impl SwapChain {
         let buffer_alloc_info = vk::CommandBufferAllocateInfo::builder()
             .command_buffer_count(1)
             .command_pool(pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .build();
+            .level(vk::CommandBufferLevel::PRIMARY);
         let buffer = device.allocate_command_buffers(&buffer_alloc_info).map_err(|err| err.to_ral_error())?[0];
     
         let begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-            .build();
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
         device.begin_command_buffer(buffer, &begin_info).map_err(|err| err.to_ral_error())?;
 
         let dependency_info = vk::DependencyInfo::builder()
-            .image_memory_barriers(barriers)
-            .build();
+            .image_memory_barriers(barriers);
         device.cmd_pipeline_barrier2(buffer, &dependency_info);
 
         device.end_command_buffer(buffer).map_err(|err| err.to_ral_error())?;
@@ -288,8 +266,7 @@ impl SwapChain {
             unsafe fn create_surface(device: &Device, desc: &ral::SwapChainDesc) -> ral::Result<(khr::Win32Surface, vk::SurfaceKHR)> {
                 let surface_create_info = vk::Win32SurfaceCreateInfoKHR::builder()
                     .hinstance(desc.app_handle.hmodule().0 as *const c_void)
-                    .hwnd(desc.window_handle.hwnd().0 as *const c_void)
-                    .build();
+                    .hwnd(desc.window_handle.hwnd().0 as *const c_void);
         
                 let instance = match device.instance.upgrade() {
                     Some(instance) => instance,
@@ -306,6 +283,7 @@ impl SwapChain {
 
 impl ral::SwapChainInterface for SwapChain {
     unsafe fn present(&self, present_mode: ral::PresentMode, back_buffer_idx: u32, queue: &ral::CommandQueueHandle, present_info: &ral::PresentInfo<'_>) -> ral::Result<()> {
+        scoped_alloc!(UseAlloc::TlsTemp);
         let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         let queue = queue.handle.as_concrete_type::<CommandQueue>().queue;
@@ -344,7 +322,6 @@ impl ral::SwapChainInterface for SwapChain {
         let present_region;
         let mut present_regions;
         if self.support_incremental {
-            scoped_alloc!(UseAlloc::TlsTemp);
             regions = DynArray::new();
 
             if self.support_incremental && let Some(rects) = present_info.update_rects {
@@ -358,25 +335,25 @@ impl ral::SwapChainInterface for SwapChain {
                 }
             }
 
-            present_region = vk::PresentRegionKHR::builder()
+            present_region = [vk::PresentRegionKHR::builder()
                 .rectangles(&regions)
-                .build();
+                .build()];
             present_regions = vk::PresentRegionsKHR::builder()
-                .regions(&[present_region])
-                .build();
+                .regions(&present_region);
 
             vk_present_info = vk_present_info.push_next(&mut present_regions);
         }
 
         let mut present_mode_info;
+        let vk_present_mode;
         if self.support_maintenance1 {
+            vk_present_mode = [present_mode.to_vulkan()];
             present_mode_info = vk::SwapchainPresentModeInfoEXT::builder()
-                .present_modes(&[present_mode.to_vulkan()])
-                .build();
+                .present_modes(&vk_present_mode);
             vk_present_info = vk_present_info.push_next(&mut present_mode_info);
         }
 
-        match self.ash_swapchain.queue_present(queue, &vk_present_info.build()) {
+        match self.ash_swapchain.queue_present(queue, &vk_present_info) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.to_ral_error()),
         }
@@ -389,8 +366,7 @@ impl ral::SwapChainInterface for SwapChain {
             .swapchain(self.swapchain.get())
             .timeout(u64::MAX)
             .fence(self.acquire_fence)
-            .device_mask(1)
-            .build();
+            .device_mask(1);
 
         let (index, _success) = self.ash_swapchain.acquire_next_image2(&acquire_info).map_err(|err| err.to_ral_error())?;
 
@@ -404,7 +380,7 @@ impl ral::SwapChainInterface for SwapChain {
         !self.support_maintenance1
     }
 
-    unsafe fn recreate_swapchain(&self, device: &ral::Device, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResultInfo> {
+    unsafe fn recreate_swapchain(&self, device: &ral::DeviceHandle, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResultInfo> {
         // Destroy old swap-chain
         self.ash_swapchain.destroy_swapchain(self.swapchain.get(), self.alloc_callbacks.get_some_vk_callbacks());
 
@@ -430,8 +406,7 @@ impl ral::SwapChainInterface for SwapChain {
         let queue_index = params.queue.index.get() as u32;
 
         let pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_index)
-            .build();
+            .queue_family_index(queue_index);
         let resize_command_pool = vk_device.device.create_command_pool(&pool_info, self.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
         let (swapchain, backbuffers) = Self::create_swapchain(
@@ -465,7 +440,7 @@ impl ral::SwapChainInterface for SwapChain {
         })
     }
 
-    unsafe fn resize(&self, device: &ral::Device, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
+    unsafe fn resize(&self, device: &ral::DeviceHandle, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
         self.recreate_swapchain(device, params).map(|info| ral::api::SwapChainResizeResultInfo {
             backbuffers: info.backbuffers,
             width: info.width,

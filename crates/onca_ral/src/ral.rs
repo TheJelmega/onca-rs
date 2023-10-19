@@ -10,7 +10,7 @@ use onca_core::{
 use onca_logging::{log_error, LogCategory, LogLevel, Logger};
 use onca_toml::{self as toml, Toml};
 
-use crate::{PhysicalDevice, Result, Error, Device, DeviceInterfaceHandle, CommandQueue, QueuePriority, QueueType, CommandQueueInterfaceHandle, handle::Handle, DeviceHandle, QueueIndex, CommandQueueHandle};
+use crate::{PhysicalDevice, Result, Error, Device, DeviceInterfaceHandle, CommandQueue, QueuePriority, QueueType, CommandQueueInterfaceHandle, handle::Handle, DeviceHandle, QueueIndex, CommandQueueHandle, GpuAllocatorImpl};
 
 const LOG_CAT : LogCategory = LogCategory::new("Graphics RAL");
 
@@ -180,11 +180,10 @@ pub trait Interface {
 }
 
 pub struct Ral {
-    dynlib   : DynLib,
+    dynlib: DynLib,
     /// Option so we can `take` it on drop, but if `Ral` exists, the option will always be `Some(_)`
-    ral      : Option<HeapPtr<dyn Interface>>,
-
-
+    ral:    Option<HeapPtr<dyn Interface>>,
+    alloc:  UseAlloc,
 }
 
 impl Ral {
@@ -206,7 +205,7 @@ impl Ral {
         };
         
         let ral = create_ral(memory_manager, logger, alloc, settings);
-        ral.map(|ral| Self { dynlib, ral: Some(ral) })
+        ral.map(|ral| Self { dynlib, ral: Some(ral), alloc })
     }
 
     fn get(&self) -> &HeapPtr<dyn Interface> {
@@ -221,7 +220,7 @@ impl Ral {
         self.get().get_physical_devices()
     }
 
-    pub fn create_device(&self, phys_dev: PhysicalDevice) -> Result<DeviceHandle> {
+    pub fn create_device(&self, phys_dev: PhysicalDevice, gpu_alloc_impl: GpuAllocatorImpl) -> Result<DeviceHandle> {
         let (handle, command_queue_handles) = unsafe { self.get().create_device(&phys_dev)? };
         let mut command_queues = MaybeUninit::<[[CommandQueueHandle; QueuePriority::COUNT]; QueueType::COUNT]>::uninit();
 
@@ -231,7 +230,7 @@ impl Ral {
             }
         }
         let command_queues = unsafe { command_queues.assume_init() };
-        Ok(Device::new(handle, phys_dev, command_queues))
+        Ok(DeviceHandle::create(handle, phys_dev, command_queues, gpu_alloc_impl, self.alloc))
     }    
 
     fn drop_impl(&mut self) {

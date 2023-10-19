@@ -22,6 +22,8 @@
 #![feature(unsize)]
 #![feature(coerce_unsized)]
 #![feature(generic_const_exprs)]
+#![feature(int_roundings)]
+#![feature(const_try)]
 
 #![debugger_visualizer(natvis_file = "libonca_ral.natvis")]
 
@@ -38,13 +40,16 @@ mod texture;
 mod descriptor;
 mod command_list;
 mod fence;
-mod renderpass;
 mod shader;
 mod pipeline;
+mod buffer;
+mod memory;
+mod sampler;
 
 pub mod api;
 
 pub use common::*;
+use onca_logging::LogCategory;
 pub use result::*;
 pub use ral::*;
 pub use handle::{Handle, WeakHandle, HandleImpl};
@@ -56,9 +61,13 @@ pub use texture::*;
 pub use descriptor::*;
 pub use command_list::*;
 pub use fence::*;
-pub use renderpass::*;
 pub use shader::*;
 pub use pipeline::*;
+pub use buffer::*;
+pub use memory::*;
+pub use sampler::*;
+
+pub const LOG_CAT : LogCategory = LogCategory::new("RAL");
 
 // https://devblogs.microsoft.com/directx/directx12agility/
 #[macro_export]

@@ -1,5 +1,5 @@
 use onca_core::prelude::*;
-use onca_logging::{log_error};
+use onca_logging::log_error;
 use onca_ral as ral;
 use ral::QueueIndex;
 
@@ -15,9 +15,9 @@ use ash::prelude::VkResult;
 use ash::vk;
 
 pub struct VulkanRal {
-    settings             : ral::Settings,
-    instance             : Arc<Instance>,
-    allocation_callbacks : AllocationCallbacks
+    settings:              ral::Settings,
+    instance:              Arc<Instance>,
+    _allocation_callbacks: AllocationCallbacks
 }
 
 impl VulkanRal {
@@ -32,7 +32,7 @@ impl VulkanRal {
         Ok(Self {
             settings,
             instance,
-            allocation_callbacks,
+            _allocation_callbacks: allocation_callbacks,
         })
     }
 }

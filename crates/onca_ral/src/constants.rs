@@ -1,4 +1,6 @@
-use onca_core::{KiB, GiB};
+use core::num::NonZeroU16;
+
+use onca_core::{KiB, MiB, GiB};
 use crate::{WorkGroupSize, Range, MemAlign, TextureSize};
 
 //==============================================================================================================================
@@ -6,135 +8,149 @@ use crate::{WorkGroupSize, Range, MemAlign, TextureSize};
 //==============================================================================================================================
 
 /// Maximum dimension of a 1D texture.
-pub const MAX_TEXTURE_SIZE_1D   : u32 = 16384;
+pub const MAX_TEXTURE_SIZE_1D:   u32 = 16384;
 /// Maximum number of layers in a 1D texture.
-pub const MAX_TEXTURE_LAYERS_1D : u32 = 2048;
+pub const MAX_TEXTURE_LAYERS_1D: u32 = 2048;
 /// Maximum dimension of a 2D texture.
-pub const MAX_TEXTURE_SIZE_2D   : u32 = 16384;
+pub const MAX_TEXTURE_SIZE_2D:   u32 = 16384;
 /// Maximum number of layers in a 2D texture.
-pub const MAX_TEXTURE_LAYERS_2D : u32 = 2048;
+pub const MAX_TEXTURE_LAYERS_2D: u32 = 2048;
 /// Maximum dimension of a 3D texture.
-pub const MAX_TEXTURE_SIZE_3D   : u32 = 2048;
+pub const MAX_TEXTURE_SIZE_3D:   u32 = 2048;
 /// Maximum dimension of a cubemap texture.
-pub const MAX_TEXTURE_SIZE_CUBE : u32 = 16384;
+pub const MAX_TEXTURE_SIZE_CUBE: u32 = 16384;
 
 //==============================================================================================================================
 // BUFFER LIMITS
 //==============================================================================================================================
 
 /// Maximum number of texels in a texel buffer
-pub const MAX_TEXEL_BUFFER_ELEMENTS : u32 = 1 << 27;
+pub const MAX_TEXEL_BUFFER_ELEMENTS: u32 = 1 << 27;
 /// Maximum size of a constant buffer (and subsequently the maximum offset into the buffer)
-pub const MAX_CONSTANT_BUFFER_SIZE  : u32 = KiB(64) as u32;
+pub const MAX_CONSTANT_BUFFER_SIZE:  u32 = KiB(64) as u32;
 /// Maximum size of a storage buffer (and subsequently the maximum offset into the buffer)
-pub const MAX_STORAGE_BUFFER_SIZE   : u32 = GiB(1) as u32;
+pub const MAX_STORAGE_BUFFER_SIZE:   u32 = GiB(1) as u32;
 
 //==============================================================================================================================
 // MEMORY LIMITS
 //==============================================================================================================================
 
-/// Minimum memory alignment for mapping memory
-pub const MIN_MEMORY_MAP_ALIGNMENT : MemAlign = MemAlign::new(64);
+/// Minimum alignment for memory allocations
+pub const MIN_ALLOCATION_ALIGN: MemAlign = MemAlign::new(KiB(64) as u64);
+/// Minimum alignment for msaa allocations
+pub const MIN_MSAA_ALLOCATION_ALIGN: MemAlign = MemAlign::new(MiB(4) as u64);
 /// Minimum memory alignment for mapping device-coherent memory
-pub const MIN_COHERENT_MEMORY_MAP_ALIGNMENT : MemAlign = MemAlign::new(128);
+pub const MIN_COHERENT_MEMORY_MAP_ALIGNMENT: MemAlign = MemAlign::new(128);
 /// Minimum memory alignment for texel buffer offsets
-pub const MIN_TEXEL_BUFFER_OFFSET_ALIGNMENT : u64 = 64;
+pub const MIN_TEXEL_BUFFER_OFFSET_ALIGNMENT: u64 = 64;
 /// Minimum memory alignment for constant buffer offsets
-pub const MIN_CONSTANT_BUFFER_OFFSET_ALIGNMENT : u64 = 64;
+pub const MIN_CONSTANT_BUFFER_OFFSET_ALIGNMENT: u64 = 64;
 /// Minimum memory alignment for storage buffer offsets
-pub const MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT : u64 = 64;
+pub const MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT: u64 = 64;
 /// Minimum memory alignment for constant texel buffer offsets
 pub const MIN_CONSTANT_TEXEL_BUFFER_OFFSET_ALIGNMENT : u64 = 64;
 /// Minimum memory alignment for storage texel buffer offsets
 pub const MIN_STORAGE_TEXEL_BUFFER_OFFSET_ALIGNMENT : u64 = 64;
 /// Maximum sparse memory address space
-pub const MAX_SPARSE_ADDRESS_SPACE_SIZE : u64 = GiB(1024) as u64 - 1;
+pub const MAX_SPARSE_ADDRESS_SPACE_SIZE: u64 = GiB(1024) as u64 - 1;
+/// Aligment of constant buffer size (size needs to be a multiple of this value)
+pub const CONSTANT_BUFFER_SIZE_ALIGN: MemAlign = MemAlign::new(256);
 /// Optimal texture/buffer copy offset alignment
-pub const OPTIMAL_COPY_OFFSET_ALIGNMENT : MemAlign = MemAlign::new(512);
+pub const OPTIMAL_COPY_OFFSET_ALIGNMENT: MemAlign = MemAlign::new(512);
 /// Optimal texture/buffer copy row pitch alignment
-pub const OPTIMAL_COPY_ROW_PITCH_ALIGNMENT : MemAlign = MemAlign::new(256);
+pub const OPTIMAL_COPY_ROW_PITCH_ALIGNMENT: MemAlign = MemAlign::new(256);
 
 //==============================================================================================================================
 // PER STAGE LIMITS
 //==============================================================================================================================
 
 /// Maximum constant buffers per pipeline stage.
-pub const MAX_PER_STAGE_SAMPLERS           : u32 = 1_048_576;
+pub const MAX_PER_STAGE_SAMPLERS:           u32 = 1_048_576;
 /// Maximum constant buffers per pipeline stage.
-pub const MAX_PER_STAGE_CONSTANT_BUFFERS   : u32 = 1_048_576;
+pub const MAX_PER_STAGE_CONSTANT_BUFFERS:   u32 = 1_048_576;
 /// Maximum storage buffers per pipeline stage.
-pub const MAX_PER_STAGE_STORAGE_BUFFERS    : u32 = 1_048_576;
+pub const MAX_PER_STAGE_STORAGE_BUFFERS:    u32 = 1_048_576;
 /// Maximum sampled textures per pipeline stage.
-pub const MAX_PER_STAGE_SAMPLED_TEXTURES   : u32 = 1_048_576;
+pub const MAX_PER_STAGE_SAMPLED_TEXTURES:   u32 = 1_048_576;
 /// Maximum storage textures per pipeline stage.
-pub const MAX_PER_STAGE_STORAGE_TEXTURES   : u32 = 1_048_576;
+pub const MAX_PER_STAGE_STORAGE_TEXTURES:   u32 = 1_048_576;
 /// Maximum storage textures per pipeline stage. (Subpasses are not supported, so this value is unused)
-pub const MAX_PER_STAGE_INPUT_ATTACHMENTS  : u32 = 7;
+pub const MAX_PER_STAGE_INPUT_ATTACHMENTS:  u32 = 7;
 /// Maximum inline descriptors per pipeline stage.
-pub const MAX_PER_STAGE_INLINE_DESCRIPTORS : u32 = 4;
+pub const MAX_PER_STAGE_INLINE_DESCRIPTORS: u32 = 4;
 /// Maximum resources that can be bound to a pipeline stage.
-pub const MAX_PER_STAGE_RESOURCES          : u32 = 8_388_606;
+pub const MAX_PER_STAGE_RESOURCES:          u32 = 8_388_606;
+/// Maximum number of elements in a bounded descriptor range
+/// 
+/// Value is arbitrarily chosen, so can be increased in the future
+pub const MAX_DESCRIPTOR_ARRAY_SIZE:        u32 = 16;
+/// Maximum number of elements in an unbounded bindless descriptor range
+/// 
+/// Value is arbitrarily chosen, so can be increased in the future
+pub const MAX_BINDLESS_ARRAY_SIZE:          u32 = 1024;
 
 //==============================================================================================================================
 // PIPELINE LIMITS
 //==============================================================================================================================
 
 /// Maximum samplers that can be bound to a single pipeline
-pub const MAX_PIPELINE_DESCRIPTOR_SAMPLERS                 : u32 = 2048;
+pub const MAX_PIPELINE_DESCRIPTOR_SAMPLERS:                 u32 = 2048;
 /// Maximum constant buffers that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRIPTOR_CONSTANT_BUFFERS         : u32 = 1_048_576;
+pub const MAX_PIPELINE_DESCRIPTOR_CONSTANT_BUFFERS:         u32 = 1_048_576;
 /// Maximum dynamic constant buffers that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRITPOR_DYNAMIC_CONSTANT_BUFFERS : u32 = 8;
+pub const MAX_PIPELINE_DESCRITPOR_DYNAMIC_CONSTANT_BUFFERS: u32 = 8;
 /// Maximum storage buffers that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRIPTOR_STORAGE_BUFFERS          : u32 = 1_048_576;
+pub const MAX_PIPELINE_DESCRIPTOR_STORAGE_BUFFERS:          u32 = 1_048_576;
 /// Maximum dynamic storage buffers that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRITPOR_DYNAMIC_STORAGE_BUFFERS  : u32 = 8;
+pub const MAX_PIPELINE_DESCRITPOR_DYNAMIC_STORAGE_BUFFERS:  u32 = 8;
 /// Maximum sampled textures that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRIPTOR_SAMPLED_TEXTURES         : u32 = 1_048_576;
+pub const MAX_PIPELINE_DESCRIPTOR_SAMPLED_TEXTURES:         u32 = 1_048_576;
 /// Maximum storage textures that can be bound to a single pipeline.
-pub const MAX_PIPELINE_DESCRIPTOR_STORAGE_TEXTURES         : u32 = 1_048_576;
+pub const MAX_PIPELINE_DESCRIPTOR_STORAGE_TEXTURES:         u32 = 1_048_576;
 /// Maximum input attachments that can be bound to a single pipeline. (Subpasses are not supported, so this value is unused)
-pub const MAX_PIPELINE_DESCRIPTOR_INPUT_ATTACHMENTS        : u32 = 1_048_576;
+pub const MAX_PIPELINE_DESCRIPTOR_INPUT_ATTACHMENTS:        u32 = 1_048_576;
 /// Maximum size of the memory block backing an inline descriptor.
-pub const MAX_PIPELINE_INLINE_DESCRIPTOR_BLOCK_SIZE        : u32 = 256;
+pub const MAX_PIPELINE_INLINE_DESCRIPTOR_BLOCK_SIZE:        u32 = 256;
 /// Maximum total block size of all memory blocks in descriptors (with the current block size and inline descriptor limits, this is not reachable).
-pub const MAX_PIPELINE_INLINE_DESCRIPTOR_TOTAL_BLOCK_SIZE  : u32 = 3584;
-/// Maximum number of inline descriptors that can be bound to a single pipeline.
-pub const MAX_PIPELINE_INLINE_DESCRIPTORS                  : u32 = 4;
+pub const MAX_PIPELINE_INLINE_DESCRIPTOR_TOTAL_BLOCK_SIZE : u32 = 3584;
+/// Maximum number of inline descriptors that can be boun to a single pipeline.
+pub const MAX_PIPELINE_INLINE_DESCRIPTORS:                   u32 = 4;
 /// Maximum number of total descriptors that can be bound to a single pipeline.
-pub const MAX_PIPELINE_BOUND_DESCRIPTORS                   : u32 = 32;
+pub const MAX_PIPELINE_BOUND_DESCRIPTORS:                   u32 = 32;
 /// Maximu size of push constants, in bytes
-pub const MAX_PIPELINE_PUSH_CONSTANT_SIZE                  : u32 = 128;
+pub const MAX_PIPELINE_PUSH_CONSTANT_SIZE:                  u32 = 128;
+/// Minimum descriptor table offset alignment (in descriptors)
+pub const MIN_DESCRIPTOR_TABLE_OFFSET_ALIGNMENT:            u32 = 4;
 
 //==============================================================================================================================
 // GENERAL SHADER LIMITS
 //==============================================================================================================================
 
 /// Texel sample offset range
-pub const SHADER_TEXEL_OFFSET_RANGE : Range<i32> = Range { min: -8, max: 7 };
+pub const SHADER_TEXEL_OFFSET_RANGE:         Range<i32> = Range { min: -8, max: 7 };
 /// Texel gather offset range
-pub const SHADER_TEXEL_GATHER_OFFSET_RANGE : Range<i32> = Range { min: -32, max: 31 };
+pub const SHADER_TEXEL_GATHER_OFFSET_RANGE:  Range<i32> = Range { min: -32, max: 31 };
 /// Interpolation offset range
-pub const SHADER_INTERPOLATION_OFFSET_RANGE : Range<f32> = Range { min: -0.5, max: 0.4375 };
+pub const SHADER_INTERPOLATION_OFFSET_RANGE: Range<f32> = Range { min: -0.5, max: 0.4375 };
 /// Interpolation offset precision
-pub const SHADER_INTERPOLATION_PRECISION : u8 = 4;
+pub const SHADER_INTERPOLATION_PRECISION:    u8 = 4;
 
 //==============================================================================================================================
 // VERTEX SHADER LIMITS
 //==============================================================================================================================
 
 /// Maximum number of vertex input attributes.
-pub const MAX_VERTEX_INPUT_ATTRIBUTES       : u32 = 32;
-/// Maximum number of vertex input buffers bound.
-pub const MAX_VERTEX_INPUT_BUFFERS          : u32 = 32;
+pub const MAX_VERTEX_INPUT_ATTRIBUTES:                 u32 = 32;
+/// Maximum number of vertex input buffers bund.
+pub const MAX_VERTEX_INPUT_BUFFERS:                    u32 = 32;
 /// Maximum vertex input attribute offset.
-pub const MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET : u32 = 2047;
+pub const MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET:           u32 = 2047;
 /// Maximum vertex input attribute stride.
-pub const MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE : u32 = 2048;
+pub const MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE:           u32 = 2048;
 /// Maximum number of components that can be output by a vertex shader. Each element is expected to pad until the next boundary of 4 components, so this ends up being 32 elements.
-pub const MAX_VERTEX_OUTPUT_COMPONENTS      : u32 = 128;
+pub const MAX_VERTEX_OUTPUT_COMPONENTS:                u32 = 128;
 /// Maximum per-instance step rate for vertex attributes
-pub const MAX_VERTEX_ATTRIBUTE_PER_INSTANCE_STEP_RATE : u32 = 268_435_455;
+pub const MAX_VERTEX_ATTRIBUTE_PER_INSTANCE_STEP_RATE: u32 = 268_435_455;
 
 //==============================================================================================================================
 // PIXEL SHADER LIMITS
@@ -165,7 +181,11 @@ pub const MAX_COMPUTE_WORKGROUP_SIZE : WorkGroupSize = WorkGroupSize::new(1024, 
 //==============================================================================================================================
 
 /// Maximum frame buffer size
-pub const MAX_FRAME_BUFFER_SIZE : TextureSize = TextureSize::new_2d(16384, 16384, 2048);
+pub const MAX_FRAME_BUFFER_SIZE : TextureSize = unsafe { TextureSize::Size2D {
+    width: NonZeroU16::new_unchecked(16384),
+    height: NonZeroU16::new_unchecked(16384),
+    layers: NonZeroU16::new_unchecked(2048)
+} };
 
 //==============================================================================================================================
 // VIEWPORT LIMITS
@@ -313,24 +333,24 @@ pub const MAX_SUBPASS_COLOR_ATTACHMENTS : u32 = 8;
 //==============================================================================================================================
 
 /// Maximum number of samplers that can exists at any time
-pub const MAX_SAMPLER_ALLOCATION_COUNT : u32 = 4000;
+pub const MAX_SAMPLER_ALLOCATION_COUNT: u32 = 4000;
 /// Maximum draw indexed index
-pub const MAX_DRAW_INDEXED_INDEX       : u32 = u32::MAX;
+pub const MAX_DRAW_INDEXED_INDEX:       u32 = u32::MAX;
 /// Maximum draw indirect count
-pub const MAX_DRAW_INDIRECT_COUNT      : u32 = u32::MAX;
+pub const MAX_DRAW_INDIRECT_COUNT:      u32 = u32::MAX;
 /// Sampler lod bias range
-pub const SAMPLER_LOD_BIAS_RANGE       : Range<f32> = Range{ min: -15.00, max: 15.00 };
+pub const SAMPLER_LOD_BIAS_RANGE:       Range<f32> = Range{ min: -15.00, max: 15.00 };
 /// Maximum sampler anisotropy
-pub const MAX_SAMPLER_ANISOTROPY       : f32 = 16.0;
+pub const MAX_SAMPLER_ANISOTROPY:       u8 = 16;
 /// Maximum number of clip, cull, or combined clip-cull distances
-pub const MAX_CLIP_OR_CULL_DISTANCES   : u32 = 8;
+pub const MAX_CLIP_OR_CULL_DISTANCES:   u32 = 8;
 /// Minimum sample count for all resources
-pub const MIN_SAMPLE_COUNT : u8 = 8;
+pub const MIN_SAMPLE_COUNT:             u8 = 8;
 /// Maximum amount of render target view that can exist at any time
 /// 
 /// This value is arbitrarily chosen.
-pub const MAX_RENDER_TARGET_VIEWS : u16 = 2048;
+pub const MAX_RENDER_TARGET_VIEWS: u16 = 2048;
 /// Maximum amount of depth stencil views that can exist at any time
 /// 
 /// This value is arbitrarily chosen.
-pub const MAX_DEPTH_STENCIL_VIEWS : u16 = 256;
+pub const MAX_DEPTH_STENCIL_VIEWS: u16 = 256;

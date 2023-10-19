@@ -70,6 +70,21 @@ pub trait HandleImpl {
     unsafe fn interface(&self) -> &Self::InterfaceHandle;
 }
 
+macro_rules! create_ral_handle {
+    ($iden:ident, $ty:ty, $iface:ident) => {
+        pub type $iden = Handle<$ty>;
+
+        impl HandleImpl for $ty {
+            type InterfaceHandle = $iface;
+
+            unsafe fn interface(&self) -> &Self::InterfaceHandle {
+                &self.handle
+            }
+        }
+    };
+}
+pub(crate) use create_ral_handle;
+
 /// RAL handle
 pub struct Handle<T: HandleImpl> {
     arc : Arc<T>
@@ -93,13 +108,13 @@ impl<T: HandleImpl> Handle<T> {
         WeakHandle::from_weak(Arc::downgrade(&handle.arc))
     }
 
-    /// Check if 2 `Arc`s contain the same pointer
+    /// Check if 2 `Handle`s contain the same pointer
     #[inline]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
         Arc::ptr_eq(&this.arc, &other.arc)
     }
 
-    /// Check if an `Arc` and a `AWeak` contain the same pointer
+    /// Check if an `Handle` and a `WeakHandle` contain the same pointer
     pub fn weak_ptr_eq(this: &Self, weak: &WeakHandle<T>) -> bool {
         Arc::weak_ptr_eq(&this.arc, &weak.weak)
     }
@@ -162,6 +177,13 @@ impl<T: HandleImpl> WeakHandle<T> {
     pub fn strong_count(this: &WeakHandle<T>) -> usize {
         AWeak::strong_count(&this.weak)
     }
+
+    /// Check if 2 `WeakHandle`s contain the same pointer
+    #[inline]
+    pub fn ptr_eq(this: &Self, other: &Self) -> bool {
+        AWeak::ptr_eq(&this.weak, &other.weak)
+    }
+
 }
 
 // Derive does not seem to work correctly for Clone

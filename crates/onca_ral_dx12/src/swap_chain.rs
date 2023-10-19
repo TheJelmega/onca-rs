@@ -24,18 +24,7 @@ impl SwapChain {
     pub unsafe fn new(device: &Device, phys_dev: &ral::PhysicalDevice, create_info: &ral::SwapChainDesc) -> ral::Result<(ral::SwapChainInterfaceHandle, ral::api::SwapChainResultInfo)> {
         let dx_phys_dev = phys_dev.handle.as_concrete_type::<PhysicalDevice>();
 
-        let mut swapchain_format = None;
-        for format in &create_info.formats {
-            if phys_dev.format_props[*format as usize].optimal_tiling_support.is_set(ral::FormatTextureSupportFlags::Display) {
-                swapchain_format = Some(*format);
-                break;
-            }
-        }
-        let format = match swapchain_format {
-            Some(format) => format,
-            None => return Err(ral::Error::UnsupportedSwapchainFormats(create_info.formats.clone())),
-        };
-
+        let format = create_info.formats[0];
         let desc = DXGI_SWAP_CHAIN_DESC1 {
             Width: create_info.width as u32,
             Height: create_info.height as u32,
@@ -61,19 +50,9 @@ impl SwapChain {
 
         for i in 0..create_info.num_backbuffers as u32 {
             let resource = swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
-            
-            let descriptor = device.rtv_heap.allocate()?;
-            device.device.CreateRenderTargetView(&resource, None, descriptor);
-
-            backbuffers.push((
-                ral::TextureInterfaceHandle::new(Texture {
-                    resource
-                }),
-                ral::RenderTargetViewInterfaceHandle::new(RenderTargetView {
-                    cpu_descriptor: descriptor,
-                    rtv_heap: device.rtv_heap.clone(),
-                })
-            ));
+            backbuffers.push(ral::TextureInterfaceHandle::new(Texture {
+                resource
+            }));
         }
 
         // Always support copy src an ddst
@@ -193,11 +172,11 @@ impl ral::SwapChainInterface for SwapChain {
         false
     }
 
-    unsafe fn recreate_swapchain(&self, _device: &ral::Device, _params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResultInfo> {
+    unsafe fn recreate_swapchain(&self, _device: &ral::DeviceHandle, _params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResultInfo> {
         Err(ral::Error::NotImplemented("DX12 doesn't need any recreation of a swapchain, therefore this function should never be able to be called"))
     }
     
-    unsafe fn resize(&self, device: &ral::Device, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
+    unsafe fn resize(&self, device: &ral::DeviceHandle, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
         let mut dynamic = self.dynamic.lock();
         // Set wait value for all backbuffers
         let cur_fence_value = *dynamic.frame_values.iter().reduce(|a, b| a.max(b)).unwrap();
@@ -212,19 +191,9 @@ impl ral::SwapChainInterface for SwapChain {
         let mut backbuffers = DynArray::with_capacity(params.num_backbuffers as usize);
         for i in 0..params.num_backbuffers as u32 {
             let resource = self.swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
-            
-            let descriptor = dx_device.rtv_heap.allocate()?;
-            dx_device.device.CreateRenderTargetView(&resource, None, descriptor);
-
-            backbuffers.push((
-                ral::TextureInterfaceHandle::new(Texture {
-                    resource
-                }),
-                ral::RenderTargetViewInterfaceHandle::new(RenderTargetView {
-                    cpu_descriptor: descriptor,
-                    rtv_heap: dx_device.rtv_heap.clone(),
-                })
-            ));
+            backbuffers.push(ral::TextureInterfaceHandle::new(Texture {
+                resource
+            }));
         }
 
         Ok(ral::api::SwapChainResizeResultInfo {

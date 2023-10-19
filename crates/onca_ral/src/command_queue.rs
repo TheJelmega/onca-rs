@@ -1,7 +1,7 @@
 use core::fmt;
 use onca_core::prelude::*;
 
-use crate::{handle::InterfaceHandle, Handle, Result, CommandList, Error, CommandListSubmitInfo, api, HandleImpl, CommandListState};
+use crate::{handle::{InterfaceHandle, create_ral_handle}, Handle, Result, CommandList, Error, CommandListSubmitInfo, api, HandleImpl, CommandListState};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct QueueIndex(u8);
@@ -36,10 +36,9 @@ pub struct CommandQueue {
     pub handle: CommandQueueInterfaceHandle,
     pub index:  QueueIndex,
 }
+create_ral_handle!(CommandQueueHandle, CommandQueue, CommandQueueInterfaceHandle);
 
-pub type CommandQueueHandle = Handle<CommandQueue>;
-
-impl CommandQueue {
+impl CommandQueueHandle {
     /// Flush all work on this queue
     /// 
     /// Prefer synchronization using fences
@@ -98,12 +97,4 @@ fn submit_info_to_batch_and_validate<'a, T: AsRef<Handle<CommandList>>>(submit_i
         signal_fences: &submit_info.signal_fences.unwrap_or(&[]),
         command_lists,
     })
-}
-
-impl HandleImpl for CommandQueue {
-    type InterfaceHandle = CommandQueueInterfaceHandle;
-
-    unsafe fn interface(&self) -> &Self::InterfaceHandle {
-        &self.handle
-    }
 }

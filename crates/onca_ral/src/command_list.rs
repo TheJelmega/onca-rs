@@ -58,7 +58,10 @@
 
 use core::sync::atomic::{AtomicBool, self};
 
-use onca_core::{prelude::*, sync::{RwLock, Mutex}, collections::{BitSet, StaticDynArray}};
+use onca_core::{
+    prelude::*,
+    sync::{RwLock, Mutex}
+};
 use onca_core_macros::flags;
 
 use crate::{
@@ -84,22 +87,23 @@ pub type CommandPoolInterfaceHandle = InterfaceHandle<dyn CommandPoolInterface>;
 /// Generic command pool implementation, wrappers only allow certain functionality to be called
 struct CommandPool {
     handle:       CommandPoolInterfaceHandle,
+    pool_type:    CommandListType,
     flags:        CommandPoolFlags,
     queue_idx:    QueueIndex,
     lists:        RwLock<DynArray<Handle<CommandList>>>,
     is_recording: AtomicBool,
-    weak:         WeakHandle<CommandPool>,
 }
+type CommandPoolHandle = Handle<CommandPool>;
 
-impl CommandPool {
-    pub(crate) fn new(handle: CommandPoolInterfaceHandle, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Handle<Self> {
-        Handle::new_cyclic(|weak| Self {
+impl CommandPoolHandle {
+    pub(crate) fn create(handle: CommandPoolInterfaceHandle, pool_type: CommandListType, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Self {
+        Handle::new(CommandPool {
             handle,
+            pool_type,
             flags,
             queue_idx,
             lists: RwLock::new(DynArray::new()),
-            is_recording: AtomicBool::new(false),
-            weak
+            is_recording: AtomicBool::new(false)
         })
     }
 
@@ -122,12 +126,12 @@ impl CommandPool {
     /// # Error
     /// 
     /// In additional to API errors, this call will fail if the command pool is not a graphics command pool
-    pub fn allocate(&self) -> Result<Handle<CommandList>> {
-        let handle = unsafe { self.handle.allocate(CommandListType::Graphics)? };
+    pub fn allocate(&self) -> Result<CommandListHandle> {
+        let handle = unsafe { self.handle.allocate(self.pool_type)? };
         Ok(Handle::new(CommandList{
             handle,
             queue_idx: self.queue_idx,
-            pool: self.weak.clone(),
+            pool: Handle::downgrade(self),
             dynamic: RwLock::new(CommandListDynamic::new()),
             validation: Mutex::new(CommandListValidation::new())
         }))
@@ -171,7 +175,7 @@ pub type GraphicsCommandPoolHandle = GraphicsCommandPool;
 
 impl GraphicsCommandPool {
     pub(crate) fn new(handle: CommandPoolInterfaceHandle, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Self {
-        Self { handle: CommandPool::new(handle, flags, queue_idx) }
+        Self { handle: CommandPoolHandle::create(handle, CommandListType::Graphics, flags, queue_idx) }
     }
 
     /// Reset the command pool
@@ -206,7 +210,7 @@ pub type ComputeCommandPoolHandle = ComputeCommandPool;
 
 impl ComputeCommandPool {
     pub(crate) fn new(handle: CommandPoolInterfaceHandle, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Self {
-        Self { handle: CommandPool::new(handle, flags, queue_idx) }
+        Self { handle: CommandPoolHandle::create(handle, CommandListType::Compute, flags, queue_idx) }
     }
 
     /// Reset the command pool
@@ -241,7 +245,7 @@ pub type CopyCommandPoolHandle = CopyCommandPool;
 
 impl CopyCommandPool {
     pub(crate) fn new(handle: CommandPoolInterfaceHandle, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Self {
-        Self { handle: CommandPool::new(handle, flags, queue_idx) }
+        Self { handle: CommandPoolHandle::create(handle, CommandListType::Copy, flags, queue_idx) }
     }
 
     /// Reset the command pool
@@ -276,7 +280,7 @@ pub type BundleCommandPoolHandle = BundleCommandPool;
 
 impl BundleCommandPool {
     pub(crate) fn new(handle: CommandPoolInterfaceHandle, flags: CommandPoolFlags, queue_idx: QueueIndex) -> Self {
-        Self { handle: CommandPool::new(handle, flags, queue_idx) }
+        Self { handle: CommandPoolHandle::create(handle, CommandListType::Bundle, flags, queue_idx) }
     }
 
     /// Reset the command pool
@@ -306,7 +310,7 @@ pub trait CommandListInterface {
 
     /// Resets the command list, returning an error if it failed
     unsafe fn reset(&self) -> Result<()>;
-    /// Begins command list recording, returns an erro if it fails
+    /// Begins command list recording, returns an error if it fails
     unsafe fn begin(&self, flags: CommandListBeginFlags) -> Result<()>;
     /// Resets the command list and begins recording, returning an error if it failed
     unsafe fn reset_and_begin(&self, flags: CommandListBeginFlags) -> Result<()>;
@@ -314,32 +318,61 @@ pub trait CommandListInterface {
     unsafe fn close(&self) -> Result<()>; 
 
     //==============================================================
-
+    // Copy functionality
+    
     /// Inserts a memory barrier
     unsafe fn barrier(&self, barriers: &[Barrier], cur_queue_idx: QueueIndex);
     
-    // Copy functionality
+    /// Copy regionds of data between buffers
+    unsafe fn copy_buffer_regions(&self, src: &BufferHandle, dst: &BufferHandle, regions: &[BufferCopyRegion]);
+    /// Copy the entire content of a buffer into another buffer
+    unsafe fn copy_buffer(&self, src: &BufferHandle, dst: &BufferHandle);
+    /// Copy regionds of data between textures
+    unsafe fn copy_texture_regions(&self, src: &TextureHandle, dst: &TextureHandle, regions: &[TextureCopyRegion]);
+    /// Copy the entire content of a texture into another texture
+    unsafe fn copy_texture(&self, src: &TextureHandle, dst: &TextureHandle);
+    /// Copy regions from a buffer to a texture
+    unsafe fn copy_buffer_to_texture(&self, src: &BufferHandle, dst: &TextureHandle, regions: &[BufferTextureRegion]);
+    /// Copy regions from atexture to a  buffer
+    unsafe fn copy_texture_to_buffer(&self, src: &TextureHandle, dst: &BufferHandle, regions: &[BufferTextureRegion]);
 
+    //==============================================================
+    // General functionality
+
+    /// Bind resourece and sampler descriptor heaps
+    unsafe fn bind_descriptor_heaps(&self, resource_heap: Option<&DescriptorHeapHandle>, sampler_heap: Option<&DescriptorHeapHandle>);
+    
+    //==============================================================
     // Compute functionality
-
+    
     /// Bind a compute pipeline layout
     unsafe fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle);
     /// Bind a compute pipeline
     unsafe fn bind_compute_pipeline(&self, pipeline: &PipelineHandle);
 
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    unsafe fn set_compute_descriptor_table(&self, index: u32, descriptor: GpuDescriptor, layout: &PipelineLayoutHandle);
+
+    //==============================================================
     // Graphics functionality
 
-    /// Begins rendering (bind render targets, etc), and returns 3 values:
-    /// - Bitset with RTs that need to be resolved manually
-    /// - Bool if the depth needs to be resolved manually
-    /// - Bool if the stencil needs to be resolved manually
-    unsafe fn begin_rendering(&self, rendering_info: &RenderingInfo) -> (BitSet<8>, bool, bool);
-    /// Ends rendering and manually resolves RTs and/or depth/stencil if needed
-    unsafe fn end_rendering(&self, rt_resolve: Option<&[EndRenderingRenderTargetResolveInfo]>, depth_stencil_resolve: Option<&EndRenderingDepthStencilResolveInfo>);
     /// Bind a graphics pipeline layout
     unsafe fn bind_graphics_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle);
     /// Bind a graphics pipeline
     unsafe fn bind_graphics_pipeline(&self, pipeline: &PipelineHandle);
+
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    unsafe fn set_graphics_descriptor_table(&self, index: u32, descriptor: GpuDescriptor, layout: &PipelineLayoutHandle);
+
+    /// Bind a vertex buffer
+    unsafe fn bind_vertex_buffer(&self, view: VertexBufferView);
+    /// Bind an index buffer
+    unsafe fn bind_index_buffer(&self, view: IndexBufferView);
+
+    /// Begins rendering (bind render targets, etc)
+    unsafe fn begin_rendering(&self, rendering_info: &RenderingInfo);
+    /// Ends rendering and manually resolves RTs and/or depth/stencil if needed
+    unsafe fn end_rendering(&self);
     /// Set the viewport(s)
     unsafe fn set_viewports(&self, viewports: &[Viewport]);
     /// Set the scissor(s)
@@ -347,8 +380,10 @@ pub trait CommandListInterface {
     /// Set the primitive topology
     unsafe fn set_primitive_topology(&self, topology: PrimitiveTopology);
 
-    /// Draw without index
-    unsafe fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32);
+    /// Draw without indices
+    unsafe fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32);  
+    /// Draw with indices
+    unsafe fn draw_indexed_instanced(&self, index_count: u32, instance_count: u32, start_index: u32, vertex_offset: i32, start_instance: u32);
 }
 
 pub type CommandListInterfaceHandle = InterfaceHandle<dyn CommandListInterface>;
@@ -392,17 +427,16 @@ pub(crate) enum CommandListPipelineStateFlags {
     Viewport,
     Scissor,
     Topology,
+    VertexBuffer,
+    IndexBuffer,
 }
 
 /// Dynamic state
 pub struct CommandListDynamic {
-    
-
-    pub(crate) pipeline_layout:       Option<PipelineLayoutHandle>,
-    pub(crate) pipeline:              Option<PipelineHandle>,
-
-    pub(crate) end_render_rt_resolve: StaticDynArray<EndRenderingRenderTargetResolveInfo, 8>,
-    pub(crate) end_render_ds_resolve: Option<EndRenderingDepthStencilResolveInfo>,
+    pub(crate) pipeline_layout:          Option<PipelineLayoutHandle>,
+    pub(crate) pipeline:                 Option<PipelineHandle>,
+    pub(crate) resource_descriptor_heap: Option<DescriptorHeapHandle>,
+    pub(crate) sampler_descriptor_heap:  Option<DescriptorHeapHandle>,
 }
 
 impl CommandListDynamic {
@@ -410,8 +444,8 @@ impl CommandListDynamic {
         Self {
             pipeline_layout: None,
             pipeline: None,
-            end_render_rt_resolve: StaticDynArray::new(),
-            end_render_ds_resolve: None,
+            resource_descriptor_heap: None,
+            sampler_descriptor_heap: None,
         }
     }
 
@@ -446,6 +480,7 @@ impl CommandListValidation {
     }
 }
 
+// TODO: replace locking with requirement that once recording has started, only that thread can use the command list until it has been closed
 /// Generic command list implementation, this is an opaque type to the user, wrappers only allow certain functionality to be called
 pub struct CommandList {
                handle:    CommandListInterfaceHandle,
@@ -455,16 +490,36 @@ pub struct CommandList {
     #[cfg(feature = "validation")]
     pub(crate) validation: Mutex<CommandListValidation>,
 }
+type CommandListHandle = Handle<CommandList>;
+
+macro_rules! validate_parameter_recording {
+    ($validation:expr, $true_condition:expr, $($args:tt)*) => {
+        if !$true_condition {
+            $validation.set_error(Error::InvalidParameter(onca_format!($($args)*)));
+            return;
+        }
+    };
+}
+
+macro_rules! validate_during_recording {
+    ($validation:expr, $validator:expr) => {
+        if let Err(err) = $validator {
+            $validation.set_error(err);
+            return;
+        }
+    };
+}
 
 // TODO: add threading guard
-impl CommandList {
+impl CommandListHandle {
     /// Reset the command list
-    // `self.handle.reset` has 2 individual paths, to make sure that 
+    /// 
+    /// Resetting the command list does not reset the underlying memory, for this, call reset on the command pool used to create the command list
     fn reset(&self) -> Result<()> {
         #[cfg(feature = "validation")]
         {
             let pool = WeakHandle::upgrade(&self.pool).ok_or(Error::CommandList("Trying to reset command list when the pool has been deleted"))?;
-            if !pool.flags.is_set(CommandPoolFlags::ResetList) {
+            if !pool.flags.contains(CommandPoolFlags::ResetList) {
                 return Err(Error::CommandList("Cannot reset command list, owning pool does not allow individual command lists to be reset"));
             }
             *self.validation.lock() = CommandListValidation::new();
@@ -504,7 +559,7 @@ impl CommandList {
         #[cfg(feature = "validation")]
         {
             let pool = WeakHandle::upgrade(&self.pool).ok_or(Error::CommandList("Trying to reset command list when the pool has been deleted"))?;
-            if !pool.flags.is_set(CommandPoolFlags::ResetList) {
+            if !pool.flags.contains(CommandPoolFlags::ResetList) {
                 return Err(Error::CommandList("Cannot reset command list, owning pool does not allow individual command lists to be reset"));
             }
 
@@ -555,6 +610,8 @@ impl CommandList {
         }
     }
 
+    //==============================================================================================================================
+
     /// Insert barriers into the command list
     fn barrier(&self, barriers: &[Barrier]) {
         #[cfg(feature = "validation")]
@@ -564,14 +621,158 @@ impl CommandList {
                 return;
             }
         }
-        unsafe { self.handle.barrier(barriers, self.queue_idx) }
+        unsafe { self.handle.barrier(barriers, self.queue_idx); }
     }
 
+    /// Copy a region between 2 buffers
+    pub fn copy_buffer_region(&self, src: &BufferHandle, dst: &BufferHandle, region: BufferCopyRegion) {
+        scoped_alloc!(UseAlloc::TlsTemp);
+        let regions = dynarr![region];
+        self.copy_buffer_regions(src, dst, &regions);
+    }
+
+    /// Copy mutliple regions between 2 buffers
+    pub fn copy_buffer_regions(&self, src: &BufferHandle, dst: &BufferHandle, regions: &[BufferCopyRegion]) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, src.usages().contains(BufferUsage::CopySrc), "Buffer copy source must have the `BufferUsage::CopySrc` usage");
+            validate_parameter_recording!(validation, dst.usages().contains(BufferUsage::CopyDst), "Buffer copy destination must have the `BufferUsage::CopyDst` usage");
+
+            let src_size = src.size();
+            let dst_size = dst.size();
+            for (idx, region) in regions.iter().enumerate() {
+                validate_parameter_recording!(validation, region.size != 0, "Buffer copy region {idx} size cannot be 0");
+                validate_parameter_recording!(validation, region.src_offset < src_size, "Buffer copy region {idx} source offset out of range: {}, buffer size: {src_size}", region.src_offset);
+                validate_parameter_recording!(validation, region.src_offset + region.size <= src_size, "Buffer copy region {idx} size will go out of range in the source buffer, offset + size: {}, buffer size: {src_size}", region.src_offset + region.size);
+                validate_parameter_recording!(validation, region.dst_offset < dst_size, "Buffer copy region {idx} destination offset out of range: {}, buffer size: {src_size}", region.src_offset);
+                validate_parameter_recording!(validation, region.dst_offset + region.size <= dst_size, "Buffer copy region {idx} size will go out of range in the destination buffer, offset + size: {}, buffer size: {src_size}", region.src_offset + region.size);
+            }
+        }
+        unsafe { self.handle.copy_buffer_regions(src, dst, regions); }
+    }
+
+    /// Copy the entire content of a buffer to another buffer
+    pub fn copy_buffer(&self, src: &BufferHandle, dst: &BufferHandle) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, src.usages().contains(BufferUsage::CopySrc), "Buffer copy source must have the `BufferUsage::CopySrc` usage");
+            validate_parameter_recording!(validation, dst.usages().contains(BufferUsage::CopyDst), "Buffer copy destination must have the `BufferUsage::CopyDst` usage");
+            
+            let src_size = src.size();
+            let dst_size = dst.size();
+            validate_parameter_recording!(validation, src_size == dst_size, "Buffer size must match to copy the entire buffer, src size: {src_size}, dst size: {dst_size}");
+        }
+        unsafe { self.handle.copy_buffer(src, dst); }
+    }
+
+    /// Copy a region between 2 textures
+    /// 
+    /// The source texture needs to be in the `CopySrc` layout and the desination texture needs to be in the `CopyDst` layout
+    pub fn copy_texture_region(&self, src: &TextureHandle, dst: &TextureHandle, region: TextureCopyRegion) {
+        scoped_alloc!(UseAlloc::TlsTemp);
+        let regions = dynarr![region];
+        self.copy_texture_regions(src, dst, &regions);
+    }
+    
+    /// Copy multiple regions between 2 textures
+    pub fn copy_texture_regions(&self, src: &TextureHandle, dst: &TextureHandle, regions: &[TextureCopyRegion]) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+            
+            validate_parameter_recording!(validation, src.usages().contains(TextureUsage::CopySrc), "Texture copy source must have the `TextureUsage::CopySrc` usage");
+            validate_parameter_recording!(validation, dst.usages().contains(TextureUsage::CopyDst), "Texture copy destination must have the `TextureUsage::CopyDst` usage");
+            for region in regions {
+                validate_during_recording!(validation, region.validate(src, dst));
+            }
+        }
+        unsafe { self.handle.copy_texture_regions(src, dst, regions) }
+    }
+
+    /// Copy the entire content of a texture to another texture
+    pub fn copy_texture(&self, src: &TextureHandle, dst: &TextureHandle) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, src.usages().contains(TextureUsage::CopySrc), "Texture copy source must have the `TextureUsage::CopySrc` usage");
+            validate_parameter_recording!(validation, dst.usages().contains(TextureUsage::CopyDst), "Texture copy destination must have the `TextureUsage::CopyDst` usage");
+
+            let (src_width, src_height, src_depth, src_layers) = src.size().as_tuple();
+            let (dst_width, dst_height, dst_depth, dst_layers) = dst.size().as_tuple();
+
+            validate_parameter_recording!(validation, src_width == dst_width, "Source and destination width mismatch, source: {src_width}, destination: {dst_width}");
+            validate_parameter_recording!(validation, src_height == dst_height, "Source and destination height mismatch, source: {src_height}, destination: {dst_height}");
+            validate_parameter_recording!(validation, src_depth == dst_depth, "Source and destination depth mismatch, source: {src_depth}, destination: {dst_depth}");
+            validate_parameter_recording!(validation, src_layers == dst_layers, "Source and destination layers mismatch, source: {src_layers}, destination: {dst_layers}");
+
+            validate_parameter_recording!(validation, src.format().components() == src.format().components(), "Cannot copy between textures with different format components");
+            validate_parameter_recording!(validation, src.mip_levels() == dst.mip_levels(), "Cannot copy between textures with a different number of mip levels");
+        }
+        unsafe { self.handle.copy_texture(src, dst) }
+    }
+
+    /// Copy data from a buffer to a texture
+    pub fn copy_buffer_to_texture(&self, src: &BufferHandle, dst: &TextureHandle, regions: &[BufferTextureRegion]) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+            
+            for region in regions {
+                validate_during_recording!(validation, region.validate(src, dst, false));
+            }
+        }
+        unsafe { self.handle.copy_buffer_to_texture(src, dst, regions) };
+    }
+    
+    /// Copy data from a texture to a buffer
+    pub fn copy_texture_to_buffer(&self, src: &TextureHandle, dst: &BufferHandle, regions: &[BufferTextureRegion]) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            for region in regions {
+                validate_during_recording!(validation, region.validate(dst, src, true));
+            }
+        }
+        unsafe { self.handle.copy_texture_to_buffer(src, dst, regions) };
+    }
 
     //==============================================================================================================================
 
-    /// Begin rendering
-    fn begin_rendering(&self, rendering_info: &RenderingInfo) {
+    /// Bind resourece and sampler descriptor heaps
+    fn bind_descriptor_heaps(&self, resource_heap: Option<&DescriptorHeapHandle>, sampler_heap: Option<&DescriptorHeapHandle>) {
         #[cfg(feature = "validation")]
         {
             self.check_recording();
@@ -581,164 +782,32 @@ impl CommandList {
                 return;
             }
 
-            validation.flags.enable(CommandListValidationFlags::Rendering);
-        }
-
-        let mut dynamic = self.dynamic.write();
-
-        let (need_rt_resolve, need_depth_resolve, need_stencil_resolve) = unsafe { self.handle.begin_rendering(rendering_info) };
-
-        for idx in need_rt_resolve.iter_ones() {
-            let rt_info = &rendering_info.render_targets[idx];
-            let resolve = rt_info.resolve.as_ref().unwrap();
-
-            dynamic.end_render_rt_resolve.push(EndRenderingRenderTargetResolveInfo {
-                rect: rendering_info.render_area,
-                mode: resolve.mode,
-                src: rt_info.rtv.clone(),
-                dst: todo!(),
-            })
-        }
-
-        if need_depth_resolve || need_stencil_resolve {
-            #[cfg(feature = "validation")] 
-            let (depth_stencil, resolve) = {
-                let mut validation = self.validation.lock();
-                let depth_stencil = match &rendering_info.depth_stencil {
-                    Some(ds) => ds,
-                    None => {
-                        validation.set_error(Error::CommandList("Invalid ral::CommandListInterface::begin_rendering implementation: retuned manual resolve for depth or stencil, when no depth stencil is present"));
-                        return;
-                    },
-                };
-                let resolve = match &depth_stencil.resolve {
-                    Some(resolve) => resolve,
-                    None => {
-                        validation.set_error(Error::CommandList("Invalid ral::CommandListInterface::begin_rendering implementation: retuned manual resolve for depth or stencil, when no resolve for the depth stencil is present"));
-                        return;
-                    },
-                };
-                (depth_stencil, resolve)
-            };
-            #[cfg(not(feature = "validation"))] 
-            let (depth_stencil, resolve) = {
-                let depth_stencil = rendering_info.depth_stencil.unwrap();
-                let resolve = depth_stencil.resolve.unwrap();
-                (depth_stencil, resolve)
-            };
-    
-            let depth_mode = if need_depth_resolve {
-                resolve.depth_mode
-            } else {
-                None
-            };
-            let stencil_mode = if need_stencil_resolve {
-                resolve.stencil_mode
-            } else {
-                None
-            };
-    
-            dynamic.end_render_ds_resolve = Some(EndRenderingDepthStencilResolveInfo {
-                rect: rendering_info.render_area,
-                depth_mode,
-                stencil_mode,
-                src: todo!(),
-                dst: todo!(),
-            })
-        }
-
-        
-    }
-
-    /// End rendering
-    fn end_rendering(&self) {
-        #[cfg(feature = "validation")]
-        {
-            self.check_recording();
-
-            let mut validation = self.validation.lock();
-            if !validation.flags.is_set(CommandListValidationFlags::Rendering) {
-                validation.set_error(Error::CommandList("Cannot end rendering, as `begin_rendering` was never called`"));
-                return;
-            }
-        }
-        let mut dynamic = self.dynamic.write();
-        
-        let rt_resolve = if dynamic.end_render_rt_resolve.is_empty() {
-            None
-        } else {
-            Some(dynamic.end_render_rt_resolve.as_slice())
-        };
-
-        unsafe { self.handle.end_rendering(rt_resolve, dynamic.end_render_ds_resolve.as_ref()) };
-        
-        dynamic.end_render_rt_resolve.clear();
-        dynamic.end_render_ds_resolve = None;
-
-        #[cfg(feature = "validation")]
-        {
-            self.validation.lock().flags.disable(CommandListValidationFlags::Rendering);
-        }
-    }
-
-    /// Bind a graphics pipeline layout
-    fn bind_graphics_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
-        #[cfg(feature = "validation")]
-        {
-            self.check_recording();
-            let mut validation = self.validation.lock();
-            if validation.state == CommandListState::Error {
-                return;
-            }
-
-            validation.flags.disable(CommandListValidationFlags::ComputePipeline);
-            validation.pipeline_state.enable(CommandListPipelineStateFlags::PipelineLayout);
-        }
-
-        let mut dynamic = self.dynamic.write();
-        dynamic.pipeline_layout = Some(pipeline_layout.clone());
-        dynamic.pipeline = None;
-
-        unsafe { self.handle.bind_graphics_pipeline_layout(pipeline_layout); }
-    }
-
-    /// Bind a graphics pipeline
-    fn bind_graphics_pipeline(&self, pipeline: &PipelineHandle) {
-        #[cfg(feature = "validation")]
-        {
-            self.check_recording();
-
-            let mut validation = self.validation.lock();
-            if validation.state == CommandListState::Error {
-                return;
-            }
-
-            if validation.flags.is_set(CommandListValidationFlags::ComputePipeline) {
-                validation.set_error(Error::InvalidParameter("Trying to bind a graphics pipeline when a compute layout is bound".to_onca_string()));
-                return;
-            }
-
-            let dynamic = self.dynamic.write();
-            match &dynamic.pipeline_layout {
-                Some(pipeline_layout) => {
-                    if !Handle::ptr_eq(pipeline_layout, pipeline.layout()) {
-                        validation.set_error(Error::InvalidParameter("Cannot bind pipeline, as the layout does not match the bound pipeline layout".to_onca_string()));
-                        return;
-                    }
-                },
-                None => {
-                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_onca_string()));
+            if let Some(heap) = resource_heap {
+                if !heap.is_shader_visible() {
+                    validation.set_error(Error::DescriptorHeapNotShaderVisible);
                     return;
-                },
-            }
+                }
 
-            validation.pipeline_state.enable(CommandListPipelineStateFlags::Pipeline);
+                validate_parameter_recording!(validation, heap.heap_type() == DescriptorHeapType::Resources, "Cannot bind a non-resource descriptor heap as resource descriptor heap");
+            }
+            if let Some(heap) = sampler_heap {
+                if !heap.is_shader_visible() {
+                    validation.set_error(Error::DescriptorHeapNotShaderVisible);
+                    return;
+                }
+
+                validate_parameter_recording!(validation, heap.heap_type() == DescriptorHeapType::Samplers, "Cannot bind a non-resource descriptor heap as resource descriptor heap");
+            }
         }
 
         let mut dynamic = self.dynamic.write();
-        dynamic.pipeline = Some(pipeline.clone());
-        unsafe { self.handle.bind_graphics_pipeline(pipeline) };
+        dynamic.resource_descriptor_heap = resource_heap.map(|heap| heap.clone());
+        dynamic.sampler_descriptor_heap = sampler_heap.map(|heap| heap.clone());
+
+        unsafe { self.handle.bind_descriptor_heaps(resource_heap, sampler_heap) };
     }
+
+    //==============================================================================================================================
 
     /// Bind a compute pipeline layout
     fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
@@ -772,17 +841,12 @@ impl CommandList {
                 return;
             }
 
-            if !validation.flags.is_set(CommandListValidationFlags::ComputePipeline) {
-                validation.set_error(Error::InvalidParameter("Trying to bind a compute pipeline when a graphics layout is bound".to_onca_string()));
-                return;
-            }
+            validate_parameter_recording!(validation, validation.flags.contains(CommandListValidationFlags::ComputePipeline),"Trying to bind a graphics pipeline when a compute layout is bound");
 
             let dynamic = self.dynamic.write();
             match &dynamic.pipeline_layout {
                 Some(pipeline_layout) => {
-                    if !Handle::ptr_eq(pipeline_layout, pipeline.layout()) {
-                        validation.set_error(Error::InvalidParameter("Cannot bind pipeline, as the layout does not match the bound pipeline layout".to_onca_string()));
-                    }
+                    validate_parameter_recording!(validation, Handle::ptr_eq(pipeline_layout, pipeline.layout()),"Cannot bind pipeline, as the layout does not match the bound pipeline layout");        
                 },
                 None => {
                     validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_onca_string()));
@@ -796,6 +860,234 @@ impl CommandList {
         let mut dynamic = self.dynamic.write();
         dynamic.pipeline = Some(pipeline.clone());
         unsafe { self.handle.bind_compute_pipeline(pipeline); };
+    }
+
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    fn set_compute_descriptor_table(&self, index: u32, descriptor: GpuDescriptor) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+            let dynamic = self.dynamic.read();
+
+            validate_parameter_recording!(validation, dynamic.pipeline.is_some(), "Trying to set a descriptor table with no pipeline layout bound");
+            validate_parameter_recording!(validation, !validation.flags.contains(CommandListValidationFlags::ComputePipeline), "Cannot set a graphics descriptor table when a compute pipeline is bound");
+
+            let heap = match WeakHandle::upgrade(descriptor.heap()) {
+                Some(heap) => heap,
+                None => {
+                    validation.set_error(Error::ExpiredHandle("Descriptor heap owning GPU descriptor"));
+                    return
+                },
+            };
+
+            let dynamic = self.dynamic.read();
+            match heap.heap_type() {
+                DescriptorHeapType::Resources => {
+                    if let Some(cur_heap) = &dynamic.resource_descriptor_heap {
+                        validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
+                    } else {
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        return;
+                    }
+                },
+                DescriptorHeapType::Samplers => {
+                    if let Some(cur_heap) = &dynamic.sampler_descriptor_heap {
+                        validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
+                    } else {
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        return;
+                    }
+                },
+            }
+        }
+
+        let dynamic = self.dynamic.read();
+        let pipeline_layout = dynamic.pipeline_layout.as_ref().unwrap();
+        unsafe { self.handle.set_compute_descriptor_table(index, descriptor, pipeline_layout) };
+    }
+
+    //==============================================================================================================================
+
+    /// Bind a graphics pipeline layout
+    fn bind_graphics_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validation.flags.disable(CommandListValidationFlags::ComputePipeline);
+            validation.pipeline_state.enable(CommandListPipelineStateFlags::PipelineLayout);
+        }
+
+        let mut dynamic = self.dynamic.write();
+        dynamic.pipeline_layout = Some(pipeline_layout.clone());
+        dynamic.pipeline = None;
+
+        unsafe { self.handle.bind_graphics_pipeline_layout(pipeline_layout); }
+    }
+
+    /// Bind a graphics pipeline
+    fn bind_graphics_pipeline(&self, pipeline: &PipelineHandle) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, !validation.flags.contains(CommandListValidationFlags::ComputePipeline),"Trying to bind a graphics pipeline when a compute layout is bound");
+
+            let dynamic = self.dynamic.write();
+            match &dynamic.pipeline_layout {
+                Some(pipeline_layout) => {
+                    validate_parameter_recording!(validation, Handle::ptr_eq(pipeline_layout, pipeline.layout()), "Cannot bind pipeline, as the layout does not match the bound pipeline layout");
+                },
+                None => {
+                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_onca_string()));
+                    return;
+                },
+            }
+
+            validation.pipeline_state.enable(CommandListPipelineStateFlags::Pipeline);
+        }
+
+        let mut dynamic = self.dynamic.write();
+        dynamic.pipeline = Some(pipeline.clone());
+        unsafe { self.handle.bind_graphics_pipeline(pipeline) };
+    }
+
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    fn set_graphics_descriptor_table(&self, index: u32, descriptor: GpuDescriptor) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, !validation.flags.contains(CommandListValidationFlags::ComputePipeline), "Cannot set a graphics descriptor table when a compute pipeline is bound");
+
+            let heap = match WeakHandle::upgrade(descriptor.heap()) {
+                Some(heap) => heap,
+                None => {
+                    validation.set_error(Error::ExpiredHandle("Descriptor heap owning GPU descriptor"));
+                    return
+                },
+            };
+
+            let dynamic = self.dynamic.read();
+            match heap.heap_type() {
+                DescriptorHeapType::Resources => {
+                    if let Some(cur_heap) = &dynamic.resource_descriptor_heap {
+                        validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
+                    } else {
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        return;
+                    }
+                },
+                DescriptorHeapType::Samplers => {
+                    if let Some(cur_heap) = &dynamic.sampler_descriptor_heap {
+                        validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
+                    } else {
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        return;
+                    }
+                },
+            }
+
+            validate_parameter_recording!(validation, descriptor.index() % constants::MIN_DESCRIPTOR_TABLE_OFFSET_ALIGNMENT == 0, "Descriptors need to be align to a multiple of 4 descriptors to bind as a descriptor table")
+        }
+
+        let dynamic = self.dynamic.read();
+        let pipeline_layout = dynamic.pipeline_layout.as_ref().unwrap();
+        unsafe { self.handle.set_graphics_descriptor_table(index, descriptor, pipeline_layout) };
+    }
+
+    /// Bind a vertex buffer to the pipeline
+    fn bind_vertex_buffer(&self, mut view: VertexBufferView) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            self.check_in_renderpass();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_during_recording!(validation, view.validate());
+            validation.pipeline_state.enable(CommandListPipelineStateFlags::VertexBuffer);
+        }
+
+        // Make sure to clamp the size, as implementation are allowed to use the size value directly without comparing it to the buffer size
+        view.size = view.size.min(view.buffer.size());
+        unsafe { self.handle.bind_vertex_buffer(view); }
+    }
+
+    fn bind_index_buffer(&self, mut view: IndexBufferView) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            self.check_in_renderpass();
+            
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_during_recording!(validation, view.validate());
+            validation.pipeline_state.enable(CommandListPipelineStateFlags::IndexBuffer);
+        }
+
+        // Make sure to clamp the size, as implementation are allowed to use the size value directly without comparing it to the buffer size
+        view.size = view.size.min(view.buffer.size());
+        unsafe { self.handle.bind_index_buffer(view); }
+    }
+
+    /// Begin rendering
+    fn begin_rendering(&self, rendering_info: &RenderingInfo) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validation.flags.enable(CommandListValidationFlags::Rendering);
+        }
+        unsafe { self.handle.begin_rendering(rendering_info) };
+    }
+
+    /// End rendering
+    fn end_rendering(&self) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, validation.flags.contains(CommandListValidationFlags::Rendering), "Cannot end rendering, as `begin_rendering` was never called")
+        }
+        unsafe { self.handle.end_rendering() };
+        #[cfg(feature = "validation")]
+        {
+            self.validation.lock().flags.disable(CommandListValidationFlags::Rendering);
+        }
     }
 
     /// Set the viewports
@@ -832,6 +1124,7 @@ impl CommandList {
         unsafe { self.handle.set_scissors(scissors); }
     }
 
+    /// Set the primitive topology to be used
     fn set_primitive_topology(&self, topology: PrimitiveTopology) {
         #[cfg(feature = "validation")]
         {
@@ -848,7 +1141,7 @@ impl CommandList {
         unsafe { self.handle.set_primitive_topology(topology); }
     }
     
-    /// Set draw instanced
+    /// Draw instanced
     fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
         #[cfg(feature = "validation")]
         {
@@ -863,6 +1156,25 @@ impl CommandList {
         unsafe { self.handle.draw_instanced(vertex_count, instance_count, start_vertex, start_instance); };
     }
 
+    /// Draw indexed instance
+    fn draw_indexed_instanced(&self, index_count: u32, instance_count: u32, start_index: u32, vertex_offset: i32, start_instance: u32) {
+        #[cfg(feature = "validation")]
+        {
+            self.check_recording();
+            self.check_in_renderpass();
+            self.check_draw_state();
+
+            let mut validation = self.validation.lock();
+            if validation.state == CommandListState::Error {
+                return;
+            }
+
+            validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::IndexBuffer), "Trying to draw indexed, but no index buffer has been set");
+        }
+
+        unsafe { self.handle.draw_indexed_instanced(index_count, instance_count, start_index, vertex_offset, start_instance); }
+    }
+
     //==============================================================================================================================
     // HELPERS
 
@@ -873,9 +1185,7 @@ impl CommandList {
             return;
         }
 
-        if validation.state != CommandListState::Recording {
-            validation.set_error(Error::CommandList("Cannot record command, as command list is not in the recording state"));
-        }
+        validate_parameter_recording!(validation, validation.state == CommandListState::Recording, "Cannot record command, as command list is not in the recording state");
     }
     
     #[cfg(feature = "validation")]
@@ -885,33 +1195,29 @@ impl CommandList {
             return;
         }
 
-        if !validation.flags.is_set(CommandListValidationFlags::Rendering) {
-            validation.set_error(Error::CommandList("Cannot record rendering command, as command list is not in a render pass"));
-        }
+        validate_parameter_recording!(validation, validation.flags.contains(CommandListValidationFlags::Rendering), "Cannot record rendering command, as command list is not in a render pass");
     }
 
     #[cfg(feature = "validation")]
     fn check_draw_state(&self) {
         let mut validation = self.validation.lock();
+        if validation.state == CommandListState::Error {
+            return;
+        }
 
-        if !validation.pipeline_state.is_set(CommandListPipelineStateFlags::PipelineLayout) {
-            validation.set_error(Error::CommandList("Trying to draw, but no pipeline layout has been set"));
-            return;
-        }
-        if !validation.pipeline_state.is_set(CommandListPipelineStateFlags::Pipeline) {
-            validation.set_error(Error::CommandList("Trying to draw, but no pipeline has been set"));
-            return;
-        }
-        if !validation.pipeline_state.is_set(CommandListPipelineStateFlags::Viewport) {
-            validation.set_error(Error::CommandList("Trying to draw, but no viewports has been set"));
-            return;
-        }
-        if !validation.pipeline_state.is_set(CommandListPipelineStateFlags::Scissor) {
-            validation.set_error(Error::CommandList("Trying to draw, but no scissors has been set"));
-            return;
-        }
-        if !validation.pipeline_state.is_set(CommandListPipelineStateFlags::Topology) {
-            validation.set_error(Error::CommandList("Trying to draw, but no primitive topology has been set"));
+        validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::PipelineLayout), "Trying to draw, but no pipeline layout has been set");
+        validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::Pipeline), "Trying to draw, but no pipeline has been set");
+        validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::Viewport), "Trying to draw, but no viewports has been set");
+        validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::Scissor), "Trying to draw, but no scissors has been set");
+        validate_parameter_recording!(validation, validation.pipeline_state.contains(CommandListPipelineStateFlags::Topology), "Trying to draw, but no primitive topology has been set");
+        
+        let needs_vertex_buffer = !self.dynamic.read().pipeline_layout.as_ref().map_or(false, |layout| layout.flags().contains(PipelineLayoutFlags::ContainsInputLayout));
+        validate_parameter_recording!(validation, !needs_vertex_buffer || validation.pipeline_state.contains(CommandListPipelineStateFlags::VertexBuffer), "Trying to draw, but no vertex buffer has been set");
+
+        if !validation.pipeline_state.contains(CommandListPipelineStateFlags::VertexBuffer) &&
+            self.dynamic.read().pipeline_layout.as_ref().map_or(false, |layout| layout.flags().contains(PipelineLayoutFlags::ContainsInputLayout))
+        {
+            validation.set_error(Error::CommandList("Trying to draw, but no vertex buffer has been set"));
             return;
         }
     }
@@ -947,6 +1253,8 @@ pub type GraphicsCommandListHandle = GraphicsCommandList;
 
 impl GraphicsCommandList {
     /// Reset the command list
+    /// 
+    /// Resetting the command list does not reset the underlying memory, for this, call reset on the command pool used to create the command list
     pub fn reset(&self) -> Result<()> {
         self.handle.reset()
     }
@@ -968,11 +1276,47 @@ impl GraphicsCommandList {
         self.handle.close()
     }
 
+    //==============================================================
+
     /// Insert barriers into the command list
     pub fn barrier(&self, barriers: &[Barrier]) {
         self.handle.barrier(barriers);
     }
 
+    /// Copy data between 2 buffers
+    pub fn copy_buffer_regions(&self, src: &BufferHandle, dst: &BufferHandle, regions: &[BufferCopyRegion]) {
+        self.handle.copy_buffer_regions(src, dst, regions);
+    }
+
+    /// Copy the entire content of a buffer to another buffer
+    pub fn copy_buffer(&self, src: &BufferHandle, dst: &BufferHandle) {
+        self.handle.copy_buffer(src, dst);
+    }
+
+    //==============================================================
+
+    /// Bind resourece and sampler descriptor heaps
+    pub fn bind_descriptor_heaps(&self, resource_heap: Option<&DescriptorHeapHandle>, sampler_heap: Option<&DescriptorHeapHandle>) {
+        self.handle.bind_descriptor_heaps(resource_heap, sampler_heap);
+    }
+
+    //==============================================================
+
+    /// Bind a compute pipeline layout
+    pub fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
+        self.handle.bind_compute_pipeline_layout(pipeline_layout)
+    }
+
+    /// Bind a compute pipeline
+    pub fn bind_compute_pipeline(&self, pipeline: &PipelineHandle) {
+        self.handle.bind_compute_pipeline(pipeline)
+    }
+
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    pub fn set_compute_descriptor_table(&self, index: u32, descriptor: GpuDescriptor) {
+        self.handle.set_compute_descriptor_table(index, descriptor)
+    }
+    
     //==============================================================
 
     /// Bind a graphics pipeline layout
@@ -984,15 +1328,20 @@ impl GraphicsCommandList {
     pub fn bind_graphics_pipeline(&self, pipeline: &PipelineHandle) {
         self.handle.bind_graphics_pipeline(pipeline)
     }
+
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    pub fn set_graphics_descriptor_table(&self, index: u32, descriptor: GpuDescriptor) {
+        self.handle.set_graphics_descriptor_table(index, descriptor)
+    }
     
-    /// Bind a compute pipeline layout
-    pub fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
-        self.handle.bind_compute_pipeline_layout(pipeline_layout)
+    /// Bind a vertex buffer to the pipeline
+    pub fn bind_vertex_buffer(&self, view: VertexBufferView) {
+        self.handle.bind_vertex_buffer(view)
     }
 
-    /// Bind a compute pipeline
-    pub fn bind_compute_pipeline(&self, pipeline: &PipelineHandle) {
-        self.handle.bind_compute_pipeline(pipeline)
+    /// Bind an index buffer to the pipeline
+    pub fn bind_index_buffer(&self, view: IndexBufferView) {
+        self.handle.bind_index_buffer(view)
     }
 
     /// Begin rendering, i.e. begin the render pass
@@ -1029,6 +1378,17 @@ impl GraphicsCommandList {
     pub fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
         self.handle.draw_instanced(vertex_count, instance_count, start_vertex, start_instance);
     }
+
+    /// Draw `index_count` indices, with the first idex starting at `start_index`, which will be offset by `vertex_offset`
+    pub fn draw_indexed(&self, index_count: u32, start_index: u32, vertex_offset: i32) {
+        self.handle.draw_indexed_instanced(index_count, 1, start_index, vertex_offset, 0);
+    }
+
+    /// Draw `instance_count` instances with `index_count` indices, with the first idex starting at `start_index`, which will be offset by `vertex_offset`, and the first instance starting with an index of `start_instance`
+    pub fn draw_indexed_instanced(&self, index_count: u32, instance_count: u32, start_index: u32, vertex_offset: i32, start_instance: u32) {
+        self.handle.draw_indexed_instanced(index_count, instance_count, start_index, vertex_offset, start_instance);
+    }
+
 }
 
 impl AsRef<Handle<CommandList>> for GraphicsCommandList {
@@ -1051,6 +1411,8 @@ pub type ComputeCommandListHandle = ComputeCommandList;
 
 impl ComputeCommandList {
     /// Reset the command list
+    /// 
+    /// Resetting the command list does not reset the underlying memory, for this, call reset on the command pool used to create the command list
     pub fn reset(&self) -> Result<()> {
         self.handle.reset()
     }
@@ -1072,11 +1434,30 @@ impl ComputeCommandList {
         self.handle.close()
     }
 
+    //==============================================================
+
     /// Insert barriers into the command list
     pub fn barrier(&self, barriers: &[Barrier]) {
         self.handle.barrier(barriers);
     }
     
+    /// Copy data between 2 buffers
+    pub fn copy_buffer_regions(&self, src: &BufferHandle, dst: &BufferHandle, regions: &[BufferCopyRegion]) {
+        self.handle.copy_buffer_regions(src, dst, regions);
+    }
+
+    /// Copy the entire content of a buffer to another buffer
+    pub fn copy_buffer(&self, src: &BufferHandle, dst: &BufferHandle) {
+        self.handle.copy_buffer(src, dst);
+    }
+
+    //==============================================================
+
+    /// Bind resourece and sampler descriptor heaps
+    pub fn bind_descriptor_heaps(&self, resource_heap: Option<&DescriptorHeapHandle>, sampler_heap: Option<&DescriptorHeapHandle>) {
+        self.handle.bind_descriptor_heaps(resource_heap, sampler_heap);
+    }
+
     //==============================================================
     
     /// Bind a pipeline layout
@@ -1089,6 +1470,17 @@ impl ComputeCommandList {
         self.handle.bind_compute_pipeline(pipeline)
     }
 
+    /// Bind the first entry in the descriptor table at 'index' in the current bound pipeline
+    pub fn set_compute_descriptor_table(&self, index: u32, descriptor: GpuDescriptor) {
+        self.handle.set_compute_descriptor_table(index, descriptor)
+    }
+    
+}
+
+impl AsRef<Handle<CommandList>> for ComputeCommandList {
+    fn as_ref(&self) -> &Handle<CommandList> {
+        &self.handle
+    }
 }
 
 //==============================================================
@@ -1105,6 +1497,8 @@ pub type CopyCommandListHandle = CopyCommandList;
 
 impl CopyCommandList {
     /// Reset the command list
+    /// 
+    /// Resetting the command list does not reset the underlying memory, for this, call reset on the command pool used to create the command list
     pub fn reset(&self) -> Result<()> {
         self.handle.reset()
     }
@@ -1126,9 +1520,28 @@ impl CopyCommandList {
         self.handle.close()
     }
 
+    //==============================================================
+
     /// Insert barriers into the command list
     pub fn barrier(&self, barriers: &[Barrier]) {
         self.handle.barrier(barriers);
+    }
+    
+    /// Copy data between 2 buffers
+    pub fn copy_buffer_region(&self, src: &BufferHandle, dst: &BufferHandle, regions: &[BufferCopyRegion]) {
+        self.handle.copy_buffer_regions(src, dst, regions);
+    }
+
+    /// Copy the entire content of a buffer to another buffer
+    pub fn cop_buffer(&self, src: &BufferHandle, dst: &BufferHandle) {
+        self.handle.copy_buffer(src, dst);
+    }
+
+}
+
+impl AsRef<Handle<CommandList>> for CopyCommandList {
+    fn as_ref(&self) -> &Handle<CommandList> {
+        &self.handle
     }
 }
 
@@ -1146,6 +1559,8 @@ pub type BundleCommandListHandle = BundleCommandList;
 
 impl BundleCommandList {
     /// Reset the command list
+    /// 
+    /// Resetting the command list does not reset the underlying memory, for this, call reset on the command pool used to create the command list
     pub fn reset(&self) -> Result<()> {
         self.handle.reset()
     }
@@ -1168,6 +1583,20 @@ impl BundleCommandList {
     }
 
     //==============================================================
+
+    //==============================================================
+    
+    /// Bind a compute pipeline layout
+    pub fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
+        self.handle.bind_compute_pipeline_layout(pipeline_layout)
+    }
+
+    /// Bind a compute pipeline
+    pub fn bind_compute_pipeline(&self, pipeline: &PipelineHandle) {
+        self.handle.bind_compute_pipeline(pipeline)
+    }
+
+    //==============================================================
     
     /// Bind a graphics pipeline layout
     pub fn bind_graphics_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
@@ -1179,14 +1608,14 @@ impl BundleCommandList {
         self.handle.bind_graphics_pipeline(pipeline)
     }
     
-    /// Bind a compute pipeline layout
-    pub fn bind_compute_pipeline_layout(&self, pipeline_layout: &PipelineLayoutHandle) {
-        self.handle.bind_compute_pipeline_layout(pipeline_layout)
+    /// Bind a vertex buffer to the pipeline
+    pub fn bind_vertex_buffer(&self, view: VertexBufferView) {
+        self.handle.bind_vertex_buffer(view)
     }
 
-    /// Bind a compute pipeline
-    pub fn bind_compute_pipeline(&self, pipeline: &PipelineHandle) {
-        self.handle.bind_compute_pipeline(pipeline)
+    /// Bind an index buffer to the pipeline
+    pub fn bind_index_buffer(&self, view: IndexBufferView) {
+        self.handle.bind_index_buffer(view)
     }
 
     /// Set the viewports to use
@@ -1214,3 +1643,10 @@ impl BundleCommandList {
         self.handle.draw_instanced(vertex_count, instance_count, start_vertex, start_instance);
     }
 }
+
+impl AsRef<Handle<CommandList>> for BundleCommandList {
+    fn as_ref(&self) -> &Handle<CommandList> {
+        &self.handle
+    }
+}
+

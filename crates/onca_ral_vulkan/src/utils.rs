@@ -84,22 +84,22 @@ impl ToVulkan for ral::TextureUsage {
 
     fn to_vulkan(&self) -> Self::VkType {
         let mut vk_usage = vk::ImageUsageFlags::empty();
-    if self.is_set(ral::TextureUsage::CopySrc) {
+    if self.contains(ral::TextureUsage::CopySrc) {
         vk_usage |= vk::ImageUsageFlags::TRANSFER_SRC;
     }
-    if self.is_set(ral::TextureUsage::CopyDst) {
+    if self.contains(ral::TextureUsage::CopyDst) {
         vk_usage |= vk::ImageUsageFlags::TRANSFER_DST;
     }
-    if self.is_set(ral::TextureUsage::Sampled) {
+    if self.contains(ral::TextureUsage::Sampled) {
         vk_usage |= vk::ImageUsageFlags::SAMPLED;
     }
-    if self.is_set(ral::TextureUsage::Storage) {
+    if self.contains(ral::TextureUsage::Storage) {
         vk_usage |= vk::ImageUsageFlags::STORAGE;
     }
-    if self.is_set(ral::TextureUsage::ColorAttachment) {
+    if self.contains(ral::TextureUsage::ColorAttachment) {
         vk_usage |= vk::ImageUsageFlags::COLOR_ATTACHMENT;
     }
-    if self.is_set(ral::TextureUsage::DepthStencilAttachment) {
+    if self.contains(ral::TextureUsage::DepthStencilAttachment) {
         vk_usage |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
     }
     vk_usage
@@ -118,30 +118,30 @@ impl ToVulkan for ral::PresentMode {
     }
 }
 
-impl ToVulkan for ral::TextureViewAspect {
+impl ToVulkan for ral::TextureAspect {
     type VkType = vk::ImageAspectFlags;
 
     fn to_vulkan(&self) -> Self::VkType {
         let mut flags = vk::ImageAspectFlags::NONE;
-    if self.is_set(ral::TextureViewAspect::Color) {
+    if self.contains(ral::TextureAspect::Color) {
         flags |= vk::ImageAspectFlags::COLOR;
     }
-    if self.is_set(ral::TextureViewAspect::Depth) {
+    if self.contains(ral::TextureAspect::Depth) {
         flags |= vk::ImageAspectFlags::DEPTH;
     }
-    if self.is_set(ral::TextureViewAspect::Stencil) {
+    if self.contains(ral::TextureAspect::Stencil) {
         flags |= vk::ImageAspectFlags::STENCIL;
     }
-    if self.is_set(ral::TextureViewAspect::Metadata) {
+    if self.contains(ral::TextureAspect::Metadata) {
         flags |= vk::ImageAspectFlags::METADATA;
     }
-    if self.is_set(ral::TextureViewAspect::Plane0) {
+    if self.contains(ral::TextureAspect::Plane0) {
         flags |= vk::ImageAspectFlags::PLANE_0;
     }
-    if self.is_set(ral::TextureViewAspect::Plane1) {
+    if self.contains(ral::TextureAspect::Plane1) {
         flags |= vk::ImageAspectFlags::PLANE_1;
     }
-    if self.is_set(ral::TextureViewAspect::Plane2) {
+    if self.contains(ral::TextureAspect::Plane2) {
         flags |= vk::ImageAspectFlags::PLANE_2;
     }
     flags
@@ -190,7 +190,7 @@ impl ToVulkan for ral::CommandListBeginFlags {
     fn to_vulkan(&self) -> Self::VkType {
         let mut vk_flags = vk::CommandBufferUsageFlags::empty();
 
-    if self.is_set(ral::CommandListBeginFlags::OneTimeSubmit) {
+    if self.contains(ral::CommandListBeginFlags::OneTimeSubmit) {
         vk_flags |= vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT;
     }
 
@@ -204,107 +204,105 @@ impl ToVulkan for ral::Access {
     fn to_vulkan(&self) -> Self::VkType {
         let mut flags = vk::AccessFlags2::empty();
 
-        if self.is_set(ral::Access::MemoryRead) {
+        if self.contains(ral::Access::MemoryRead) {
             flags |= vk::AccessFlags2::MEMORY_READ;
         } else {
-            if self.is_set(ral::Access::ShaderRead) {
+            if self.contains(ral::Access::ShaderRead) {
                 flags |= vk::AccessFlags2::SHADER_READ;
             } else {
-                if self.is_set(ral::Access::ConstantBuffer) {
+                if self.contains(ral::Access::ConstantBuffer) {
                     flags |= vk::AccessFlags2::UNIFORM_READ;
                 }
-                if self.is_set(ral::Access::SampledRead) {
+                if self.contains(ral::Access::SampledRead) {
                     flags |= vk::AccessFlags2::SHADER_SAMPLED_READ;
                 }
-                if self.is_set(ral::Access::StorageRead) {
+                if self.contains(ral::Access::StorageRead) {
                     flags |= vk::AccessFlags2::SHADER_STORAGE_READ;
                 }
-                if self.is_set(ral::Access::ShaderTableRead) {
+                if self.contains(ral::Access::ShaderTableRead) {
                     flags |= vk::AccessFlags2::SHADER_BINDING_TABLE_READ_KHR;
                 }
             }
 
-            if self.is_set(ral::Access::VertexBuffer) {
+            if self.contains(ral::Access::VertexBuffer) {
                 flags |= vk::AccessFlags2::VERTEX_ATTRIBUTE_READ;
             }
-            if self.is_set(ral::Access::IndexBuffer) {
+            if self.contains(ral::Access::IndexBuffer) {
                 flags |= vk::AccessFlags2::INDEX_READ;
             }
-            if self.is_set(ral::Access::RenderTargetRead) {
+            if self.contains(ral::Access::RenderTargetRead) {
                 flags |= vk::AccessFlags2::COLOR_ATTACHMENT_READ;
             }
-            if self.is_set(ral::Access::DepthStencilRead) {
+            if self.contains(ral::Access::DepthStencilRead) {
                 flags |= vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ;
             }
-            if self.is_set(ral::Access::Indirect) {
+            if self.contains(ral::Access::Indirect) {
                 flags |= vk::AccessFlags2::INDIRECT_COMMAND_READ;
             }
-            if self.is_set(ral::Access::Conditional) {
+            if self.contains(ral::Access::Conditional) {
                 flags |= vk::AccessFlags2::CONDITIONAL_RENDERING_READ_EXT;
             }
-            if self.is_set(ral::Access::Descriptor) {
+            if self.contains(ral::Access::Descriptor) {
                 flags |= vk::AccessFlags2::DESCRIPTOR_BUFFER_READ_EXT;
             }
-            if self.is_set(ral::Access::AccelerationStructureRead) {
+            if self.contains(ral::Access::AccelerationStructureRead) {
                 flags |= vk::AccessFlags2::ACCELERATION_STRUCTURE_READ_KHR;
             }
-            if self.is_set(ral::Access::CopyRead) ||
-               self.is_set(ral::Access::ResolveRead)
+            if self.intersects(ral::Access::CopyRead | ral::Access::ResolveRead)
             {
                 flags |= vk::AccessFlags2::TRANSFER_READ;
             }
-            if self.is_set(ral::Access::HostRead) {
+            if self.contains(ral::Access::HostRead) {
                 flags |= vk::AccessFlags2::HOST_READ;
             }
-            if self.is_set(ral::Access::ShadingRateRead) {
+            if self.contains(ral::Access::ShadingRateRead) {
                 flags |= vk::AccessFlags2::FRAGMENT_SHADING_RATE_ATTACHMENT_READ_KHR;
             }
-            if self.is_set(ral::Access::VideoDecodeRead) {
+            if self.contains(ral::Access::VideoDecodeRead) {
                 flags |= vk::AccessFlags2::VIDEO_DECODE_READ_KHR;
             }
             #[allow(unreachable_code)]
-            if self.is_set(ral::Access::VideoProcessRead) {
+            if self.contains(ral::Access::VideoProcessRead) {
                 flags |= todo!("Video processing is currently unsupported");
             }
-            if self.is_set(ral::Access::VideoEncodeRead) {
+            if self.contains(ral::Access::VideoEncodeRead) {
                 flags |= vk::AccessFlags2::VIDEO_ENCODE_READ_KHR;
             }
         }
 
-        if self.is_set(ral::Access::MemoryWrite) {
+        if self.contains(ral::Access::MemoryWrite) {
             flags |= vk::AccessFlags2::MEMORY_WRITE;
         } else {
-            if self.is_set(ral::Access::ShaderWrite) {
+            if self.contains(ral::Access::ShaderWrite) {
                 flags |= vk::AccessFlags2::SHADER_WRITE;
-            } else if self.is_set(ral::Access::StorageWrite) {
+            } else if self.contains(ral::Access::StorageWrite) {
                 flags |= vk::AccessFlags2::SHADER_STORAGE_WRITE;
             }
 
-            if self.is_set(ral::Access::RenderTargetWrite) {
+            if self.contains(ral::Access::RenderTargetWrite) {
                 flags |= vk::AccessFlags2::COLOR_ATTACHMENT_WRITE;
             }
-            if self.is_set(ral::Access::DepthStencilWrite) {
+            if self.contains(ral::Access::DepthStencilWrite) {
                 flags |= vk::AccessFlags2::VIDEO_ENCODE_READ_KHR;
             }
-            if self.is_set(ral::Access::AccelerationStructureWrite) {
+            if self.contains(ral::Access::AccelerationStructureWrite) {
                 flags |= vk::AccessFlags2::ACCELERATION_STRUCTURE_WRITE_KHR;
             }
-            if self.is_set(ral::Access::CopyWrite) ||
-               self.is_set(ral::Access::ResolveWrite)
+            if self.intersects(ral::Access::CopyWrite | ral::Access::ResolveWrite)
             {
                 flags |= vk::AccessFlags2::TRANSFER_WRITE;
             }
-            if self.is_set(ral::Access::HostWrite) {
+            if self.contains(ral::Access::HostWrite) {
                 flags |= vk::AccessFlags2::HOST_WRITE;
             }
-            if self.is_set(ral::Access::VideoEncodeWrite) {
+            if self.contains(ral::Access::VideoEncodeWrite) {
                 flags |= vk::AccessFlags2::VIDEO_ENCODE_WRITE_KHR;
             }
             #[allow(unreachable_code)]
-            if self.is_set(ral::Access::VideoProcessWrite) {
+            if self.contains(ral::Access::VideoProcessWrite) {
                 flags |=  todo!("Video processing is currently unsupported");
             }
-            if self.is_set(ral::Access::VideoDecodeWrite) {
+            if self.contains(ral::Access::VideoDecodeWrite) {
                 flags |= vk::AccessFlags2::VIDEO_DECODE_READ_KHR;
             }
         }
@@ -319,93 +317,92 @@ impl ToVulkan for ral::SyncPoint {
     fn to_vulkan(&self) -> Self::VkType {
         let mut stages = vk::PipelineStageFlags2::empty();
 
-        if self.is_set(ral::SyncPoint::All) {
+        if self.contains(ral::SyncPoint::All) {
             return vk::PipelineStageFlags2::ALL_COMMANDS;
         }
-
-        if self.is_set(ral::SyncPoint::Top) {
+        if self.contains(ral::SyncPoint::Top) {
             stages |= vk::PipelineStageFlags2::TOP_OF_PIPE;
         }
-        if self.is_set(ral::SyncPoint::Bottom) {
+        if self.contains(ral::SyncPoint::Bottom) {
             stages |= vk::PipelineStageFlags2::BOTTOM_OF_PIPE;
         }
-        if self.is_set(ral::SyncPoint::DrawIndirect) {
+        if self.contains(ral::SyncPoint::DrawIndirect) {
             stages |= vk::PipelineStageFlags2::DRAW_INDIRECT;
         }
-        if self.is_set(ral::SyncPoint::VertexInput) {
+        if self.contains(ral::SyncPoint::VertexInput) {
             stages |= vk::PipelineStageFlags2::VERTEX_ATTRIBUTE_INPUT;
         }
-        if self.is_set(ral::SyncPoint::IndexInput) {
+        if self.contains(ral::SyncPoint::IndexInput) {
             stages |= vk::PipelineStageFlags2::INDEX_INPUT;
         }
-        if self.is_set(ral::SyncPoint::InputAssembler) {
+        if self.contains(ral::SyncPoint::InputAssembler) {
             stages |= vk::PipelineStageFlags2::VERTEX_INPUT;
         }
-        if self.is_set(ral::SyncPoint::Vertex) {
+        if self.contains(ral::SyncPoint::Vertex) {
             stages |= vk::PipelineStageFlags2::VERTEX_SHADER;
         }
-        if self.is_set(ral::SyncPoint::Task) {
+        if self.contains(ral::SyncPoint::Task) {
             stages |= vk::PipelineStageFlags2::TASK_SHADER_EXT;
         }
-        if self.is_set(ral::SyncPoint::Mesh) {
+        if self.contains(ral::SyncPoint::Mesh) {
             stages |= vk::PipelineStageFlags2::MESH_SHADER_EXT;
         }
-        if self.is_set(ral::SyncPoint::PreRaster) {
+        if self.contains(ral::SyncPoint::PreRaster) {
             stages |= vk::PipelineStageFlags2::PRE_RASTERIZATION_SHADERS;
         }
-        if self.is_set(ral::SyncPoint::Pixel) {
+        if self.contains(ral::SyncPoint::Pixel) {
             stages |= vk::PipelineStageFlags2::FRAGMENT_SHADER;
         }
-        if self.is_set(ral::SyncPoint::PrePixelOps) {
+        if self.contains(ral::SyncPoint::PrePixelOps) {
             stages |= vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS;
         }
-        if self.is_set(ral::SyncPoint::PostPixelOps) {
+        if self.contains(ral::SyncPoint::PostPixelOps) {
             stages |= vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS;
         }
-        if self.is_set(ral::SyncPoint::RenderTarget) {
+        if self.contains(ral::SyncPoint::RenderTarget) {
             stages |= vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT;
         }
-        if self.is_set(ral::SyncPoint::Compute) {
+        if self.contains(ral::SyncPoint::Compute) {
             stages |= vk::PipelineStageFlags2::COMPUTE_SHADER;
         }
-        if self.is_set(ral::SyncPoint::Host) {
+        if self.contains(ral::SyncPoint::Host) {
             stages |= vk::PipelineStageFlags2::HOST;
         }
-        if self.is_set(ral::SyncPoint::Copy) {
+        if self.contains(ral::SyncPoint::Copy) {
             stages |= vk::PipelineStageFlags2::COPY;
         }
-        if self.is_set(ral::SyncPoint::Resolve) {
+        if self.contains(ral::SyncPoint::Resolve) {
             stages |= vk::PipelineStageFlags2::RESOLVE;
         }
-        if self.is_set(ral::SyncPoint::Clear) {
+        if self.contains(ral::SyncPoint::Clear) {
             stages |= vk::PipelineStageFlags2::CLEAR;
         }
-        if self.is_set(ral::SyncPoint::RayTracing) {
+        if self.contains(ral::SyncPoint::RayTracing) {
             stages |= vk::PipelineStageFlags2::RAY_TRACING_SHADER_KHR;
         }
-        if self.is_set(ral::SyncPoint::AccelerationStructureBuild) {
+        if self.contains(ral::SyncPoint::AccelerationStructureBuild) {
             stages |= vk::PipelineStageFlags2::ACCELERATION_STRUCTURE_BUILD_KHR;
         }
-        if self.is_set(ral::SyncPoint::AccelerationStructureCopy) {
+        if self.contains(ral::SyncPoint::AccelerationStructureCopy) {
             stages |= vk::PipelineStageFlags2::ACCELERATION_STRUCTURE_COPY_KHR;
         }
-        if self.is_set(ral::SyncPoint::Conditional) {
+        if self.contains(ral::SyncPoint::Conditional) {
             stages |= vk::PipelineStageFlags2::CONDITIONAL_RENDERING_EXT;
         }
-        if self.is_set(ral::SyncPoint::ShadingRate) {
+        if self.contains(ral::SyncPoint::ShadingRate) {
             stages |= vk::PipelineStageFlags2::FRAGMENT_SHADING_RATE_ATTACHMENT_KHR;
         }
-        if self.is_set(ral::SyncPoint::Graphics) {
+        if self.contains(ral::SyncPoint::Graphics) {
             stages |= vk::PipelineStageFlags2::ALL_GRAPHICS;
         }
-        if self.is_set(ral::SyncPoint::VideoDecode) {
+        if self.contains(ral::SyncPoint::VideoDecode) {
             stages |= vk::PipelineStageFlags2::VIDEO_DECODE_KHR;
         }
         #[allow(unreachable_code)]
-        if self.is_set(ral::SyncPoint::VideoProcess) {
+        if self.contains(ral::SyncPoint::VideoProcess) {
             stages |= todo!("Video processing is currently unsupported");
         }
-        if self.is_set(ral::SyncPoint::VideoEncode) {
+        if self.contains(ral::SyncPoint::VideoEncode) {
             stages |= vk::PipelineStageFlags2::VIDEO_ENCODE_KHR;
         }
 
@@ -691,16 +688,16 @@ impl ToVulkan for ral::ColorWriteMask {
 
     fn to_vulkan(&self) -> Self::VkType {
         let mut mask = vk::ColorComponentFlags::empty();
-        if self.is_set(ral::ColorWriteMask::R) {
+        if self.contains(ral::ColorWriteMask::R) {
             mask |= vk::ColorComponentFlags::R;
         }
-        if self.is_set(ral::ColorWriteMask::G) {
+        if self.contains(ral::ColorWriteMask::G) {
             mask |= vk::ColorComponentFlags::G;
         }
-        if self.is_set(ral::ColorWriteMask::B) {
+        if self.contains(ral::ColorWriteMask::B) {
             mask |= vk::ColorComponentFlags::B;
         }
-        if self.is_set(ral::ColorWriteMask::A) {
+        if self.contains(ral::ColorWriteMask::A) {
             mask |= vk::ColorComponentFlags::A;
         }
         mask
@@ -746,6 +743,181 @@ impl ToVulkan for ral::ScissorRect {
         vk::Rect2D {
             offset: vk::Offset2D { x: self.y as i32, y: self.x as i32 },
             extent: vk::Extent2D { width: self.width as u32, height: self.height as u32 },
+        }
+    }
+}
+
+impl ToVulkan for ral::BufferUsage {
+    type VkType = vk::BufferUsageFlags;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        let mut flags = vk::BufferUsageFlags::empty();
+        if self.contains(ral::BufferUsage::CopySrc) {
+            flags |= vk::BufferUsageFlags::TRANSFER_SRC;
+        }
+        if self.contains(ral::BufferUsage::CopyDst) {
+            flags |= vk::BufferUsageFlags::TRANSFER_DST;
+        }
+        if self.contains(ral::BufferUsage::ConstantTexelBuffer) {
+            flags |= vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::StorageTexelBuffer) {
+            flags |= vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::ConstantBuffer) {
+            flags |= vk::BufferUsageFlags::UNIFORM_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::StorageBuffer) {
+            flags |= vk::BufferUsageFlags::STORAGE_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::IndexBuffer) {
+            flags |= vk::BufferUsageFlags::INDEX_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::VertexBuffer) {
+            flags |= vk::BufferUsageFlags::VERTEX_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::IndirectBuffer) {
+            flags |= vk::BufferUsageFlags::INDEX_BUFFER;
+        }
+        if self.contains(ral::BufferUsage::ConditionalRendering) {
+            flags |= vk::BufferUsageFlags::CONDITIONAL_RENDERING_EXT;
+        }
+        flags
+    }
+}
+
+impl ToVulkan for ral::IndexFormat {
+    type VkType = vk::IndexType;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::IndexFormat::U16 => vk::IndexType::UINT16,
+            ral::IndexFormat::U32 => vk::IndexType::UINT32,
+        }
+    }
+}
+
+impl ToVulkan for ral::TextureOffset {
+    type VkType = vk::Offset3D;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::Offset3D { x: self.x as i32, y: self.y as i32, z: self.z as i32 }
+    }
+}
+
+impl ToVulkan for ral::TextureExtent {
+    type VkType = vk::Extent3D;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::Extent3D { width: self.width.get() as u32, height: self.height.get() as u32, depth: self.depth.get() as u32 }
+    }
+}
+
+impl ToVulkan for ral::Filter {
+    type VkType = vk::Filter;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::Filter::Point => vk::Filter::NEAREST,
+            ral::Filter::Linear => vk::Filter::LINEAR,
+        }
+    }
+}
+
+impl ToVulkan for ral::MipmapMode {
+    type VkType = vk::SamplerMipmapMode;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::MipmapMode::Point => vk::SamplerMipmapMode::NEAREST,
+            ral::MipmapMode::Linear => vk::SamplerMipmapMode::LINEAR,
+        }
+    }
+}
+
+impl ToVulkan for ral::SamplerAddressMode {
+    type VkType = vk::SamplerAddressMode;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::SamplerAddressMode::Wrap       => vk::SamplerAddressMode::REPEAT,
+            ral::SamplerAddressMode::Mirror     => vk::SamplerAddressMode::MIRRORED_REPEAT,
+            ral::SamplerAddressMode::Clamp      => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            ral::SamplerAddressMode::Border     => vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            ral::SamplerAddressMode::MirrorOnce => vk::SamplerAddressMode::MIRROR_CLAMP_TO_EDGE,
+        }
+    }
+}
+
+impl ToVulkan for ral::StaticBorderColor {
+    type VkType = vk::BorderColor;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::StaticBorderColor::FloatTransparentBlack => vk::BorderColor::FLOAT_TRANSPARENT_BLACK,
+            ral::StaticBorderColor::FloatOpaqueBlack      => vk::BorderColor::FLOAT_OPAQUE_BLACK,
+            ral::StaticBorderColor::FloatOpaqueWhite      => vk::BorderColor::FLOAT_OPAQUE_WHITE,
+            ral::StaticBorderColor::UintOpaqueBlack       => vk::BorderColor::INT_OPAQUE_BLACK,
+            ral::StaticBorderColor::UintOpaqueWhite       => vk::BorderColor::INT_OPAQUE_WHITE,
+            
+        }
+    }
+}
+
+impl ToVulkan for ral::ShaderVisibility {
+    type VkType = vk::ShaderStageFlags;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::ShaderVisibility::All    => vk::ShaderStageFlags::ALL,
+            ral::ShaderVisibility::Vertex => vk::ShaderStageFlags::VERTEX,
+            ral::ShaderVisibility::Pixel  => vk::ShaderStageFlags::FRAGMENT,
+            ral::ShaderVisibility::Task   => vk::ShaderStageFlags::TASK_EXT,
+            ral::ShaderVisibility::Mesh   => vk::ShaderStageFlags::MESH_EXT,
+        }
+    }
+}
+
+impl ToVulkan for ral::DescriptorType {
+    type VkType = vk::DescriptorType;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::DescriptorType::SampledTexture      => vk::DescriptorType::SAMPLED_IMAGE,
+            ral::DescriptorType::StorageTexture      => vk::DescriptorType::STORAGE_BUFFER,
+            ral::DescriptorType::ConstantTexelBuffer => vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
+            ral::DescriptorType::StorageTexelBuffer  => vk::DescriptorType::STORAGE_TEXEL_BUFFER,
+            ral::DescriptorType::ConstantBuffer      => vk::DescriptorType::UNIFORM_BUFFER,
+            ral::DescriptorType::StorageBuffer       => vk::DescriptorType::STORAGE_BUFFER,
+        }
+    }
+}
+
+impl ToVulkan for ral::TextureComponentSwizzle {
+    type VkType = vk::ComponentSwizzle;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        match self {
+            ral::TextureComponentSwizzle::Identity => vk::ComponentSwizzle::IDENTITY,
+            ral::TextureComponentSwizzle::Zero     => vk::ComponentSwizzle::ZERO,
+            ral::TextureComponentSwizzle::One      => vk::ComponentSwizzle::ONE,
+            ral::TextureComponentSwizzle::R        => vk::ComponentSwizzle::R,
+            ral::TextureComponentSwizzle::G        => vk::ComponentSwizzle::G,
+            ral::TextureComponentSwizzle::B        => vk::ComponentSwizzle::B,
+            ral::TextureComponentSwizzle::A        => vk::ComponentSwizzle::A,
+        }
+    }
+}
+
+impl ToVulkan for ral::TextureComponentMapping {
+    type VkType = vk::ComponentMapping;
+
+    fn to_vulkan(&self) -> Self::VkType {
+        vk::ComponentMapping {
+            r: self.r.to_vulkan(),
+            g: self.g.to_vulkan(),
+            b: self.b.to_vulkan(),
+            a: self.a.to_vulkan(),
         }
     }
 }

@@ -31,7 +31,7 @@ impl AllocationCallbacks {
                 .pfn_allocation(Some(Self::alloc))
                 .pfn_reallocation(Some(Self::realloc))
                 .pfn_free(Some(Self::free))
-                .pfn_internal_allocation(Some(Self::notify_free))
+                .pfn_internal_allocation(Some(Self::notify_alloc))
                 .pfn_internal_free(Some(Self::notify_free))
             .build(),
             user_data: Arc::new(Mutex::new(AllocationUserdata {
@@ -44,9 +44,9 @@ impl AllocationCallbacks {
         this
     }
 
-    pub fn set_alloc(&mut self, alloc: UseAlloc) {
-        self.user_data.lock().alloc = alloc;
-    }
+    //pub fn set_alloc(&mut self, alloc: UseAlloc) {
+    //    self.user_data.lock().alloc = alloc;
+    //}
 
     pub fn get_some_vk_callbacks(&self) -> Option<&vk::AllocationCallbacks> {
         Some(&self.callbacks)
@@ -117,8 +117,7 @@ impl AllocationCallbacks {
         let layout = this.layout_mapping[&ptr];
         this.layout_mapping.remove(&ptr);
 
-        // Allocation will be dropped and handle the free
-        _ = Allocation::new(memory, layout);
+        get_memory_manager().dealloc(Allocation::new(memory, layout));
     }
 
     extern "system" fn notify_alloc(_userdata: *mut c_void, _size: usize, _alloc_type: vk::InternalAllocationType, _scope: vk::SystemAllocationScope) {

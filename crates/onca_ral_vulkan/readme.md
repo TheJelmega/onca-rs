@@ -4,17 +4,4 @@ Most of there features should generally be available on PC (windows/linux), but 
 
 Apple devices are not expected to supported via MoltenVK and if support is added to onca, this would likely be via a Metal RAL.
 
-# Required features
-
-- imageCubeArray
-- independentBlend
-- geometryShader
-- tessellationShader
-- drawIndirectFirstInstance
-- depthBiasClamp
-- fillModeNonSolid
-- depthBounds
-- occlusionQueryPrecise
-- inheritedQueries
-- dualSrcBlend
-- pipelineStatisticsQuery
+Currently, ReBAR is expected to be enabled when using an AMD card, as it this is not enabled, AMD drivers report a 3rd memory heap that we aren't supported yet at the moment

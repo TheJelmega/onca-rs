@@ -3,40 +3,44 @@ use onca_ral as ral;
 use ash::vk;
 use ral::HandleImpl;
 
-use crate::{utils::ToRalError, device::Device};
+use crate::{utils::ToRalError, device::Device, vulkan::AllocationCallbacks};
 
 pub struct Fence {
-    pub semaphore : vk::Semaphore,
-    pub device:     AWeak<ash::Device>,
+    pub semaphore:       vk::Semaphore,
+    pub device:          AWeak<ash::Device>,
+    pub alloc_callbacks: AllocationCallbacks,
 }
 
 impl Fence {
     pub unsafe fn new(device: &Device) -> ral::Result<Fence> {
         let mut typed_create_info = vk::SemaphoreTypeCreateInfo::builder()
-            .semaphore_type(vk::SemaphoreType::TIMELINE)
-            .build();
+            .semaphore_type(vk::SemaphoreType::TIMELINE);
 
         let create_info = vk::SemaphoreCreateInfo::builder()
-            .push_next(&mut typed_create_info)
-            .build();
+            .push_next(&mut typed_create_info);
 
         let semaphore = device.device.create_semaphore(&create_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
         Ok(Fence {
             semaphore,
             device: Arc::downgrade(&device.device),
+            alloc_callbacks: device.alloc_callbacks.clone(),
         })
     }
 }
 
 impl ral::FenceInterface for Fence {
+    unsafe fn get_value(&self) -> ral::Result<u64> {
+        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        device.get_semaphore_counter_value(self.semaphore).map_err(|err| err.to_ral_error())
+    }
+
     unsafe fn signal(&self, value: u64) -> ral::Result<()> {
         let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let signal_info = vk::SemaphoreSignalInfo::builder()
             .semaphore(self.semaphore)
-            .value(value)
-            .build();
+            .value(value);
         
         device.signal_semaphore(&signal_info).map_err(|err| err.to_ral_error())
     }
@@ -49,8 +53,7 @@ impl ral::FenceInterface for Fence {
         
         let wait_info = vk::SemaphoreWaitInfo::builder()
         .semaphores(&semaphores)
-        .values(&values)
-        .build();
+        .values(&values);
 
         device.wait_semaphores(&wait_info, timeout.as_millis() as u64).map_err(|err| err.to_ral_error())
     }
@@ -71,11 +74,15 @@ impl ral::FenceInterface for Fence {
         let wait_info = vk::SemaphoreWaitInfo::builder()
             .flags(if wait_for_all { vk::SemaphoreWaitFlags::ANY } else { vk::SemaphoreWaitFlags::default() })
             .semaphores(&semaphores)
-            .values(&values)
-            .build();
+            .values(&values);
 
         device.wait_semaphores(&wait_info, timeout.as_millis() as u64).map_err(|err| err.to_ral_error())
-    }
+    }  
+}
 
-    
+impl Drop for Fence {
+    fn drop(&mut self) {
+        let device = AWeak::upgrade(&self.device).unwrap();
+        unsafe { device.destroy_semaphore(self.semaphore, self.alloc_callbacks.get_some_vk_callbacks()) };
+    }
 }

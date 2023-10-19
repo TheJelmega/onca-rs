@@ -1,5 +1,5 @@
 #![feature(let_chains)]
-#![feature(generic_const_exprs)]
+#![feature(int_roundings)]
 
 use onca_core::{
 	prelude::*,
@@ -30,6 +30,10 @@ mod command_list;
 mod fence;
 mod shader;
 mod pipeline;
+mod buffer;
+mod descriptor;
+mod memory;
+mod sampler;
 
 
 #[no_mangle]

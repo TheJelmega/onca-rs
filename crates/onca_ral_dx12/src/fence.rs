@@ -25,7 +25,11 @@ impl Fence {
     }
 }
 
-impl ral::FenceInterface for Fence {
+impl ral::FenceInterface for Fence {   
+    unsafe fn get_value(&self) -> ral::Result<u64> {
+        Ok(self.fence.GetCompletedValue()) 
+    }
+
     unsafe fn signal(&self, value: u64) -> ral::Result<()> {
         self.fence.Signal(value).map_err(|err| err.to_ral_error())
     }
@@ -49,6 +53,8 @@ impl ral::FenceInterface for Fence {
         let hres = WaitForMultipleObjects(&events, wait_for_all, timeout.as_millis() as u32).to_hresult();
         hresult_to_ral_result(hres)
     }
+
+    
 }
 
 impl Drop for Fence {

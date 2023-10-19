@@ -8,7 +8,7 @@ use windows::Win32::Graphics::{
     Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC, DXGI_FORMAT}
 };
 
-use crate::{device::Device, shader::Shader, utils::{ToDx, ToRalError}};
+use crate::{device::Device, shader::Shader, utils::{ToDx, ToRalError, get_sampler_filter, get_root_parameter_type, get_descriptor_range_type}, sampler::StaticSampler, descriptors::DescriptorTableLayout};
 
 pub struct PipelineLayout {
     pub root_sig: ID3D12RootSignature
@@ -21,15 +21,77 @@ impl PipelineLayout {
                         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
                         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-        if desc.flags.is_set(ral::PipelineLayoutFlags::ContainsInputLayout) {
+        if desc.flags.contains(ral::PipelineLayoutFlags::ContainsInputLayout) {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         }
 
+        let mut parameters = DynArray::new();
+        let mut all_ranges = DynArray::new();
+
+        if let Some(tables) = &desc.descriptor_tables {
+            parameters.reserve(tables.len());
+            all_ranges.reserve(tables.len());
+
+            for table in tables {
+                let table_layout = table.interface().as_concrete_type::<DescriptorTableLayout>();
+                let (ranges, parameter) = table_layout.get_ranges_and_parameter(parameters.len() as u32);
+                parameters.push(parameter);
+                all_ranges.push(ranges);
+            }
+        }
+
+        if let Some(inlines) = &desc.inline_descriptors {
+            parameters.reserve(inlines.len());
+
+            for inline in inlines {
+                let flags =  match inline.data_access {
+                    ral::DescriptorDataAccess::Default                 => D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+                    ral::DescriptorDataAccess::Static                  => D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC,
+                    ral::DescriptorDataAccess::StaticWhileSetAtExecute => D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE,
+                    ral::DescriptorDataAccess::Volatile                => D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE,
+                };
+                parameters.push(D3D12_ROOT_PARAMETER1 {
+                    ParameterType: get_root_parameter_type(inline.descriptor_type),
+                    Anonymous: D3D12_ROOT_PARAMETER1_0 { Descriptor: D3D12_ROOT_DESCRIPTOR1 {
+                        ShaderRegister: 0,
+                        RegisterSpace: parameters.len() as u32,
+                        Flags: flags
+                    }},
+                    ShaderVisibility: inline.visibility.to_dx(),
+                })
+            }
+        }
+
+        if let Some(constants) = &desc.constant_ranges {
+            parameters.reserve(constants.len());
+            for constant in constants {
+                parameters.push(D3D12_ROOT_PARAMETER1 {
+                    ParameterType: D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                    Anonymous: D3D12_ROOT_PARAMETER1_0 { Constants: D3D12_ROOT_CONSTANTS {
+                        ShaderRegister: 0,
+                        RegisterSpace: parameters.len() as u32,
+                        Num32BitValues: constant.count as u32,
+                    } },
+                    ShaderVisibility: constant.visibility.to_dx(),
+                })
+            }
+        }
+
+        let mut static_samplers = DynArray::new();
+        if let Some(samplers) = &desc.static_samplers {
+            for (reg_idx, sampler) in samplers.iter().enumerate() {
+                let mut desc = sampler.interface().as_concrete_type::<StaticSampler>().desc;
+                desc.ShaderRegister = reg_idx as u32;
+                desc.RegisterSpace = parameters.len() as u32;
+                static_samplers.push(desc)
+            }
+        }
+
         let root_desc = D3D12_ROOT_SIGNATURE_DESC1 {
-            NumParameters: 0, // TODO
-            pParameters: core::ptr::null(), // TODO
-            NumStaticSamplers: 0, // TODO
-            pStaticSamplers: core::ptr::null(), // TODO
+            NumParameters: parameters.len() as u32,
+            pParameters: parameters.as_ptr(),
+            NumStaticSamplers: static_samplers.len() as u32,
+            pStaticSamplers: static_samplers.as_ptr(),
             Flags: flags,
         };
 
@@ -41,11 +103,7 @@ impl PipelineLayout {
         };
 
         let mut signature_blob = None;
-
-        match D3D12SerializeVersionedRootSignature(&versioned_root_desc, &mut signature_blob, None) {
-            Ok(_) => (),
-            Err(_) => todo!(),
-        }
+        D3D12SerializeVersionedRootSignature(&versioned_root_desc, &mut signature_blob, None).map_err(|err| err.to_ral_error())?;
 
         // If we get here, the blob contains a valid serialized root signature 
         let signature_blob = signature_blob.unwrap_unchecked();
@@ -89,11 +147,14 @@ impl Pipeline {
             pipeline_stream.set_depth_stencil_format(format.to_dx());
         }
 
-        let mut input_layout = DynArray::with_capacity(desc.vertex_input_layout.elements.len());
-        for element in &desc.vertex_input_layout.elements {
-            input_layout.push(element.to_dx());
+        let mut dx_input_layout = DynArray::new();
+        if let Some(input_layout) = &desc.input_layout {
+            dx_input_layout.reserve(input_layout.elements.len());
+            for element in &input_layout.elements {
+                dx_input_layout.push(element.to_dx());
+            }
+            pipeline_stream.set_input_layout(&dx_input_layout);
         }
-        pipeline_stream.set_input_layout(&input_layout);
         
         let mut stream = pipeline_stream.build();
         let dx_desc = D3D12_PIPELINE_STATE_STREAM_DESC {

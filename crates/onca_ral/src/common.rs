@@ -1,6 +1,7 @@
-use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16}};
-use onca_core::{prelude::*, collections::HashSet};
+use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16, NonZeroU64}, hash::Hash};
+use onca_core::{prelude::*, collections::{HashSet, StaticDynArray}};
 use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
+use onca_logging::{log_verbose, LogCategory};
 use crate::*;
 
 extern crate static_assertions as sa;
@@ -31,7 +32,10 @@ impl Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}.{}.{}", self.major, self.minor, self.patch))
+        scoped_alloc!(UseAlloc::TlsTemp);
+
+        // TODO: format to a stack string ??
+        f.pad(&onca_format!("{}.{}.{}", self.major, self.minor, self.patch))
     }
 }
 
@@ -102,7 +106,6 @@ pub struct Rect {
     pub width:  u32,
     pub height: u32,
 }
-
 //==============================================================================================================================
 // QUEUES
 //==============================================================================================================================
@@ -205,7 +208,7 @@ pub enum SwapChainAlphaMode {
     Premultiplied,
     /// Alpha will be respected by the compsiting process. Non-alpha components are expected to not be multiplied by the alpha.
     PostMultiplied,
-    /// Alpha mode is unspecified. The compossiting process will be in control of the blend mode.
+    /// Alpha mode is unspecified. The compositing process will be in control of the blend mode.
     Unspecified,
 }
 
@@ -266,213 +269,521 @@ impl<'a> PresentInfo<'a> {
 }
 
 //==============================================================================================================================
+// MEMORY
+//==============================================================================================================================
+
+/// Current memory value for a given memory type
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MemoryBudgetValue {
+	/// OS-provided memory budget.
+	///
+	/// Higher usage may incur stuttering or perfomance penalties
+	pub budget:                u64,
+	/// Amount of memory in use by the application
+	pub in_use:                u64,
+	/// Memory that currently available to be reserved
+	pub available_reservation: u64,
+	/// Amount of memory that is reserved by the application.
+	///
+	/// This is a hint to the OS on how much memory is expected to be used by the application.
+	pub reserved:              u64,
+}
+
+/// Memory info for current state of memory
+pub struct MemoryBudgetInfo {
+	pub budgets: [MemoryBudgetValue; MemoryHeapType::COUNT],
+	pub total:   MemoryBudgetValue,
+}
+
+/// Memory flags
+#[flags]
+pub enum MemoryTypeFlags {
+	/// Memory does *not* need to be manually flushed for writes, or invalidated for reads.
+    /// 
+    /// This flag also implies that the memory is host visible
+	HostCoherent,
+	/// Memory will be cached on the host side
+    /// 
+    /// This flag also implies that the memory is host visible
+	HostCached,
+}
+
+/// Memory heap type
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumCount, EnumDisplay)]
+pub enum MemoryHeapType {
+    /// Memory heap lives on the GPU (device local)
+    Gpu,
+    /// Memory heap lives on the system, i.e. CPU RAM
+    /// 
+    /// System memory is always either coherent, cached, or both
+    System,
+    /// <=256 MB device local heap that represent the PCI-e upload window when ReBAR is disabled
+    UploadHeap,
+}
+
+/// Memory allocation type
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumCount, EnumDisplay)]
+pub enum MemoryType {
+    /// Memory has the highest bandwidth to the GPU, but does not provide CPU access
+    /// 
+    /// This memory will try to map to memory with the following properties:
+    /// - GPU memory
+    /// - No CPU access
+    Gpu,
+    // TODO: when ReBAR is enabled, these resources should directly be used, this is something we need to figure out in the renderer layer above
+    /// Memory is optimal for uploading info
+    /// 
+    /// This memory will try to map to memory with the following properties:
+    /// - GPU memory when ReBAR is enabled, CPU memory if ReBAR is *not* enabled
+    /// - CPU write-combine
+    Upload,
+    /// Memory is optimized for CPU access, and therefore has a lower memory bandwidth for the GPU.
+    /// 
+    /// This memory type is optimally used for GPU-write-one, CPU-read operations.
+    /// 
+    /// This memory is required to only be used as a CopyDst
+    /// 
+    /// This memory will try to map to memory with the following properties:
+    /// - CPU memory
+    /// - CPU coherent
+    /// - CPU cached (write-back)
+    Readback,
+}
+
+/// Memory type info
+#[derive(Clone, Copy, Debug)]
+pub struct MemoryTypeInfo {
+    /// Type
+    pub mem_type:  MemoryType,
+    /// Memory heap this type is on
+    pub heap_type: MemoryHeapType,
+    /// Memory indices for certain API/vendors
+    /// 
+    /// May be unused on some APIs
+    pub indices:   (u8, u8),
+}
+
+impl MemoryTypeInfo {
+    pub const MAX_MEMORY_TYPES: usize = 4;
+
+    pub fn empty_with_type(mem_type: MemoryType) -> Self {
+        Self { mem_type, heap_type: MemoryHeapType::System, indices: (u8::MAX, u8::MAX) }
+    }
+
+    pub fn create_empty_heap_arr() -> [Self; MemoryHeapType::COUNT] {
+        [
+            Self::empty_with_type(MemoryType::Gpu),
+            Self::empty_with_type(MemoryType::Upload),
+            Self::empty_with_type(MemoryType::Readback)
+        ]
+    }
+}
+
+/// Memory heap info
+#[derive(Debug)]
+pub struct MemoryHeapInfo {
+    /// Memory heap type
+    pub heap_type:      MemoryHeapType,
+    /// Does the memory represents combined memory for multiple GPU instances (only valid for MemoryType::GPU)
+    pub multi_instance: bool,
+    /// Size of the heap
+    pub size:           u64,
+    /// Indices to memory types supported by this heap
+    pub memory_types:   StaticDynArray<MemoryType, {MemoryType::COUNT}>,
+}
+
+impl Clone for MemoryHeapInfo {
+    fn clone(&self) -> Self {
+        Self {
+            heap_type: self.heap_type.clone(),
+            multi_instance: self.multi_instance.clone(),
+            size: self.size.clone(),
+            memory_types: self.memory_types.clone()
+        }
+    }
+}
+
+impl MemoryHeapInfo {
+    pub const MAX_MEMORY_TYPES: usize = 4;
+
+    pub fn empty_with_type(heap_type: MemoryHeapType) -> Self {
+        Self { heap_type, multi_instance: false, size: 0, memory_types: StaticDynArray::new() }
+    }
+
+    pub fn create_empty_heap_arr() -> [Self; MemoryHeapType::COUNT] {
+        [
+            Self::empty_with_type(MemoryHeapType::Gpu),
+            Self::empty_with_type(MemoryHeapType::System),
+            Self::empty_with_type(MemoryHeapType::UploadHeap)
+        ]
+    }
+}
+
+pub struct DeviceMemoryHeap {
+    /// Memory heap representing the actual device
+    pub heap:      MemoryHeapInfo,
+    /// Memory heap  representing the PCI-e upload heap (when rebar is *not* enabled)
+    pub non_rebar: Option<MemoryHeapInfo>
+}
+
+#[derive(Clone, Debug)]
+pub struct MemoryInfo {
+    /// Available memory heaps
+    pub heaps: [MemoryHeapInfo; MemoryHeapType::COUNT],
+    /// Available memory types
+    pub mem_types: [MemoryTypeInfo; MemoryType::COUNT],
+}
+
+impl MemoryInfo {
+    pub fn log_info(&self, log_cat: LogCategory, end_line: bool) {
+        fn get_type_str(mem_type: MemoryType) -> &'static str {
+            match mem_type {
+                MemoryType::Gpu      => "GPU     ",
+                MemoryType::Upload   => "Upload  ",
+                MemoryType::Readback => "Readback",
+            }
+        }
+
+        log_verbose!(log_cat, "|-[RAL Memory]--------------------------------------------------------------------+-----------------------------|");
+
+        let system_heap = &self.heaps[MemoryHeapType::System as usize];
+        log_verbose!(log_cat, "|- System Memory - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+- - - - - - - - - - - - - - -|");
+        log_verbose!(log_cat, "| - Size                                                                          | {:>23} MiB |", system_heap.size / MiB(1) as u64);
+        for idx in &system_heap.memory_types {
+            let mem_type_info = &self.mem_types[*idx as usize];
+            let mem_type = get_type_str(mem_type_info.mem_type);
+            log_verbose!(log_cat, "| - {mem_type}                                                                      |                    {:3}, {:3} |", mem_type_info.indices.0, mem_type_info.indices.1);
+            
+        }
+
+        let device_heap = &self.heaps[MemoryHeapType::System as usize];
+        log_verbose!(log_cat, "|- Device Memory - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+- - - - - - - - - - - - - - -|");
+        log_verbose!(log_cat, "| - Size                                                                          | {:>23} MiB |", device_heap.size / MiB(1) as u64);
+        for idx in &device_heap.memory_types {
+            let mem_type_info = &self.mem_types[*idx as usize];
+            let mem_type = get_type_str(mem_type_info.mem_type);
+            log_verbose!(log_cat, "| - {mem_type}                                                                      |                    {:3}, {:3} |", mem_type_info.indices.0, mem_type_info.indices.1);
+
+        }
+
+        let non_rebar_heap = &self.heaps[MemoryHeapType::UploadHeap as usize];
+        if non_rebar_heap.size == 0 {
+            log_verbose!(log_cat, "| - ReBAR enabled                                                                 |                             |");
+        } else {
+            log_verbose!(log_cat, "|- Upload Memory - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+- - - - - - - - - - - - - - -|");
+            log_verbose!(log_cat, "| - Size                                                                          | {:>23} MiB |", non_rebar_heap.size / MiB(1) as u64);
+            for idx in &non_rebar_heap.memory_types {
+                let mem_type_info = &self.mem_types[*idx as usize];
+                let mem_type = get_type_str(mem_type_info.mem_type);
+                log_verbose!(log_cat, "| - {mem_type}                                                                      |                    {:3}, {:3} |", mem_type_info.indices.0, mem_type_info.indices.1);
+            }
+        }
+
+        if end_line {
+            log_verbose!(log_cat, "+---------------------------------------------------------------------------------------------------------------+");
+        }
+    }
+}
+
+//==============================================================================================================================
 // BUFFERS
 //==============================================================================================================================
+
+/// Buffer copy region
+#[derive(Clone, Copy, Debug)]
+pub struct BufferCopyRegion {
+    /// Offset in source buffer
+    pub src_offset: u64,
+    /// Offset in destination buffer
+    pub dst_offset: u64,
+    /// Number of bytes to copy
+    pub size:       u64,
+}
 
 //==============================================================================================================================
 // TEXTURES
 //==============================================================================================================================
 
-/// Texture usages
-#[flags]
-pub enum TextureUsage {
-    /// Texture can be used as a copy source
-    CopySrc,
-    /// Texture can be used as a copy destination
-    CopyDst,
-    /// Texture can be used as a sampled texture
-    Sampled,
-    /// Texture can be used as a storage texture
-    Storage,
-    /// Texture can be used as a color attachment
-    ColorAttachment,
-    /// Texture can be used as a depth/stencil attachment
-    DepthStencilAttachment,
+/// View into a region of a texture to copy
+#[derive(Clone, Copy, Debug)]
+pub struct TextureCopyView {
+    /// Subresource index
+    pub subresource: TextureSubresourceIndex,
+    /// Texture offset
+    pub offset:      TextureOffset,
+    /// Texture extend
+    pub extent:      TextureExtent
 }
 
-/// Texture view type
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, EnumDisplay)]
-pub enum TextureViewType {
-    /// 1D texture view
-    View1D,
-    /// 2D texture view
-    View2D,
-    /// 3D texture view
-    View3D,
-    /// Cubemap texture view
-    ViewCube,
-    /// 1D texture array view
-    View1DArray,
-    /// 2D texture array view
-    View2DArray,
-    /// 3D texture array view
-    ViewCubeArray,
-}
+impl TextureCopyView {
+    pub fn validate(&self, texture: &TextureHandle, is_source: bool) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            let extent_width = self.extent.width.get();
+            let extent_height = self.extent.height.get();
+            let extent_depth = self.extent.depth.get();
 
-/// Aspects of an image included in a view
-#[flags]
-pub enum TextureViewAspect {
-    /// Include the color in the view
-    Color,
-    /// Include the depth in the view
-    Depth,
-    /// Include the stencil in the view
-    Stencil,
-    /// Include the metadata in the view
-    Metadata,
-    /// Include plane 0 of a muli-planar texture format
-    Plane0,
-    /// Include plane 1 of a muli-planar texture format
-    Plane1,
-    /// Include plane 2 of a muli-planar texture format
-    Plane2,
-}
+            let src_dst_str = if is_source { "source" } else { "desintation" };
 
-// TODO: DX12 does planes as indices, not aspects
-/// Texture subresource range
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum TextureSubresourceRange {
-    Texture {
-        /// Image aspects to include
-        aspect:       TextureViewAspect,
-        /// Mip level base
-        base_mip:     u8,
-        /// Number of mip levels
-        /// 
-        /// If the number of levels is unknown, assign `None`
-        mip_levels:   Option<NonZeroU8>,
-    },
-    Array {
-        /// Image aspects to include
-        aspect:       TextureViewAspect,
-        /// Mip level base
-        base_mip:     u8,
-        /// Number of mip levels
-        /// 
-        /// If the number of levels is unknown, assign `None`
-        mip_levels:   Option<NonZeroU8>,
-        /// Base array layer
-        base_layer:   u16,
-        /// Number of array layers
-        /// 
-        /// If the number of layers is unknown, assign `None`
-        array_layers: Option<NonZeroU16>,
+            let layer = match self.subresource {
+                TextureSubresourceIndex::Texture { .. } => 0,
+                TextureSubresourceIndex::Array { layer, .. } => layer,
+            };
+
+            let (width, height, depth, layers) = texture.size().as_tuple();
+            check_invalid_parameter!(extent_width <= width, "The extent width {} cannot exceed the {src_dst_str} texture's width {width}", extent_width);
+            check_invalid_parameter!(self.offset.x + extent_width <= width, "The {src_dst_str} x-offset + extent width {} cannot exceed the {src_dst_str} texture's width {width}", self.offset.x + extent_width);
+            check_invalid_parameter!(extent_height <= height, "The extent height {} cannot exceed the {src_dst_str} texture's height {height}", self.extent.height.get());
+            check_invalid_parameter!(self.offset.y + extent_height <= height, "The {src_dst_str} y-offset + extent height {} cannot exceed the {src_dst_str} texture's height {height}", self.offset.y + extent_height);
+            check_invalid_parameter!(extent_depth <= depth, "The extent depth {} cannot exceed the {src_dst_str} texture's depth {depth}", extent_depth);
+            check_invalid_parameter!(self.offset.z + extent_depth <= depth, "The {src_dst_str} y-offset + extent depth {} cannot exceed the {src_dst_str} texture's depth {depth}", self.offset.z + self.extent.depth.get());
+
+            check_invalid_parameter!(layer < layers, "The {src_dst_str} layer {layer} is out of range, number of layers: {layers}");
+
+            let aspect = texture.format().aspect();
+            let mip_levels = texture.mip_levels();
+            match self.subresource {
+                TextureSubresourceIndex::Texture { aspect: index_aspect, mip_level } => {
+                    check_invalid_parameter!(aspect.contains(index_aspect), "The {src_dst_str} subresource index contains aspects that aren't in the {src_dst_str} texture, index aspect: {index_aspect}, {src_dst_str} texture aspect: {aspect}");
+                    check_invalid_parameter!(mip_level < mip_levels, "The {src_dst_str} subresource mip level is out of range for the {src_dst_str} texture, mip level: {mip_level}, {src_dst_str} mip levels {mip_levels}");
+                },
+                TextureSubresourceIndex::Array { aspect: index_aspect, mip_level, .. } => {
+                    check_invalid_parameter!(aspect.contains(index_aspect), "The {src_dst_str} subresource index contains aspects that aren't in the {src_dst_str} texture, index aspect: {index_aspect}, {src_dst_str} texture aspect: {aspect}");
+                    check_invalid_parameter!(mip_level < mip_levels, "The {src_dst_str} subresource mip level is out of range for the {src_dst_str} texture, mip level: {mip_level}, {src_dst_str} mip levels {mip_levels}");
+                },
+            }
+        }
+        Ok(())
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct TextureCopyRegion {
+    /// Source texture copy view
+    pub src_view: TextureCopyView,
+    /// Destination texture copy view
+    pub dst_view: TextureCopyView,
+}
 
-/// Texture (memory) layout
-#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay)]
-pub enum TextureLayout {
-    /// Unknown texture layout
+impl TextureCopyRegion {
+    pub fn validate(&self, src: &TextureHandle, dst: &TextureHandle) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            self.src_view.validate(src, true)?;
+            self.dst_view.validate(dst, false)?;
+
+            check_invalid_parameter!(self.src_view.extent.width  == self.dst_view.extent.width , "Source and destination copy view don't have the same width in a copy region");
+            check_invalid_parameter!(self.src_view.extent.height == self.dst_view.extent.height, "Source and destination copy view don't have the same height in a copy region");
+            check_invalid_parameter!(self.src_view.extent.depth  == self.dst_view.extent.depth , "Source and destination copy view don't have the same depth in a copy region");
+        }
+        Ok(())
+    }
+}
+
+//==============================================================================================================================
+// TEXTURES <-> BUFFERS
+//==============================================================================================================================
+
+/// Required layout of buffer to be able to store the content of a subresource of a texture
+#[derive(Clone, Copy)]
+pub struct TextureBufferSubresourceLayout {
+    /// Offset in the texture buffer (relative to the start of the resource)
+    pub offset:     u64,
+    /// Format components of the data stored in the buffer (data-type has no influence on stored size, as it only determines how the data is interpreted)
+    pub components: FormatComponents,
+    /// Width of the texture stored in the buffer
+    pub width:      u16,
+    /// Height of the texture stored in the buffer
+    pub height:     u16,
+    /// Depth of the texture stored in the buffer
+    pub depth:      u16,
+    /// Pitch (in bytes), of the data in a single row.
     /// 
-    /// Cannot be transitioned to and any transition from this layout will have the memory undefined
-    Undefined,
-    /// Preinitialized layout (texture memory can be populated, but has not been initialized by the driver)
+    /// This is not the size of a row, only of the unpadded data, for the full size of a row, see `row_pitch`.
+    pub data_pitch:   u64,
+    /// Pitch (in bytes), of a sigle row in the texture buffer
+    pub row_pitch:  u64,
+    /// Numbers of rows required to account for a full 2D slice of a texture
+    pub slice_rows: u16,
+    /// Total size of the buffer
+    pub total_size: u64,
+}
+
+impl TextureBufferSubresourceLayout {
+    /// Create a texture buffer layout for a resourece with only 1 subresource
+    pub fn new(components: FormatComponents, size: TextureSize, subesource_index: TextureSubresourceIndex) -> Option<Self> {
+        let (width, height, depth, _) = size.as_tuple();
+        let (aspect, mip) = match subesource_index {
+            TextureSubresourceIndex::Texture { aspect, mip_level } => (aspect, mip_level),
+            TextureSubresourceIndex::Array { aspect, mip_level, .. } => (aspect, mip_level),
+        };
+
+        Self::_new(components, width, height, depth, aspect, mip)
+    }
+
+    fn _new(components: FormatComponents, width: u16, height: u16, depth: u16, aspect: TextureAspect, mip: u8) -> Option<Self> {
+        let (width_align, height_align) = components.min_mip_size();
+
+        let width = (width >> mip).next_multiple_of(width_align);
+        let height = (height >> mip).next_multiple_of(height_align);
+
+        // Adjust for the plane size
+        let FormatSubsampledPlaneLayout { plane_components, min_plane_pitch_width, width, height: plane_height } = components.get_subsampled_plane_layout(aspect, width, height);
+
+        // No need to align to either D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT or D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, as we require DX12 to support the VulkanOnDX12 features:
+        // https://microsoft.github.io/DirectX-Specs/d3d/VulkanOn12.html#unrestricted-buffer-texture-copy-row-pitch-and-offset
+        let row_pitch = plane_components.calculate_min_row_major_row_pitch(min_plane_pitch_width) as u64;
+        let data_pitch = plane_components.calculate_min_row_major_row_pitch(width) as u64;
+
+        let slice_rows = if components.is_planar() {
+            plane_height
+        } else {
+            height / height_align
+        };
+
+        let total_size = (slice_rows as u64 * depth as u64 - 1) * row_pitch + min_plane_pitch_width as u64;
+
+        Some(Self {
+            offset: 0,
+            components: plane_components,
+            width,
+            height,
+            depth,
+            data_pitch,
+            row_pitch,
+            slice_rows,
+            total_size,
+        })
+    }
+}
+/// Required layout of buffer to be able to store the content of a texture
+#[derive(Clone)]
+pub struct TextureBufferLayout {
+    /// Subresources
+    pub subresources: DynArray<(TextureSubresourceIndex, TextureBufferSubresourceLayout)>,
+    /// Total size of the buffer
+    pub total_size: u64,
+}
+
+impl TextureBufferLayout {
+    /// Calculate the texture layotut as stored in a buffer for an entire resource
+    pub fn new(components: FormatComponents, size: TextureSize, subresource_range: TextureSubresourceRange) -> Option<Self> {
+        if matches!(components, FormatComponents::SamplerFeedbackMinMip | FormatComponents::SamplerFeedbackMipRegionUsed) {
+            return None;
+        }
+
+        let (width, height, depth, _) = size.as_tuple();
+        let (num_mips, num_layers) = match subresource_range {
+            TextureSubresourceRange::Texture { aspect: _, base_mip, mip_levels } => {
+                debug_assert!(base_mip == 0);
+                (mip_levels.unwrap().get(), 1)
+            },
+            TextureSubresourceRange::Array { aspect: _, base_mip, mip_levels, base_layer, array_layers } => {
+                debug_assert!(base_mip == 0);
+                debug_assert!(base_layer == 0);
+                (mip_levels.unwrap().get(), array_layers.unwrap().get())
+            },
+        };
+
+        let plane_count = components.num_planes();
+
+        let mut subresources = DynArray::with_capacity(0);
+        let mut total_size = 0;
+        for plane in 0..plane_count {
+            for layer in 0..num_layers {
+                for mip in 0..num_mips {
+                    let aspect = components.get_aspect_from_plane(plane).unwrap();
+                    let index = if num_layers == 1 {
+                        TextureSubresourceIndex::Texture { aspect: aspect, mip_level: mip }
+                    } else {
+                        TextureSubresourceIndex::Array { aspect: aspect, mip_level: mip, layer }
+                    };
+                    let mut subresource_layout = TextureBufferSubresourceLayout::_new(components, width, height, depth, aspect, mip).unwrap();
+
+                    subresource_layout.offset = total_size;
+                    total_size += subresource_layout.total_size;
+                    subresources.push((index, subresource_layout));
+                }
+            }
+        }
+
+        Some(Self {
+            subresources,
+            total_size,
+        })
+    }
+}
+
+/// Buffer <-> Texture copy region
+#[derive(Clone, Copy, Debug)]
+pub struct BufferTextureRegion {
+    /// Offset into the buffer to copy from
+    pub buffer_offset:               u64,
+    /// Pitch (in texels) of a row in the buffer, representing a 1D row in a texture, and the number of rows in the buffer, representing 2D slice in a texture.
     /// 
-    /// Cannot be transitioned into
-    Preinitialized,
-    /// Common texture layout
-    Common,
-    /// Common read-only texture layout
-    ReadOnly,
-    /// Shader read-only texture layout
-    ShaderRead,
-    /// Shader read/write texture layout
-    ShaderWrite,
-    /// Common texture layout for attachments (render target or depth/stencil)
-    Attachment,
-    /// Render target layout
-    RenderTarget,
-    /// Depth/stencil layout
-    DepthStencil,
-    /// Read-only depth/stencil layout
-    DepthStencilReadOnly,
-    /// Read-only depth and read/write stencil layout
-    DepthRoStencilRw,
-    /// Read/write depth and read/write stencil layout
-    DepthRwStencilRo,
-    /// Depth layout
-    Depth,
-    /// Read only depth layout
-    DepthReadOnly,
-    /// Stencil layout
-    Stencil,
-    /// Read only stencil layout
-    StencilReadOnly,
-    /// Copy source layout
-    CopySrc,
-    /// Copy destination layout
-    CopyDst,
-    /// Resolve source layout
-    ResolveSrc,
-    /// Resolve destination layout
-    ResolveDst,
-    /// Present layout
-    Present,
-    /// Shading rate layout
-    ShadingRate,
-    /// Video decode source layout (currently unsupported)
-    VideoDecodeSrc,
-    /// Video decode destination layout (currently unsupported)
-    VideoDecodeDst,
-    /// Video decode reconstructed or reference layout (currently unsupported)
-    VideoDecodeReconstructedOrReference,
-    /// Video processing source layout (currently unsupported)
-    VideoProcessSrc,
-    /// Video processing destination layout (currently unsupported)
-    VideoProcessDst,
-    /// Video encode source layout (currently unsupported)
-    VideoEncodeSrc,
-    /// Video encode destination layout (currently unsupported)
-    VideoEncodeDst,
-    /// Video encode reconstructed or reference layout (currently unsupported)
-    VideoEncodeReconstructedOrReference,
+    /// If `None` is passed, data will be interpreted as being tightly packed.
+    /// 
+    /// Row pitch needs to be aligned to the byte size of of a unit (texel/block)
+    pub buffer_row_length_and_height: Option<(NonZeroU64, NonZeroU64)>,
+    /// Texture copy view
+    pub texture_view:                TextureCopyView,
 }
 
-/// Texture size
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TextureSize {
-    /// 1D texture size
-    Texture1D {
-        width:  u16,
-        layers: u16,
-    },
-    /// 2D or cube texturesize
-    Texture2D {
-        width:  u16,
-        height: u16,
-        layers: u16,
-    },
-    /// 3D texture size
-    Texture3D{
-        width:  u16,
-        height: u16,
-        depth:  u16,
-        layers: u16,
-    },
-}
+impl BufferTextureRegion {
+    pub fn validate(&self, buffer: &BufferHandle, texture: &TextureHandle, is_texture_source: bool) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            self.texture_view.validate(texture, is_texture_source)?;
+            let texel_align = texture.format().unit_byte_size();
+            check_invalid_parameter!(texel_align.is_power_of_two(), "Can only copy {} a texture with a format with a power-of-2 bytesize", if is_texture_source { "from" } else { "to" });
 
-impl TextureSize {
-    /// Create a 1D texture size
-    pub const fn new_1d(width: u16, layers: u16) -> TextureSize {
-        TextureSize::Texture1D { width, layers } 
-    }
+            check_invalid_parameter!(self.buffer_offset < buffer.size(), "Buffer offset out of range: {}, buffer size: {}", self.buffer_offset, buffer.size());
+            
+            if let Some((pitch, height)) = self.buffer_row_length_and_height {
+                let pitch = pitch.get();
+                let height = height.get();
+                let texel_align_mask = !(texel_align as u64 - 1);
+                check_invalid_parameter!(pitch % texel_align_mask != 0, "The buffer row pitch needs to be a power of 2");
 
-    /// Create a 2D texture size
-    pub const fn new_2d(width: u16, height: u16, layers: u16) -> TextureSize {
-        TextureSize::Texture2D { width, height, layers } 
-    }
- 
-    /// Create a 3D texture size
-    pub const fn new_3d(width: u16, height: u16, depth: u16, layers: u16) -> TextureSize {
-        TextureSize::Texture3D { width, height, depth, layers } 
+                let tex_height = texture.size().height();
+                check_invalid_parameter!(height >= tex_height as u64, "Buffer height, i.e. num rows per 2D slice, must be greater or equal to the the heigh of the texture, buffer height: {height}, texture height {tex_height}");
+            }
+        }
+        Ok(())
     }
 }
 
-/// Texture flags
+//==============================================================================================================================
+// SPARSE RESOURCES
+//==============================================================================================================================
+
+/// Sparse flags
 #[flags]
-pub enum TextureFlags {
+pub enum SparseFlags {
+    /// Resource is backed by sparse memory
+    Sparse,
+    /// Resource can be partially in memory (requires `Sparse` flags)
+    SparseResidency,
+    /// Resource can be backed by memory that also backs another resource
+    SparseAliassed,
+}
+
+impl SparseFlags {
+    pub fn validate(&self) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            if !self.contains(SparseFlags::Sparse) {
+
+                if self.contains(SparseFlags::SparseResidency) {
+                    return Err(Error::InvalidParameter("`SparseFlags::SparseResidency` requires `SparseFlags::Sparse` to be set".to_onca_string()));
+                }
+                if self.contains(SparseFlags::SparseAliassed) {
+                    return Err(Error::InvalidParameter("`SparseFlags::SparseAliassed` requires `SparseFlags::Sparse` to be set".to_onca_string()));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 //==============================================================================================================================
@@ -482,6 +793,40 @@ pub enum TextureFlags {
 mod vertex_format;
 pub use vertex_format::*;
 
+/// Vertex buffer view
+#[derive(Clone)]
+pub struct VertexBufferView {
+    /// Input slot to bind the vertex buffer to
+    pub input_slot: u8,
+    /// Buffer to bind
+    pub buffer:     BufferHandle,
+    /// Offset of the first vertex in the buffer (in bytes)
+    pub offset:     u64,
+    /// Size of the range containing valid vertices in the buffer.
+    /// `u64::MAX` means that the entire buffer should be used
+    pub size:       u64,
+    /// Stide of each vertex in the buffer
+    pub stride:     u16,
+}
+
+impl VertexBufferView {
+    pub fn validate(&self) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            if self.input_slot >= constants::MAX_VERTEX_INPUT_BUFFERS as u8 {
+                return Err(Error::InvalidParameter(onca_format!("Vertex input buffer slot out of range ({}), only up to {} input slots are allowed", self.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
+            }
+            if self.offset >= self.buffer.size() {
+                return Err(Error::InvalidParameter(onca_format!("Vertex buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
+            }
+            if !self.buffer.usages().contains(BufferUsage::VertexBuffer) {
+                return Err(Error::InvalidParameter("Buffer needs to have the `VertexBuffer` usage to be able to bound as a vertex buffer".to_onca_string()));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Index format
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum IndexFormat {
@@ -489,19 +834,30 @@ pub enum IndexFormat {
     U32,
 }
 
-//==============================================================================================================================
-// DESCRIPTOR
-//==============================================================================================================================
+/// Index buffer view
+#[derive(Clone)]
+pub struct IndexBufferView {
+    /// Buffer to bind
+    pub buffer:       BufferHandle,
+    /// Offset into the buffer
+    pub offset:       u64,
+    /// Size of the range containing valid vertices in the buffer.
+    /// `u64::MAX` means that the entire buffer should be used
+    pub size:         u64,
+    /// Index format
+    pub index_format: IndexFormat,
+}
 
-pub enum DescriptorHeapType {
-    /// All resources, except for RTVs, DSVs and samplers
-    Resources,
-    /// Render target views
-    RTV,
-    /// Depth stencil views
-    DSV,
-    /// Samplers
-    Samplers,
+impl IndexBufferView {
+    pub fn validate(&self) -> Result<()> {
+        #[cfg(feature = "validation")]
+        {
+            if self.offset >= self.buffer.size() {
+                return Err(Error::InvalidParameter(onca_format!("Index buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
+            }
+        }
+        Ok(())
+    }
 }
 
 //==============================================================================================================================
@@ -560,6 +916,21 @@ pub enum ShaderTypeMask {
     Callable,
 }
 
+/// Shader visibility
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ShaderVisibility {
+    /// All shaders
+    All,
+    // Vertex shader
+    Vertex,
+    // Pixel/fragment shader
+    Pixel,
+    // Task shader
+    Task,
+    // Mesh shader
+    Mesh,
+}
+
 //==============================================================================================================================
 // PIPELINE
 //==============================================================================================================================
@@ -593,24 +964,6 @@ pub struct ScissorRect {
     /// Height
     pub height: u16,
 }
-
-/// Pipeline layout flags
-#[flags]
-pub enum PipelineLayoutFlags {
-    /// Pipelines created with this flag can contain input layouts
-    /// 
-    /// On certain hardware, this can allow space to be saved in the pipeline layout
-    ContainsInputLayout,
-}
-
-/// Pipeline layout description
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct PipelineLayoutDesc {
-    /// Flags
-    pub flags: PipelineLayoutFlags,
-}
-
-
 
 /// Primitive topology type
 #[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay, EnumCount, EnumFromIndex)]
@@ -974,7 +1327,7 @@ impl StencilOpState {
     }
 }
 
-sa::const_assert!(StencilOp::COUNT                - 1 <= StencilOpState::STENCIL_OP_MASK as usize);
+sa::const_assert!(StencilOp::COUNT - 1 <= StencilOpState::STENCIL_OP_MASK as usize);
 sa::const_assert!(CompareOp::COUNT - 1 <= StencilOpState::COMPARISON_OP_MASK as usize);
 
 /// Depth stencil state
@@ -1436,8 +1789,8 @@ pub struct InputLayoutElement {
     /// Vertex buffer input slot
     pub input_slot:     u8,
     /// Format the data is encoded as
-    pub format:         Format,
-    /// Data offset in the vertex data
+    pub format:         VertexFormat,
+    /// Data offset (in bytes) in the vertex data
     pub offset:         u16,
     /// Step rate
     pub step_rate:      InputLayoutStepRate,
@@ -1451,6 +1804,16 @@ pub struct InputLayout {
 }
 
 impl InputLayout {
+    /// Create a new [`InputLayout`]
+    pub fn new() -> Self {
+        Self { elements: DynArray::new() }
+    }
+
+    /// Push an element into the [`InputLayout`]
+    pub fn push(&mut self, element: InputLayoutElement) {
+        self.elements.push(element)
+    }
+
     pub fn validate(&self) -> Result<()> {
         #[cfg(feature = "validation")]
         {
@@ -1460,6 +1823,7 @@ impl InputLayout {
 
             let mut encountered_semantics = HashSet::<(String, u8)>::new();
             let mut strides = [0u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize];
+            let mut step_rates = [None; constants::MAX_VERTEX_INPUT_BUFFERS as usize];
 
             for element in &self.elements {
                 if element.input_slot as u32 >= constants::MAX_VERTEX_INPUT_BUFFERS {
@@ -1478,7 +1842,7 @@ impl InputLayout {
                     return Err(Error::InvalidParameter(onca_format!("Vertex input element offset out of bounds `{}` as slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET ({})", element.offset, element.input_slot, constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET)));
                 }
 
-                let elem_size = element.format.num_bytes();
+                let elem_size = element.format.byte_size();
 
                 if elem_size == 2 && element.offset & 0x1 != 0 {
                     return Err(Error::InvalidParameter(onca_format!("Invalid offset `{}`, vertex input attributes that require 2 bytes need to have their offset aligned to 2 bytes", element.offset)));
@@ -1487,6 +1851,15 @@ impl InputLayout {
                 }
 
                 strides[element.input_slot as usize] = strides[element.input_slot as usize].max(element.offset + elem_size as u16);
+
+                match step_rates[element.input_slot as usize] {
+                    Some(step_rate) => {
+                        if element.step_rate != step_rate {
+                            return Err(Error::InvalidParameter(onca_format!("Mismatched step rate for attribute in input slot {}", element.input_slot)));
+                        }
+                    },
+                    None => step_rates[element.input_slot as usize] = Some(element.step_rate),
+                }
             }
 
             for (idx, stride) in strides.iter().enumerate() {
@@ -1502,11 +1875,17 @@ impl InputLayout {
     pub fn calculate_strides(&self) -> [u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize] {
         let mut strides = [0u16; constants::MAX_VERTEX_INPUT_BUFFERS as usize];
         for element in &self.elements {
-            let format_bytes = element.format.num_bytes() as u16;
+            let format_bytes = element.format.byte_size() as u16;
             strides[element.input_slot as usize] = strides[element.input_slot as usize].max(element.offset + format_bytes);
         }
 
         strides
+    }
+}
+
+impl Default for InputLayout {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1561,8 +1940,8 @@ pub struct GraphicsPipelineDesc {
     pub blend_state:          BlendState,
     /// Multisample state
     pub multisample_state:    MultisampleState,
-    /// Vertex input state
-    pub vertex_input_layout:  InputLayout,
+    /// Input state
+    pub input_layout:         Option<InputLayout>,
     /// Render targer formats
     pub rendertarget_formats: [Option<Format>; constants::MAX_RENDERTARGETS as usize],
     /// Depth stencil formats
@@ -1581,13 +1960,15 @@ impl GraphicsPipelineDesc {
     pub fn validate(&self) -> Result<()> {
         #[cfg(feature = "validation")]
         {
-            if !self.vertex_input_layout.elements.is_empty() &&
-                !self.pipeline_layout.flags().is_set(PipelineLayoutFlags::ContainsInputLayout)
-            {
-                return Err(Error::InvalidParameter("Pipeline description contains input layout, but pipeline layout does not support it".to_onca_string()));
+            if let Some(input_layout) = &self.input_layout {   
+                if !input_layout.elements.is_empty() &&
+                !self.pipeline_layout.flags().contains(PipelineLayoutFlags::ContainsInputLayout)
+                {
+                    return Err(Error::InvalidParameter("Pipeline description contains input layout, but pipeline layout does not support it".to_onca_string()));
+                }
+                
+                input_layout.validate()?;
             }
-
-            self.vertex_input_layout.validate()?;
         }
         Ok(())
     }
@@ -1601,7 +1982,7 @@ impl PartialEq for GraphicsPipelineDesc {
         self.depth_stencil_state == other.depth_stencil_state &&
         self.blend_state == other.blend_state &&
         self.multisample_state == other.multisample_state &&
-        self.vertex_input_layout == other.vertex_input_layout &&
+        self.input_layout == other.input_layout &&
         Handle::ptr_eq(&self.vertex_shader, &other.vertex_shader) &&
         Handle::ptr_eq(&self.pixel_shader, &other.pixel_shader)
     }
@@ -1904,73 +2285,73 @@ impl ResourceState {
         #[cfg(feature = "validation")]
         {
             // Check for currently unsupported sync points and accesses
-            if self.sync_point.is_any_set(SyncPoint::VideoDecode | SyncPoint::VideoProcess | SyncPoint::VideoEncode) {
+            if self.sync_point.intersects(SyncPoint::VideoDecode | SyncPoint::VideoProcess | SyncPoint::VideoEncode) {
             return Err(Error::InvalidBarrier("Video sync points are currently unsupported"));
             }
-            if self.access.is_any_set(Access::VideoDecodeRead | Access::VideoDecodeWrite | Access::VideoProcessRead | Access::VideoProcessWrite | Access::VideoEncodeRead | Access::VideoEncodeWrite) {
+            if self.access.intersects(Access::VideoDecodeRead | Access::VideoDecodeWrite | Access::VideoProcessRead | Access::VideoProcessWrite | Access::VideoEncodeRead | Access::VideoEncodeWrite) {
                 return Err(Error::InvalidBarrier("Video access is currently unsupported"));
             }
 
             // Check for invalid top/bottom sync points
-            if self.sync_point.is_set(SyncPoint::Top) && !is_after_state {
+            if self.sync_point.contains(SyncPoint::Top) && !is_after_state {
                 return Err(Error::InvalidBarrier("'Top' sync point is only valid in the after state"));
-            } else if self.sync_point.is_set(SyncPoint::Bottom) && is_after_state {
+            } else if self.sync_point.contains(SyncPoint::Bottom) && is_after_state {
                 return Err(Error::InvalidBarrier("'Top' sync point is only valid in the before state")); 
             }
 
             // Check for unsupported sync points for command list
-            if self.sync_point.is_set(SyncPoint::DrawIndirect) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::DrawIndirect) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `DrawIndirect` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Vertex) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Vertex) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Vertex` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Task) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Task) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Task` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Mesh) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Mesh) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Mesh` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::PreRaster) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::PreRaster) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `PreRaster` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::PrePixelOps) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::PrePixelOps) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `PrePixelOps` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Pixel) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Pixel) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Pixel` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::PostPixelOps) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::PostPixelOps) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `PostPixelOps` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::RenderTarget) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::RenderTarget) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `RenderTarget` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Compute) && !matches!(list_type, CommandListType::Graphics | CommandListType::Compute | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Compute) && !matches!(list_type, CommandListType::Graphics | CommandListType::Compute | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Compute` is only supported on `Graphics`, `Compute` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Resolve) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Resolve) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Resolve` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Clear) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Clear) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Clear` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::RayTracing) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::RayTracing) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `RayTracing` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::AccelerationStructureBuild) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::AccelerationStructureBuild) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `AccelerationStructureBuild` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::AccelerationStructureCopy) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::AccelerationStructureCopy) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `AccelerationStructureCopy` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Conditional) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Conditional) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Conditional` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::ShadingRate) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::ShadingRate) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `ShadingRate` is only supported on `Graphics` and `Bundle` command lists"));
             }
-            if self.sync_point.is_set(SyncPoint::Graphics) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
+            if self.sync_point.contains(SyncPoint::Graphics) && !matches!(list_type, CommandListType::Graphics | CommandListType::Bundle) {
                 return Err(Error::InvalidBarrier("Sync point `Graphics` is only supported on `Graphics` and `Bundle` command lists"));
             }
             /*if self.sync_point.is_set(SyncPoint::VideoEncode) && !matches!(list_type, ) {
@@ -1990,97 +2371,97 @@ impl ResourceState {
             let input_assembler = all_graphics | SyncPoint::InputAssembler | SyncPoint::Graphics;
             let all_shader = all_graphics | SyncPoint::Vertex | SyncPoint::Task  | SyncPoint::Mesh | SyncPoint::Pixel | SyncPoint::Compute | SyncPoint::RayTracing;
 
-            if self.access.is_set(Access::VertexBuffer) && !self.sync_point.is_any_set(input_assembler | SyncPoint::VertexInput) {
+            if self.access.contains(Access::VertexBuffer) && !self.sync_point.intersects(input_assembler | SyncPoint::VertexInput) {
                 return invalid_barrier!("`VertexBuffer`", "`Top`, `Bottom`, `All`, 'Graphics`, `InputAssembler`, or `VertexInput`");
             }
-            if self.access.is_set(Access::IndexBuffer) && !self.sync_point.is_any_set(input_assembler | SyncPoint::IndexInput){
+            if self.access.contains(Access::IndexBuffer) && !self.sync_point.intersects(input_assembler | SyncPoint::IndexInput){
                 return invalid_barrier!("`IndexBuffer`", "`Top`, `Bottom`, `All`, 'Graphics`, `InputAssembler`, or `IndexInput`");
             }
-            if self.access.is_set(Access::RenderTargetRead) && !self.sync_point.is_any_set(all_graphics | SyncPoint::RenderTarget){
+            if self.access.contains(Access::RenderTargetRead) && !self.sync_point.intersects(all_graphics | SyncPoint::RenderTarget){
                 return invalid_barrier!("`RenderTargetRead`", "`Top`, `Bottom`, `All`, 'Graphics`, or `RenderTarget`");
             }
-            if self.access.is_set(Access::RenderTargetWrite) && !self.sync_point.is_any_set(all_graphics | SyncPoint::RenderTarget){
+            if self.access.contains(Access::RenderTargetWrite) && !self.sync_point.intersects(all_graphics | SyncPoint::RenderTarget){
                 return invalid_barrier!("`RenderTargetWrite`", "`Top`, `Bottom`, `All`, 'Graphics`, or `RenderTarget`");
             }
-            if self.access.is_set(Access::DepthStencilRead) && !self.sync_point.is_any_set(all_graphics | SyncPoint::PrePixelOps | SyncPoint::PostPixelOps){
+            if self.access.contains(Access::DepthStencilRead) && !self.sync_point.intersects(all_graphics | SyncPoint::PrePixelOps | SyncPoint::PostPixelOps){
                 return invalid_barrier!("`DepthStencilRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `PrePixelOps`, or `PostPixelOps`");
             }
-            if self.access.is_set(Access::DepthStencilWrite) && !self.sync_point.is_any_set(all_graphics | SyncPoint::PrePixelOps | SyncPoint::PostPixelOps){
+            if self.access.contains(Access::DepthStencilWrite) && !self.sync_point.intersects(all_graphics | SyncPoint::PrePixelOps | SyncPoint::PostPixelOps){
                 return invalid_barrier!("`DepthStencilWrite`", "`Top`, `Bottom`, `All`, 'Graphics`, `PrePixelOps`, or `PostPixelOps`");
             }
-            if self.access.is_set(Access::ConstantBuffer) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::ConstantBuffer) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`ConstantBuffer`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::SampledRead) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::SampledRead) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`SampledRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::StorageRead) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::StorageRead) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`StorageRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::ShaderTableRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::RayTracing) {
+            if self.access.contains(Access::ShaderTableRead) && !self.sync_point.intersects(all_commands | SyncPoint::RayTracing) {
                 return invalid_barrier!("`ShaderTableRead`", "`Top`, `Bottom`, `All`, or `RayTracing`");
             }
-            if self.access.is_set(Access::ShaderRead) && !self.sync_point.is_any_set(all_shader | SyncPoint::AccelerationStructureBuild) {
+            if self.access.contains(Access::ShaderRead) && !self.sync_point.intersects(all_shader | SyncPoint::AccelerationStructureBuild) {
                 return invalid_barrier!("`ShaderRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, `RayTracing`, or `AccelerationStructureBuild`");
             }
-            if self.access.is_set(Access::StorageWrite) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::StorageWrite) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`StorageWrite`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::ShaderWrite) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::ShaderWrite) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`ShaderRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::Indirect) && !self.sync_point.is_any_set(all_graphics | SyncPoint::DrawIndirect) {
+            if self.access.contains(Access::Indirect) && !self.sync_point.intersects(all_graphics | SyncPoint::DrawIndirect) {
                 return invalid_barrier!("`Indirect`", "`Top`, `Bottom`, `All`, 'Graphics`, or `DrawIndirect`");
             }
-            if self.access.is_set(Access::Conditional) && !self.sync_point.is_any_set(all_graphics | SyncPoint::Conditional) {
+            if self.access.contains(Access::Conditional) && !self.sync_point.intersects(all_graphics | SyncPoint::Conditional) {
                 return invalid_barrier!("`Conditional`", "`Top`, `Bottom`, `All`, 'Graphics`, or `Conditional`");
             }
-            if self.access.is_set(Access::Descriptor) && !self.sync_point.is_any_set(all_shader) {
+            if self.access.contains(Access::Descriptor) && !self.sync_point.intersects(all_shader) {
                 return invalid_barrier!("`Descriptor`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, or `RayTracing`");
             }
-            if self.access.is_set(Access::AccelerationStructureRead) && !self.sync_point.is_any_set(all_shader | SyncPoint::AccelerationStructureBuild | SyncPoint::AccelerationStructureCopy | SyncPoint::AccelerationStructureQuery) {
+            if self.access.contains(Access::AccelerationStructureRead) && !self.sync_point.intersects(all_shader | SyncPoint::AccelerationStructureBuild | SyncPoint::AccelerationStructureCopy | SyncPoint::AccelerationStructureQuery) {
                 return invalid_barrier!("`AccelerationStructureRead`", "`Top`, `Bottom`, `All`, 'Graphics`, `Vertex`, `Task`, `Mesh`, `Pixel`, `Compute`, `RayTracing`, `AccelerationStructureBuild`, `AccelerationStructureCopy`, `AccelerationStructureQuery`");
             }
-            if self.access.is_set(Access::AccelerationStructureWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::AccelerationStructureBuild | SyncPoint::AccelerationStructureCopy) {
+            if self.access.contains(Access::AccelerationStructureWrite) && !self.sync_point.intersects(all_commands | SyncPoint::AccelerationStructureBuild | SyncPoint::AccelerationStructureCopy) {
                 return invalid_barrier!("`AccelerationStructureWrite`", "`Top`, `Bottom`, `All`, `AccelerationStructureBuild`, or `AccelerationStructureCopy`");
             }
-            if self.access.is_set(Access::CopyRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::Copy | SyncPoint::AccelerationStructureBuild) {
+            if self.access.contains(Access::CopyRead) && !self.sync_point.intersects(all_commands | SyncPoint::Copy | SyncPoint::AccelerationStructureBuild) {
                 return invalid_barrier!("`CopyRead`", "`Top`, `Bottom`, `All`, 'Copy`, or `AccelerationStructureBuild`");
             }
-            if self.access.is_set(Access::CopyWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::Copy | SyncPoint::AccelerationStructureBuild) {
+            if self.access.contains(Access::CopyWrite) && !self.sync_point.intersects(all_commands | SyncPoint::Copy | SyncPoint::AccelerationStructureBuild) {
                 return invalid_barrier!("`CopyWrite`", "`Top`, `Bottom`, `All`, 'Copy`, or `AccelerationStructureBuild`");
             }
-            if self.access.is_set(Access::ResolveRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::Resolve) {
+            if self.access.contains(Access::ResolveRead) && !self.sync_point.intersects(all_commands | SyncPoint::Resolve) {
                 return invalid_barrier!("`ResolveRead`", "`Top`, `Bottom`, `All`, or `Resolve`");
             }
-            if self.access.is_set(Access::ResolveWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::Resolve) {
+            if self.access.contains(Access::ResolveWrite) && !self.sync_point.intersects(all_commands | SyncPoint::Resolve) {
                 return invalid_barrier!("`ResolveWrite`", "`Top`, `Bottom`, `All`, or `Resolve`");
             }
-            if self.access.is_set(Access::HostRead) && !self.sync_point.is_any_set(SyncPoint::Host) {
+            if self.access.contains(Access::HostRead) && !self.sync_point.intersects(SyncPoint::Host) {
                 return invalid_barrier!("`HostRead`", "`Host`");
             }
-            if self.access.is_set(Access::HostWrite) && !self.sync_point.is_any_set(SyncPoint::Host) {
+            if self.access.contains(Access::HostWrite) && !self.sync_point.intersects(SyncPoint::Host) {
                 return invalid_barrier!("`HostWrite`", "``Host`");
             }
-            if self.access.is_set(Access::ShadingRateRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::ShadingRate) {
+            if self.access.contains(Access::ShadingRateRead) && !self.sync_point.intersects(all_commands | SyncPoint::ShadingRate) {
                 return invalid_barrier!("`ShadingRateRead`", "`Top`, `Bottom`, `All`, or `ShadingRate`");
             }
-            if self.access.is_set(Access::VideoDecodeRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoDecode) {
+            if self.access.contains(Access::VideoDecodeRead) && !self.sync_point.intersects(all_commands | SyncPoint::VideoDecode) {
                 return invalid_barrier!("`VideoDecodeRead`", "`Top`, `Bottom`, `All`, or `VideoDecode`");
             }
-            if self.access.is_set(Access::VideoDecodeWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoDecode) {
+            if self.access.contains(Access::VideoDecodeWrite) && !self.sync_point.intersects(all_commands | SyncPoint::VideoDecode) {
                 return invalid_barrier!("`VideoDecodeWrite`", "`Top`, `Bottom`, `All`, or `VideoDecode`");
             }
-            if self.access.is_set(Access::VideoProcessRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoProcess) {
+            if self.access.contains(Access::VideoProcessRead) && !self.sync_point.intersects(all_commands | SyncPoint::VideoProcess) {
                 return invalid_barrier!("`VideoProcessRead`", "`Top`, `Bottom`, `All`, or `VideoProcess`");
             }
-            if self.access.is_set(Access::VideoProcessWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoProcess) {
+            if self.access.contains(Access::VideoProcessWrite) && !self.sync_point.intersects(all_commands | SyncPoint::VideoProcess) {
                 return invalid_barrier!("`VideoProcessWrite`", "`Top`, `Bottom`, `All`, or `VideoProcess`");
             }
-            if self.access.is_set(Access::VideoEncodeRead) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoEncode) {
+            if self.access.contains(Access::VideoEncodeRead) && !self.sync_point.intersects(all_commands | SyncPoint::VideoEncode) {
                 return invalid_barrier!("`VideoEncodeRead`", "`Top`, `Bottom`, `All`, or `VideoEncode`");
             }
-            if self.access.is_set(Access::VideoEncodeWrite) && !self.sync_point.is_any_set(all_commands | SyncPoint::VideoEncode) {
+            if self.access.contains(Access::VideoEncodeWrite) && !self.sync_point.intersects(all_commands | SyncPoint::VideoEncode) {
                 return invalid_barrier!("`VideoEncodeWrite`", "`Top`, `Bottom`, `All`, or `VideoEncode`");
             }
 
@@ -2103,79 +2484,79 @@ impl ResourceState {
             TextureLayout::Preinitialized                      => if self.access.is_any() {
                     return Err(Error::InvalidBarrier("`Undefined` texture layout is only valid for no access"));
                 },
-            TextureLayout::Common                              => if !self.access.is_any_set(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead | Access::StorageWrite | Access::ShaderWrite | Access::CopyRead | Access::CopyWrite) {
+            TextureLayout::Common                              => if !self.access.intersects(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead | Access::StorageWrite | Access::ShaderWrite | Access::CopyRead | Access::CopyWrite) {
                 return Err(Error::InvalidBarrier("`ReadOnly` texture layout is only valid for `ConstantBuffer`, `SampledRead`, `StorageRead`, `ShaderTableRead`, `ShaderRead`, `StorageWrite`, `ShaderWrite`, `CopyRead`, or `CopyWrite` access"));
             },
-            TextureLayout::ReadOnly                            => if !self.access.is_any_set(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead | Access::ShadingRateRead | Access::ResolveRead) {
+            TextureLayout::ReadOnly                            => if !self.access.intersects(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead | Access::ShadingRateRead | Access::ResolveRead) {
                 return Err(Error::InvalidBarrier("`ReadOnly` texture layout is only valid for `ConstantBuffer`, `SampledRead`, `StorageRead`, `ShaderTableRead`, `ShaderRead`, `ShadingRateRead`, or `ResolveRead` access"));
             },
-            TextureLayout::ShaderRead                          => if !self.access.is_any_set(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead) {
+            TextureLayout::ShaderRead                          => if !self.access.intersects(Access::ConstantBuffer | Access::SampledRead | Access::StorageRead | Access::ShaderTableRead | Access::ShaderRead) {
                     return Err(Error::InvalidBarrier("`ShaderRead` texture layout is only valid for `ConstantBuffer`, `SampledRead`, `StorageRead`, `ShaderTableRead`, or `ShaderRead` access"));
                 },
-            TextureLayout::ShaderWrite                         => if !self.access.is_any_set(Access::StorageWrite | Access::ShaderWrite) {
+            TextureLayout::ShaderWrite                         => if !self.access.intersects(Access::StorageWrite | Access::ShaderWrite) {
                 return Err(Error::InvalidBarrier("`ShaderRead` texture layout is only valid for `StorageWrite`, and `ShaderWrite` access"));
             },
             TextureLayout::Attachment                          => {},
-            TextureLayout::RenderTarget                        => if !self.access.is_any_set(Access::RenderTargetRead | Access::RenderTargetWrite) {
+            TextureLayout::RenderTarget                        => if !self.access.intersects(Access::RenderTargetRead | Access::RenderTargetWrite) {
                     return Err(Error::InvalidBarrier("`RenderTarget` texture layout is only valid for `RenderTargetRead` or `RenderTargetWrite` access"));
                 },
-            TextureLayout::DepthStencil                        => if !self.access.is_any_set(Access::DepthStencilRead | Access::DepthStencilWrite) {
+            TextureLayout::DepthStencil                        => if !self.access.intersects(Access::DepthStencilRead | Access::DepthStencilWrite) {
                     return Err(Error::InvalidBarrier("`DepthStencil` texture layout is only valid for `DepthStencilRead` or `DepthStencilWrite` access"));
                 },
-            TextureLayout::DepthStencilReadOnly                => if !self.access.is_any_set(Access::DepthStencilRead) {
+            TextureLayout::DepthStencilReadOnly                => if !self.access.intersects(Access::DepthStencilRead) {
                     return Err(Error::InvalidBarrier("`DepthStencilReadOnly` texture layout is only valid for `DepthStencilRead` access"));
                 },
-            TextureLayout::DepthRoStencilRw                    => if !self.access.is_any_set(Access::DepthStencilRead | Access::DepthStencilWrite) {
+            TextureLayout::DepthRoStencilRw                    => if !self.access.intersects(Access::DepthStencilRead | Access::DepthStencilWrite) {
                     return Err(Error::InvalidBarrier("`DepthRoStencilRw` texture layout is only valid for `DepthStencilRead` or `DepthStencilWrite` access"));
                 },
-            TextureLayout::DepthRwStencilRo                    => if !self.access.is_any_set(Access::DepthStencilRead | Access::DepthStencilWrite) {
+            TextureLayout::DepthRwStencilRo                    => if !self.access.intersects(Access::DepthStencilRead | Access::DepthStencilWrite) {
                     return Err(Error::InvalidBarrier("`DepthRwStencilRo` texture layout is only valid for `DepthStencilRead` or `DepthStencilWrite` access"));
                 },
-            TextureLayout::Depth                               => if !self.access.is_any_set(Access::DepthStencilRead | Access::DepthStencilWrite) {
+            TextureLayout::Depth                               => if !self.access.intersects(Access::DepthStencilRead | Access::DepthStencilWrite) {
                     return Err(Error::InvalidBarrier("`Depth` texture layout is only valid for `DepthStencilRead` or `DepthStencilWrite` access"));
                 },
-            TextureLayout::DepthReadOnly                       => if !self.access.is_any_set(Access::DepthStencilRead) {
+            TextureLayout::DepthReadOnly                       => if !self.access.intersects(Access::DepthStencilRead) {
                     return Err(Error::InvalidBarrier("`DepthReadOnly` texture layout is only valid for `DepthStencilRead` access"));
                 },
-            TextureLayout::Stencil                             => if !self.access.is_any_set(Access::DepthStencilRead | Access::DepthStencilWrite) {
+            TextureLayout::Stencil                             => if !self.access.intersects(Access::DepthStencilRead | Access::DepthStencilWrite) {
                     return Err(Error::InvalidBarrier("`Stencil` texture layout is only valid for `DepthStencilRead` or `DepthStencilWrite` access"));
                 },
-            TextureLayout::StencilReadOnly                     => if !self.access.is_any_set(Access::DepthStencilRead) {
+            TextureLayout::StencilReadOnly                     => if !self.access.intersects(Access::DepthStencilRead) {
                     return Err(Error::InvalidBarrier("`StencilReadOnly` texture layout is only valid for `DepthStencilRead` access"));
                 },
-            TextureLayout::CopySrc                             => if !self.access.is_any_set(Access::CopyRead) {
+            TextureLayout::CopySrc                             => if !self.access.intersects(Access::CopyRead) {
                     return Err(Error::InvalidBarrier("`CopySrc` texture layout is only valid for `CopyRead` access"));
                 },
-            TextureLayout::CopyDst                             => if !self.access.is_any_set(Access::CopyWrite) {
+            TextureLayout::CopyDst                             => if !self.access.intersects(Access::CopyWrite) {
                     return Err(Error::InvalidBarrier("`CopyDst` texture layout is only valid for `CopyWrite` access"));
                 },
-            TextureLayout::ResolveSrc                          => if !self.access.is_any_set(Access::ResolveRead) {
+            TextureLayout::ResolveSrc                          => if !self.access.intersects(Access::ResolveRead) {
                     return Err(Error::InvalidBarrier("`ResolveSrc` texture layout is only valid for `ResolveRead` access"));
                 },
-            TextureLayout::ResolveDst                          => if !self.access.is_any_set(Access::ResolveWrite) {
+            TextureLayout::ResolveDst                          => if !self.access.intersects(Access::ResolveWrite) {
                     return Err(Error::InvalidBarrier("`ResolveDst` texture layout is only valid for `ResolveWrite` access"));
                 },
             TextureLayout::Present                             => {},
-            TextureLayout::ShadingRate                         => if !self.access.is_any_set(Access::ShadingRateRead) {
+            TextureLayout::ShadingRate                         => if !self.access.intersects(Access::ShadingRateRead) {
                     return Err(Error::InvalidBarrier("`ShadingRate` texture layout is only valid for `ShadingRateRead` access"));
                 },
-            TextureLayout::VideoDecodeSrc                      => if !self.access.is_any_set(Access::VideoDecodeRead) {
+            TextureLayout::VideoDecodeSrc                      => if !self.access.intersects(Access::VideoDecodeRead) {
                     return Err(Error::InvalidBarrier("`VideoDecodeSrc` texture layout is only valid for `VideoDecodeRead` access"));
                 },
-            TextureLayout::VideoDecodeDst                      => if !self.access.is_any_set(Access::VideoDecodeWrite) {
+            TextureLayout::VideoDecodeDst                      => if !self.access.intersects(Access::VideoDecodeWrite) {
                 return Err(Error::InvalidBarrier("`VideoDecodeDst` texture layout is only valid for `VideoDecodeWrite` access"));
             },
             TextureLayout::VideoDecodeReconstructedOrReference => todo!("Video encode is currently unsupported"),
-            TextureLayout::VideoProcessSrc                     => if !self.access.is_any_set(Access::VideoProcessRead) {
+            TextureLayout::VideoProcessSrc                     => if !self.access.intersects(Access::VideoProcessRead) {
                 return Err(Error::InvalidBarrier("`VideoProcessSrc` texture layout is only valid for `VideoProcessRead` access"));
             },
-            TextureLayout::VideoProcessDst                     => if !self.access.is_any_set(Access::VideoProcessWrite) {
+            TextureLayout::VideoProcessDst                     => if !self.access.intersects(Access::VideoProcessWrite) {
                 return Err(Error::InvalidBarrier("`VideoProcessDst` texture layout is only valid for `VideoProcessWrite` access"));
             },
-            TextureLayout::VideoEncodeSrc                      => if !self.access.is_any_set(Access::VideoEncodeRead) {
+            TextureLayout::VideoEncodeSrc                      => if !self.access.intersects(Access::VideoEncodeRead) {
                 return Err(Error::InvalidBarrier("`VideoEncodeSrc` texture layout is only valid for `VideoEncodeRead` access"));
             },
-            TextureLayout::VideoEncodeDst                      => if !self.access.is_any_set(Access::VideoEncodeWrite) {
+            TextureLayout::VideoEncodeDst                      => if !self.access.intersects(Access::VideoEncodeWrite) {
                 return Err(Error::InvalidBarrier("`VideoEncodeDst` texture layout is only valid for `VideoEncodeWrite` access"));
             },
             TextureLayout::VideoEncodeReconstructedOrReference => todo!("Video encode is currently unsupported"),
@@ -2295,8 +2676,8 @@ pub enum Barrier {
         after:             ResourceState,
         /// Texture
         texture:           TextureHandle,
-        /// Texture subresource range
-        subresource_range: TextureSubresourceRange,
+        /// Texture subresource range, `None` means the full texture
+        subresource_range: Option<TextureSubresourceRange>,
         /// Queue transfer operation
         queue_transfer_op: BarrierQueueTransferOp
     },
@@ -2309,7 +2690,7 @@ impl Barrier {
     pub fn new_basic_texture(before: ResourceState, after: ResourceState, texture: TextureHandle) -> Barrier {
         Barrier::Texture {
             before, after,
-            subresource_range: texture.full_subresource_range(),
+            subresource_range: None,
             texture,
             queue_transfer_op: BarrierQueueTransferOp::None
         }
@@ -2485,7 +2866,15 @@ pub enum ResolveMode {
     Min,
     /// Resolve to the maximum value of the samples
     Max,
-    /// Resolve to the value of sample 0 (likely to not be supported in most places, and should therefore only be used when needed, as this can decrease performance)
+    /// Resolve to the value of sample 0
+    /// 
+    /// Some API and GPU combinations don't support SampleZero, and will therefore fall back on the following:
+    /// - Non-integer formats will use Average
+    /// - Integer formats will use Min
+    /// 
+    /// This is currently supported on:
+    /// - Vulkan
+    /// - DX12 with NVIDIA via NVApi (currently now implemented yet)
     SampleZero,
 }
 
@@ -2660,18 +3049,18 @@ impl RenderTargetAttachmentDesc {
     pub fn validate(&self) -> Result<()> {
         #[cfg(feature = "validation")]
         {
-            let format = self.rtv.format();
-            let data_type = format.to_components_and_data_type().1;
+            let format = self.rtv.desc().format;
+            let data_type = format.data_type();
 
             if let AttachmentLoadOp::Clear(color) = self.load_op {
                 match color {
                     ClearColor::Float(_) => if !matches!(data_type, FormatDataType::UFloat | FormatDataType::SFloat | FormatDataType::UNorm | FormatDataType::SNorm | FormatDataType::Srgb) {
                         return Err(Error::InvalidClearColor(color, format));
                     },
-                    ClearColor::Integer(_) => if !matches!(data_type, FormatDataType::SInt | FormatDataType::SScaled) {
+                    ClearColor::Integer(_) => if !matches!(data_type, FormatDataType::SInt) {
                         return Err(Error::InvalidClearColor(color, format));
                     },
-                    ClearColor::Unsigned(_) => if !matches!(data_type, FormatDataType::UInt | FormatDataType::UScaled) {
+                    ClearColor::Unsigned(_) => if !matches!(data_type, FormatDataType::UInt) {
                         return Err(Error::InvalidClearColor(color, format));
                     },
                 }
@@ -2758,31 +3147,6 @@ impl RenderingInfo<'_> {
         }
         Ok(())
     }
-}
-
-/// Resolve info for end of rendering render target compute resolve
-/// 
-/// ## NOTE
-/// 
-/// This is meant to be consumed by RAL implementations
-pub struct EndRenderingRenderTargetResolveInfo {
-    pub rect: Rect,
-    pub mode: ResolveMode,
-    pub src:  RenderTargetViewHandle,
-    pub dst:  ()
-}
-
-/// Resolve info for end of rendering depth compute resolve
-/// 
-/// ## NOTE
-/// 
-/// This is meant to be consumed by RAL implementations
-pub struct EndRenderingDepthStencilResolveInfo {
-    pub rect:         Rect,
-    pub depth_mode:   Option<ResolveMode>,
-    pub stencil_mode: Option<ResolveMode>,
-    pub src:          RenderTargetViewHandle,
-    pub dst:          ()
 }
 
 //==============================================================================================================================

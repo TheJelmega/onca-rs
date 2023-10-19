@@ -3,7 +3,7 @@ use core::num::NonZeroU8;
 use onca_core::prelude::*;
 use onca_core_macros::{flags, EnumDisplay};
 
-use crate::{common::*, handle::InterfaceHandle, Format, FormatProperties, Version};
+use crate::{common::*, handle::InterfaceHandle, Version};
 
 // Vulkan documentation: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceLimits.html
 
@@ -32,6 +32,7 @@ pub enum Capabilities {
 	/// e.g. the driver can first compile the shader in an unoptimized state, so the user can use it faster, and then proceed to optimize the shader on a background task and optimize it
 	BackgroundShaderRecompilation,
 	/// Can a scalar [0; 1] be used to define a minimum number of shaders that should be invoked per pixel, relative to the sample count?
+	// NOTE: Can this be done using DX12 force samples?
 	MinSampleShading,
 }
 
@@ -134,97 +135,6 @@ pub struct Properties {
 	pub graphics_preempt: GraphicsPreemptionGranularity,
 	/// Compute preemption granularity
 	pub compure_preempt:  ComputePreemptionGranularity,
-}
-
-//==============================================================================================================================
-// MEMORY
-//==============================================================================================================================
-
-/// Maximum number of supported types
-pub const MAX_MEMORY_TYPES: usize = 16;
-/// Maximum number of supported heaps
-pub const MAX_MEMORY_HEAPS: usize = 16;
-
-/// Memory flags
-#[flags(u8)]
-pub enum MemoryTypeFlags {
-	/// Memory is local to the GPU (most efficient).
-	DeviceLocal,
-	/// Memory can be mapped for host access using `map_memory()`
-	HostVisible,
-	/// Memory does manually need to be flushed for writes, or invalidated for reads.
-	HostCoherent,
-	/// Memory will be cached on the host side
-	HostCached,
-	/// Memory may be lazily allocated (incompatible with [`HostVisible`])
-	LazilyAllocated,
-	/// Memory can only be accessed by the device.
-	Protected,
-}
-
-/// Memory type
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MemoryType {
-	/// Flags
-	pub flags:    MemoryTypeFlags,
-	/// Index of heap containing this type
-	pub heap_idx: u8,
-}
-
-impl MemoryType {
-	pub fn is_valid(&self) -> bool {
-		!self.flags.is_none()
-	}
-}
-
-/// Memory heap flags
-#[flags]
-pub enum MemoryHeapFlags {
-	/// Memory heap is on the device
-	DeviceLocal,
-	/// When a logical `Device` represents multiple `PhysicalDevice`s, this flag indicates that the memory on this heap will be replicated on each physical device.
-	MultiInstance,
-}
-
-/// Memory heap
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MemoryHeap {
-	/// Flags
-	pub flags: MemoryHeapFlags,
-	/// Size in bytes.
-	pub size:  u64,
-}
-
-/// Memory info
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MemoryInfo {
-	/// Memory types
-	pub types: [MemoryType; MAX_MEMORY_TYPES],
-	/// memory heaps
-	pub heaps: [MemoryHeap; MAX_MEMORY_HEAPS],
-}
-
-/// Current memory value for a given memory type
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MemoryBudgetValue {
-	/// OS-provided memory budget.
-	///
-	/// Higher usage may incur stuttering or perfomance penalties
-	pub budget:                u64,
-	/// Amount of memory in use by the application
-	pub in_use:                u64,
-	/// Memory that currently available to be reserved
-	pub available_reservation: u64,
-	/// Amount of memory that is reserved by the application.
-	///
-	/// This is a hint to the OS on how much memory is expected to be used by the application.
-	pub reserved:              u64,
-}
-
-/// Memory info for current state of memory
-pub struct MemoryBudgetInfo {
-	pub budgets: [MemoryBudgetValue; MAX_MEMORY_HEAPS],
-	pub total:   MemoryBudgetValue,
 }
 
 //==============================================================================================================================
@@ -472,10 +382,6 @@ pub struct PhysicalDevice {
 	pub memory_info:            MemoryInfo,
 	/// Device capabilities
 	pub capabilities:           Capabilities,
-	/// Per format properties
-	pub format_props:           [FormatProperties; Format::COUNT],
-	/// Per vertex format properties
-	pub vertex_format_support:  [VertexFormatSupport; VertexFormat::COUNT],
 	/// Shader support
 	pub shader:                 ShaderSupport,
 	/// Sampling support

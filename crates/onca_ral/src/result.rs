@@ -22,10 +22,16 @@ pub enum Error {
     OutOfDeviceMemory,
     /// Device lost
     DeviceLost,
+    /// Format error
+    Format(String),
     /// Unsupported formats for swapchain
     UnsupportedSwapchainFormats(DynArray<Format>),
     /// Unsupported format
     UnsupportedFormat(Format),
+    /// Unsupported format for a given view
+    UnsupportedViewFormat{ texture: Format, view: Format },
+    /// Unsupported memory topology
+    UnsupportedMemoryTopology(&'static str),
     /// Use after the device was dropped
     UseAfterDeviceDropped,
     /// Operation has timed out
@@ -46,7 +52,12 @@ pub enum Error {
     InvalidQueueSubmit{ found: QueueIndex, expected: QueueIndex },
     /// Invalid shader code
     InvalidShaderCode(&'static str),
-
+    /// Descriptor out of range
+    DescriptorOutOfRange{ index: u32, max: u32 },
+    /// Descriptor heap is not shader visible
+    DescriptorHeapNotShaderVisible,
+    /// Handle has expired (trying to use handle to object that doesn't exist)
+    ExpiredHandle(&'static str),
 
     /// Generic invalid parameter
     InvalidParameter(String),
@@ -67,6 +78,7 @@ impl fmt::Display for Error {
             Error::OutOfHostMemory                            => f.write_str("Out of host memory"),
             Error::OutOfDeviceMemory                          => f.write_str("Out of device memory"),
             Error::DeviceLost                                 => f.write_str("Device lost"),
+            Error::Format(name)                               => f.write_fmt(format_args!("Format error: '{name}'")),
             Error::UnsupportedSwapchainFormats(formats)       => {
                 f.write_str("No supported swapchain format, provided formats:\n")?;
                 for format in formats {
@@ -75,6 +87,8 @@ impl fmt::Display for Error {
                 Ok(())
             },
             Error::UnsupportedFormat(format)                  => f.write_fmt(format_args!("Unsupported format: {format}")),
+            Error::UnsupportedViewFormat { texture, view }    => f.write_fmt(format_args!("Unsupported view format {view} for texture format {texture}, formats must be in the same component family")),
+            Error::UnsupportedMemoryTopology(info)            => f.write_fmt(format_args!("Unsupported memory topologies: {info}")),
             Error::UseAfterDeviceDropped                      => f.write_str("Tried to use the device after it was dropped"),
             Error::Timeout                                    => f.write_str("Operation has timed out"),
             Error::InvalidCommandPoolType { found, expected } => f.write_fmt(format_args!("Invalid command list type, found '{found}', expected `{expected}`")),
@@ -85,6 +99,9 @@ impl fmt::Display for Error {
             Error::InvalidCount(reason, count)                => f.write_fmt(format_args!("Invalid count '{reason}', found {count}")),
             Error::InvalidQueueSubmit{ found, expected }      => f.write_fmt(format_args!("Command list submitted to unsupported queue, found '{found}', expected '{expected}'")),
             Error::InvalidShaderCode(s)                       => f.write_fmt(format_args!("Invalid shader code: {s}")),
+            Error::DescriptorOutOfRange { index, max }        => f.write_fmt(format_args!("Descriptor index out of range: {index} (max: {max})")),
+            Error::DescriptorHeapNotShaderVisible             => f.write_str("Descriptor heap is not shader visible"),
+            Error::ExpiredHandle(reason)                      => f.write_fmt(format_args!("Expired handle: {reason}")),
 
             Error::InvalidParameter(s)                        => f.write_fmt(format_args!("Invalid paramter: {s}")),
             Error::NotImplemented(s)                          => f.write_fmt(format_args!("Not implemented: {s}")),
@@ -95,6 +112,15 @@ impl fmt::Display for Error {
     }
 }
 
-
-
 pub type Result<T> = core::result::Result<T, Error>;
+
+// Helper macros
+
+#[macro_export]
+macro_rules! check_invalid_parameter {
+    ($expected:expr, $($args:tt)*) => {
+        if !$expected {
+            return Err(Error::InvalidParameter(onca_format!($($args)*)));
+        }
+    };
+}

@@ -1,28 +1,21 @@
-use core::{num::NonZeroU8, mem::MaybeUninit, ffi::c_void};
+use core::mem::MaybeUninit;
 
-use onca_core::{prelude::*, strings::ToString, collections::BitSet};
+use onca_core::{prelude::*, strings::ToString};
 use onca_core_macros::flags;
 use onca_ral as ral;
-use ash::{vk, extensions::khr};
-use cfg_if::cfg_if;
+use ash::{vk, extensions::ext};
+use ral::HandleImpl;
 
 use crate::{
     utils::*,
     physical_device::PhysicalDevice,
     command_queue::CommandQueue,
     instance::Instance,
-    vulkan::AllocationCallbacks,
+    vulkan::*,
     swap_chain::SwapChain,
-    texture::{Texture, RenderTargetView},
     command_list::CommandPool,
-    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout},
+    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout}, buffer::Buffer, descriptor::{DescriptorHeap, DescriptorTableLayout}, memory::MemoryHeap, sampler::{StaticSampler, Sampler},
 };
-
-cfg_if!{
-    if #[cfg(windows)] {
-        use ash::extensions::khr::Win32Surface;
-    }
-}
 
 #[flags]
 pub enum SupportedExtensions {
@@ -31,28 +24,40 @@ pub enum SupportedExtensions {
 }
 
 pub struct Device {
-    pub device:               Arc<ash::Device>,
-    pub instance:             AWeak<Instance>,
-    pub extensions:           DynArray<&'static str>,
-    pub alloc_callbacks:      AllocationCallbacks,
-    pub queue_indices:        [u8; ral::QueueType::COUNT],
-    pub supported_extensions: SupportedExtensions,
+    pub device:                   Arc<ash::Device>,
+    pub instance:                 AWeak<Instance>,
+    pub extensions:               DynArray<&'static str>,
+    pub alloc_callbacks:          AllocationCallbacks,
+    pub queue_indices:            [u8; ral::QueueType::COUNT],
+    pub supported_extensions:     SupportedExtensions,
+    pub resource_descriptor_size: u32,
+    pub sampler_descriptor_size:  u32,
+    
+    // Individual descriptor sizes for writing
+    pub descriptor_sizes:         [u32; 11],
+
+    // Extensions
+    pub descriptor_buffer:        ext::DescriptorBuffer,
 }
 
 impl Device {
-    pub const REQUIRED_EXTENSIONS : [&str; 12] = [
-        "VK_EXT_conservative_rasterization\0",
-        "VK_EXT_memory_budget\0",
-        "VK_EXT_mesh_shader\0",
-        "VK_EXT_line_rasterization\0",
-        "VK_EXT_sample_locations\0",
-        "VK_EXT_vertex_attribute_divisor\0",
-        "VK_KHR_acceleration_structure\0",
-        "VK_KHR_deferred_host_operations\0",
-        "VK_KHR_fragment_shading_rate\0",
-        "VK_KHR_ray_tracing_pipeline\0",
-        "VK_KHR_ray_query\0",
-        "VK_KHR_swapchain\0",
+    pub const REQUIRED_EXTENSIONS : [&str; 16] = [
+        VK_EXT_CUSTOM_BORDER_COLOR,
+        VK_EXT_CONSERVATIVE_RASTERIZATION,
+        VK_EXT_DESCRIPTOR_BUFFER,
+        VK_EXT_IMAGE_VIEW_MIN_LOD,
+        VK_EXT_MEMORY_BUDGET,
+        VK_EXT_MESH_SHADER,
+        VK_EXT_MUTABLE_DESCRIPTOR_TYPE,
+        VK_EXT_LINE_RASTERIZATION,
+        VK_EXT_SAMPLE_LOCATIONS,
+        VK_EXT_VERTEX_ATTRIBUTE_DIVISOR,
+        VK_KHR_ACCELERATION_STRUCTURE,
+        VK_KHR_DEFERRED_HOST_OPERATIONS,
+        VK_KHR_FRAGMENT_SHADING_RATE,
+        VK_KHR_RAY_TRACING_PIPELINE,
+        VK_KHR_RAY_QUERY,
+        VK_KHR_SWAPCHAIN,
     ];
 
     pub fn get_instance(&self) -> ral::Result<Arc<Instance>> {
@@ -62,6 +67,7 @@ impl Device {
         }
     }
 
+    // TODO: Robust buffer access
     pub unsafe fn new(phys_dev: &ral::PhysicalDevice) -> ral::Result<(ral::DeviceInterfaceHandle, [[(ral::CommandQueueInterfaceHandle, ral::QueueIndex); ral::QueuePriority::COUNT]; ral::QueueType::COUNT])> {
         let vk_phys_dev : &PhysicalDevice = unsafe { phys_dev.handle.as_concrete_type() };
 
@@ -101,45 +107,52 @@ impl Device {
             .sparse_residency_buffer(true)
             .sparse_residency_image2_d(true)
             .sparse_residency_image3_d(true)
-            .sparse_residency_aliased(true)
-            .build();
+            .sparse_residency_aliased(true);
+
+        let mut features1_2 = vk::PhysicalDeviceVulkan12Features::builder()
+            .descriptor_binding_partially_bound(true)
+            .descriptor_binding_variable_descriptor_count(true)
+            .runtime_descriptor_array(true)
+            .timeline_semaphore(true)
+            .buffer_device_address(true);
 
         let mut sync2_features = vk::PhysicalDeviceSynchronization2Features::builder()
-            .synchronization2(true)
-            .build();
+            .synchronization2(true);
 
         let mut dynamic_rendering_features = vk::PhysicalDeviceDynamicRenderingFeatures::builder()
-            .dynamic_rendering(true)
-            .build();
+            .dynamic_rendering(true);
 
         let mut line_rasterization = vk::PhysicalDeviceLineRasterizationFeaturesEXT::builder()
             .rectangular_lines(true)
             .bresenham_lines(true)
-            .smooth_lines(true)
-            .build();
+            .smooth_lines(true);
 
         let mut vertex_attribure_divisor = vk::PhysicalDeviceVertexAttributeDivisorFeaturesEXT::builder()
             .vertex_attribute_instance_rate_divisor(true)
-            .vertex_attribute_instance_rate_zero_divisor(true)
-        .build();
+            .vertex_attribute_instance_rate_zero_divisor(true);
+
+        let mut mutable_descriptor_type = vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT::builder()
+            .mutable_descriptor_type(true);
+
+        let mut descriptor_buffer = vk::PhysicalDeviceDescriptorBufferFeaturesEXT::builder()
+            .descriptor_buffer(true)
+            .descriptor_buffer_push_descriptors(true);
+
+        let mut image_view_min_lod = vk::PhysicalDeviceImageViewMinLodFeaturesEXT::builder()
+            .min_lod(true);
 
         let mut extensions : DynArray<&str> = Self::REQUIRED_EXTENSIONS.into_iter().collect();
-        if vk_phys_dev.vk_rt_props.maintenance1 {
-            extensions.push("VK_KHR_ray_tracing_maintenance1");
+        if vk_phys_dev.options.is_extension_supported(VK_KHR_RAY_TRACING_MAINTENANCE1) {
+            extensions.push(VK_KHR_RAY_TRACING_MAINTENANCE1);
         }
 
-        const INCREMENTAL_PRESENT : &str = "VK_KHR_incremental_present";
         let mut supported_extensions = SupportedExtensions::None;
-        let support_incremental_swapchain = vk_phys_dev.extensions.iter().any(|val| val.name == INCREMENTAL_PRESENT);
-        if support_incremental_swapchain {
-            extensions.push(INCREMENTAL_PRESENT);
+        if vk_phys_dev.options.is_extension_supported(VK_KHR_INCREMENTAL_PRESENT) {
+            extensions.push(VK_KHR_INCREMENTAL_PRESENT);
             supported_extensions.enable(SupportedExtensions::SwapChainIncremental)        
         }
-        const SWAPCHAIN_MAINTENANCE1 : &str = "VK_EXT_swapchain_maintenance1";
-        let mut supported_extensions = SupportedExtensions::None;
-        let support_incremental_swapchain = vk_phys_dev.extensions.iter().any(|val| val.name == SWAPCHAIN_MAINTENANCE1);
-        if support_incremental_swapchain {
-            extensions.push(SWAPCHAIN_MAINTENANCE1);
+        if vk_phys_dev.options.is_extension_supported(VK_EXT_SWAPCHAIN_MAINTENANCE1) {
+            extensions.push(VK_EXT_SWAPCHAIN_MAINTENANCE1);
             supported_extensions.enable(SupportedExtensions::SwapChainIncremental)        
         }
 
@@ -171,7 +184,8 @@ impl Device {
             queue_create_infos.push(vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(queue_info.index as u32)
                 .queue_priorities(priorities)
-            .build());
+                .build()
+            );
 
             queue_indices[i] = queue_info.index;
         }
@@ -180,11 +194,14 @@ impl Device {
             .enabled_features(&features)
             .enabled_extension_names(&extensions_i8)
             .queue_create_infos(&queue_create_infos)
+            .push_next(&mut features1_2)
             .push_next(&mut sync2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut line_rasterization)
             .push_next(&mut vertex_attribure_divisor)
-            .build();
+            .push_next(&mut mutable_descriptor_type)
+            .push_next(&mut descriptor_buffer)
+            .push_next(&mut image_view_min_lod);
 
         let instance = match vk_phys_dev.instance.upgrade() {
             Some(instance) => instance,
@@ -214,6 +231,37 @@ impl Device {
             }
         }
 
+        let desc_buff_opts = &vk_phys_dev.options.descriptor_buffer_props;
+        let resource_descriptor_size = desc_buff_opts.sampled_image_descriptor_size
+            .max(desc_buff_opts.storage_image_descriptor_size)
+            .max(desc_buff_opts.uniform_texel_buffer_descriptor_size)
+            .max(desc_buff_opts.robust_uniform_texel_buffer_descriptor_size)
+            .max(desc_buff_opts.storage_texel_buffer_descriptor_size)
+            .max(desc_buff_opts.robust_storage_texel_buffer_descriptor_size)
+            .max(desc_buff_opts.uniform_buffer_descriptor_size)
+            .max(desc_buff_opts.robust_uniform_buffer_descriptor_size)
+            .max(desc_buff_opts.storage_buffer_descriptor_size)
+            .max(desc_buff_opts.robust_storage_buffer_descriptor_size)
+            .max(desc_buff_opts.acceleration_structure_descriptor_size)
+            as u32;
+
+        let descriptor_sizes = [
+            desc_buff_opts.sampled_image_descriptor_size as u32,
+            desc_buff_opts.storage_image_descriptor_size as u32,
+            desc_buff_opts.uniform_texel_buffer_descriptor_size as u32,
+            desc_buff_opts.robust_uniform_texel_buffer_descriptor_size as u32,
+            desc_buff_opts.storage_texel_buffer_descriptor_size as u32,
+            desc_buff_opts.robust_storage_texel_buffer_descriptor_size as u32,
+            desc_buff_opts.uniform_buffer_descriptor_size as u32,
+            desc_buff_opts.robust_uniform_buffer_descriptor_size as u32,
+            desc_buff_opts.storage_buffer_descriptor_size as u32,
+            desc_buff_opts.robust_storage_buffer_descriptor_size as u32,
+            desc_buff_opts.acceleration_structure_descriptor_size as u32,
+        ];
+
+        // Extensions
+        let descriptor_buffer = ext::DescriptorBuffer::new(&instance.instance, &device);
+
         Ok((ral::DeviceInterfaceHandle::new(Device {
                 device: device,
                 instance: vk_phys_dev.instance.clone(),
@@ -221,6 +269,10 @@ impl Device {
                 alloc_callbacks: instance.alloc_callbacks.clone(),
                 queue_indices,
                 supported_extensions,
+                resource_descriptor_size,
+                descriptor_sizes,
+                sampler_descriptor_size: vk_phys_dev.options.descriptor_buffer_props.sampler_descriptor_size as u32,
+                descriptor_buffer,
             }),
             queues.assume_init()))
     }
@@ -239,8 +291,20 @@ impl ral::DeviceInterface for Device {
         Fence::new(self).map(|fence| ral::FenceInterfaceHandle::new(fence))
     }
 
+    unsafe fn create_buffer(&self, desc: &ral::BufferDesc, alloc: &ral::GpuAllocator) -> ral::Result<(ral::BufferInterfaceHandle, ral::GpuAllocation, ral::GpuAddress)> {
+        Buffer::new(self, desc, alloc, desc.usage.to_vulkan())
+    }
+
     unsafe fn create_shader(&self, code: &[u8], _shader_type: ral::ShaderType) -> ral::Result<ral::ShaderInterfaceHandle> {
         Shader::new(self, code)
+    }
+
+    unsafe fn create_static_sampler(&self, desc: &ral::StaticSamplerDesc) -> ral::Result<ral::StaticSamplerInterfaceHandle> {
+        StaticSampler::new(self, desc)
+    }
+
+    unsafe fn create_sampler(&self, desc: &ral::SamplerDesc) -> ral::Result<ral::SamplerInterfaceHandle> {
+        Sampler::new(self, desc)
     }
 
     unsafe fn create_pipeline_layout(&self, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
@@ -251,9 +315,28 @@ impl ral::DeviceInterface for Device {
         Pipeline::new_graphics(self, desc)
     }
 
+    unsafe fn create_descriptor_table_layout(&self, desc: &ral::DescriptorTableDesc) -> ral::Result<(ral::DescriptorTableLayoutInterfaceHandle, u32, u32)> {
+        DescriptorTableLayout::new(self, desc)
+    }
+
+    unsafe fn create_descriptor_heap(&self, desc: &ral::DescriptorHeapDesc, alloc: &ral::GpuAllocator) -> ral::Result<(ral::DescriptorHeapInterfaceHandle, Option<ral::GpuAllocation>)> {
+        DescriptorHeap::new(self, desc, alloc)
+    }
+    
     unsafe fn flush(&self, _queues: &[[ral::CommandQueueHandle; ral::QueuePriority::COUNT]; ral::QueueType::COUNT]) -> ral::Result<()> {
         self.device.device_wait_idle().map_err(|err| err.to_ral_error())
     }
+
+    unsafe fn allocate_heap(&self, size: u64, alignment: u64, memory_type: ral::MemoryType, mem_info: &ral::MemoryInfo) -> ral::Result<ral::MemoryHeapInterfaceHandle> {
+        MemoryHeap::alloc(self, size, alignment, memory_type, mem_info)
+    }
+
+    unsafe fn free_heap(&self, heap: ral::MemoryHeapHandle) {
+        let heap = heap.interface().as_concrete_type::<MemoryHeap>();
+        heap.free(self)
+    }
+
+    
 }
 
 impl Drop for Device {

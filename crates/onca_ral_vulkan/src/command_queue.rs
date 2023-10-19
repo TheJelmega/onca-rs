@@ -26,7 +26,8 @@ impl ral::CommandQueueInterface for CommandQueue {
             for command_list in &batch.command_lists {
                 command_buffer_infos.push(vk::CommandBufferSubmitInfo::builder()
                     .command_buffer(command_list.interface().as_concrete_type::<CommandList>().buffer)
-                    .build());
+                    .build()
+                );
             }
 
             let mut wait_semaphores = DynArray::with_capacity(batch.wait_fences.len());
@@ -35,7 +36,8 @@ impl ral::CommandQueueInterface for CommandQueue {
                     .semaphore(fence_info.fence.interface().as_concrete_type::<Fence>().semaphore)
                     .value(fence_info.value)
                     .stage_mask(fence_info.sync_point.to_vulkan())
-                    .build());
+                    .build()
+                );
             }
 
             let mut signal_semaphores = DynArray::with_capacity(batch.wait_fences.len());
@@ -44,7 +46,8 @@ impl ral::CommandQueueInterface for CommandQueue {
                     .semaphore(fence_info.fence.interface().as_concrete_type::<Fence>().semaphore)
                     .value(fence_info.value)
                     .stage_mask(fence_info.sync_point.to_vulkan())
-                    .build());
+                    .build()
+                );
             }
 
             vk_data.push((command_buffer_infos, wait_semaphores, signal_semaphores));

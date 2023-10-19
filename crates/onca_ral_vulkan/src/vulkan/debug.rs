@@ -78,7 +78,11 @@ pub extern "system" fn debug_utils_messenger_callback(
 
     let mut cmdbufs = String::new();
     if data.cmd_buf_label_count > 0 {
-        cmdbufs.push_str("  command buffer [");
+        if !queues.is_empty() {
+            queues.push_str(", ");
+        }
+
+        cmdbufs.push_str("command buffer [");
         let cmdbuf_slice = unsafe { core::slice::from_raw_parts(data.p_cmd_buf_labels, data.cmd_buf_label_count as usize) };
         for (idx, cmdbuf) in cmdbuf_slice.iter().enumerate() {
             if idx != 0 {
@@ -95,7 +99,13 @@ pub extern "system" fn debug_utils_messenger_callback(
 
     let mut objects = String::new();
     if data.object_count > 0 {
-        objects.push_str(" objects [");
+        if !cmdbufs.is_empty() {
+            cmdbufs.push_str(", ");
+        } else if !queues.is_empty() {
+            queues.push_str(", ");
+        }
+
+        objects.push_str("objects [");
         let object_slice = unsafe { core::slice::from_raw_parts(data.p_objects, data.object_count as usize) };
         for (idx, object) in object_slice.iter().enumerate() {
             if idx != 0 {
@@ -109,7 +119,7 @@ pub extern "system" fn debug_utils_messenger_callback(
         objects.push_str("]");
     }
 
-    get_logger().log_fmt(category, level, log_location!(debug_utils_messenger_callback), format_args!("debug_util: {message_id_name}({message_id}): {message} ({queues},{cmdbufs},{objects})"));
+    get_logger().log_fmt(category, level, log_location!(debug_utils_messenger_callback), format_args!("debug_util: {message_id_name}({message_id}): {message} ({queues}{cmdbufs}{objects})"));
 
     vk::FALSE
 }

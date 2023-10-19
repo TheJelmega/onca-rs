@@ -13,7 +13,7 @@ pub struct SubmitBatch<'a> {
 /// - Chosen format
 pub struct SwapChainResultInfo {
     /// Backbuffer handles and rtv handles
-    pub backbuffers:       DynArray<(TextureInterfaceHandle, RenderTargetViewInterfaceHandle)>,
+    pub backbuffers:       DynArray<TextureInterfaceHandle>,
     /// Width of the swap-chain
     pub width:             u16,
     /// Height of the swap-chain
@@ -41,7 +41,7 @@ pub struct SwapChainChangeParams {
 
 pub struct SwapChainResizeResultInfo {
     /// Backbuffer handles and rtv handles
-    pub backbuffers:       DynArray<(TextureInterfaceHandle, RenderTargetViewInterfaceHandle)>,
+    pub backbuffers:       DynArray<TextureInterfaceHandle>,
     /// Width of the resized swap-chain
     pub width:             u16,
     /// Height of the resized swap-chain

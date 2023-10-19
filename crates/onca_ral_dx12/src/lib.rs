@@ -28,6 +28,9 @@ mod descriptors;
 mod fence;
 mod shader;
 mod pipeline;
+mod buffer;
+mod memory;
+mod sampler;
 
 use dx12_ral::Dx12Ral;
 

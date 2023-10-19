@@ -2,9 +2,9 @@ use onca_core::prelude::*;
 use onca_ral as ral;
 
 use ash::vk;
-use ral::HandleImpl;
+use ral::{HandleImpl, TextureAspect};
 
-use crate::{device::Device, utils::{ToRalError, ToVulkan}, vulkan::AllocationCallbacks, shader::Shader};
+use crate::{device::Device, utils::{ToRalError, ToVulkan}, vulkan::AllocationCallbacks, shader::Shader, sampler::Sampler, descriptor::{MUTABLE_DESCRIPTOR_TYPES, DescriptorTableLayout}};
 
 
 pub struct PipelineLayout {
@@ -15,9 +15,87 @@ pub struct PipelineLayout {
 
 impl PipelineLayout {
     pub unsafe fn new(device: &Device, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
+        let mut layouts = DynArray::new();
+
+        if let Some(tables) = &desc.descriptor_tables {
+            for table in tables {
+                let table_layout = table.interface().as_concrete_type::<DescriptorTableLayout>();
+                layouts.push(table_layout.handle);
+            }
+        }
+
+        if let Some(inlines) = &desc.inline_descriptors {
+            for inline in inlines {
+                let binding = [vk::DescriptorSetLayoutBinding::builder()
+                    .binding(0)
+                    .descriptor_type(inline.descriptor_type.to_vulkan())
+                    .descriptor_count(1)
+                    .stage_flags(inline.visibility.to_vulkan())
+                    .build()    
+                ];
+                
+                let mutable_type_list = [vk::MutableDescriptorTypeListEXT::builder()
+                    .descriptor_types(&MUTABLE_DESCRIPTOR_TYPES)
+                    .build()];
+                let mut mutable_types = vk::MutableDescriptorTypeCreateInfoEXT::builder()
+                    .mutable_descriptor_type_lists(&mutable_type_list);
+
+                let create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .push_next(&mut mutable_types)
+                .flags(vk::DescriptorSetLayoutCreateFlags::DESCRIPTOR_BUFFER_EXT  | vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR)
+                .bindings(&binding);
+                
+                let layout = device.device.create_descriptor_set_layout(&create_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
+                layouts.push(layout);
+            }
+        }
+
+        let mut push_constant_offset = 0;
+        let mut push_constants = DynArray::new();
+
+        if let Some(constants) = &desc.constant_ranges {
+            for constant in constants {
+                    let size = constant.count as u32 * 4;
+                    let range = vk::PushConstantRange::builder()
+                    .stage_flags(constant.visibility.to_vulkan())
+                    .size(size)
+                    .offset(push_constant_offset)
+                    .build();
+                push_constants.push(range);
+                push_constant_offset += size;
+            }
+        }
+
+        match &desc.static_samplers {
+            Some(samplers) => {
+                let mut bindings = DynArray::new();
+                for (idx, sampler) in samplers.iter().enumerate() {
+                    let vk_sampler = sampler.interface().as_concrete_type::<Sampler>().sampler;
+
+                    sampler.desc();
+
+                    bindings.push(vk::DescriptorSetLayoutBinding::builder()
+                        .binding(idx as u32)
+                        .descriptor_type(vk::DescriptorType::SAMPLER)
+                        .immutable_samplers(&[vk_sampler])
+                        .stage_flags(sampler.desc().visibility.to_vulkan())
+                        .build()
+                    );
+                }
+
+                let create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                    .flags(vk::DescriptorSetLayoutCreateFlags::DESCRIPTOR_BUFFER_EXT | vk::DescriptorSetLayoutCreateFlags::EMBEDDED_IMMUTABLE_SAMPLERS_EXT)
+                    .bindings(&bindings);
+
+                let layout = device.device.create_descriptor_set_layout(&create_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
+                layouts.push(layout);
+            },
+            None => {},
+        }
+
         let create_info = vk::PipelineLayoutCreateInfo::builder()
-            // TODO
-            .build();
+            .set_layouts(&layouts)
+            .push_constant_ranges(&push_constants);
 
         let layout = device.device.create_pipeline_layout(&create_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
@@ -26,7 +104,6 @@ impl PipelineLayout {
                 layout,
                 device: Arc::downgrade(&device.device),
                 alloc_callbacks: device.alloc_callbacks.clone(),
-                
             }
         ))
     }
@@ -64,36 +141,57 @@ impl Pipeline {
         shader_stages.push(vertex_shader.get_shader_stage_info(ral::ShaderType::Vertex));
         shader_stages.push(pixel_shader.get_shader_stage_info(ral::ShaderType::Pixel));
 
+        
+        let mut vertex_bindings = DynArray::new();
+        let mut vertex_binding_divisors = DynArray::new();
+        let mut vertex_attributes = DynArray::new();
+        
+        if let Some(input_layout) = &desc.input_layout {
+            vertex_bindings.reserve(input_layout.elements.len());
+            vertex_binding_divisors.reserve(input_layout.elements.len());
+            vertex_attributes.reserve(input_layout.elements.len());
 
-        let mut vertex_bindings = DynArray::with_capacity(desc.vertex_input_layout.elements.len());
-        let mut vertex_binding_divisors = DynArray::with_capacity(desc.vertex_input_layout.elements.len());
-        let mut vertex_attributes = DynArray::with_capacity(desc.vertex_input_layout.elements.len());
+            let mut location_counters = [0; ral::constants::MAX_VERTEX_INPUT_BUFFERS as usize];
+            let mut bindings_created  = [false; ral::constants::MAX_VERTEX_INPUT_BUFFERS as usize];
 
-        let strides = desc.vertex_input_layout.calculate_strides();
-        for (idx, element) in desc.vertex_input_layout.elements.iter().enumerate() {
-            let step_rate = element.step_rate.to_vulkan();
+            let strides = input_layout.calculate_strides();
+            for element in &input_layout.elements {
+                let step_rate = element.step_rate.to_vulkan();
 
-            vertex_bindings.push(vk::VertexInputBindingDescription::builder()
-                .binding(idx as u32)
-                .stride(strides[element.input_slot as usize] as u32)
-                .input_rate(step_rate.0)
-                .build());
-            vertex_binding_divisors.push(vk::VertexInputBindingDivisorDescriptionEXT::builder()
-                .binding(idx as u32)
-                .divisor(step_rate.1)
-                .build());
-            vertex_attributes.push(vk::VertexInputAttributeDescription::builder()
+                let location = location_counters[element.input_slot as usize];
+                location_counters[element.input_slot as usize] += 1;
+                
+                vertex_attributes.push(vk::VertexInputAttributeDescription::builder()
                 // TODO: Currently we just expect vulkan locations to match the order of vertex attributes, but in the future this should be handled by either shader reflection or a custom shader system (shaders written in rust)
-                .location(idx as u32)
-                .binding(idx as u32)
+                .location(location)
+                .binding(element.input_slot as u32)
                 .format(element.format.to_vulkan())
                 .offset(element.offset as u32)
                 .build());
+
+                if !bindings_created[element.input_slot as usize] {
+                    bindings_created[element.input_slot as usize] = true;
+
+                    vertex_bindings.push(vk::VertexInputBindingDescription::builder()
+                    .binding(element.input_slot as u32)
+                    .stride(strides[element.input_slot as usize] as u32)
+                    .input_rate(step_rate.0)
+                    .build());
+
+                    if step_rate.0 == vk::VertexInputRate::INSTANCE {
+                        vertex_binding_divisors.push(vk::VertexInputBindingDivisorDescriptionEXT::builder()
+                        .binding(element.input_slot as u32)
+                        .divisor(step_rate.1)
+                        .build());
+                    }
+                }
+
+                
+            }
         }
 
         let mut vertex_input_devisors = vk::PipelineVertexInputDivisorStateCreateInfoEXT::builder()
-            .vertex_binding_divisors(&vertex_binding_divisors)
-            .build();
+            .vertex_binding_divisors(&vertex_binding_divisors);
 
         let mut vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&vertex_bindings)
@@ -107,8 +205,7 @@ impl Pipeline {
 
         let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(desc.topology.to_vulkan())
-            .primitive_restart_enable(desc.primitive_restart != ral::PrimitiveRestart::None)
-            .build();
+            .primitive_restart_enable(desc.primitive_restart != ral::PrimitiveRestart::None);
 
         // We handle viewport dynamically, but we still need to pass this struct, so just create the default one
         let viewport_state = vk::PipelineViewportStateCreateInfo::default();
@@ -120,17 +217,14 @@ impl Pipeline {
 
         let mut conservative_rasterization_state = vk::PipelineRasterizationConservativeStateCreateInfoEXT::builder()
             .conservative_rasterization_mode(desc.rasterizer_state.conservative_raster.to_vulkan())
-            .extra_primitive_overestimation_size(1.0 / 256.0) // This matches Tier 3 for DX12
-            .build();
+            .extra_primitive_overestimation_size(1.0 / 256.0); // This matches Tier 3 for DX12
 
         let mut clip_enable_state = vk::PipelineRasterizationDepthClipStateCreateInfoEXT::builder()
-            .depth_clip_enable(desc.rasterizer_state.depth_clip_enable)
-            .build();
+            .depth_clip_enable(desc.rasterizer_state.depth_clip_enable);
 
         // We don't use line stipple
         let mut line_raster_state = vk::PipelineRasterizationLineStateCreateInfoEXT::builder()
-            .line_rasterization_mode(desc.rasterizer_state.line_raster_mode.to_vulkan())
-            .build();
+            .line_rasterization_mode(desc.rasterizer_state.line_raster_mode.to_vulkan());
 
         let rasterizer_state = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(true) // Is always enabled to match the functionality of other APIs
@@ -145,15 +239,14 @@ impl Pipeline {
             .line_width(if desc.rasterizer_state.line_raster_mode == ral::LineRasterizationMode::RectangularWide { 1.4 } else { 1.0 })
             .push_next(&mut conservative_rasterization_state)
             .push_next(&mut clip_enable_state)
-            .push_next(&mut line_raster_state)
-            .build();
+            .push_next(&mut line_raster_state);
 
         // minSampleShading and alphaToOne (can be done in the pixel shader if needed, by just setting alpha of the incoming color to 1) is not supported
+        let sample_mask = [desc.multisample_state.sample_mask as u32];
         let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
             .rasterization_samples(desc.multisample_state.samples.to_vulkan())
-            .sample_mask(&[desc.multisample_state.sample_mask as u32])
-            .alpha_to_coverage_enable(desc.multisample_state.alpha_to_coverage)
-            .build();
+            .sample_mask(&sample_mask)
+            .alpha_to_coverage_enable(desc.multisample_state.alpha_to_coverage);
 
         let depth_stencil_state = desc.depth_stencil_state.to_vulkan();
 
@@ -167,8 +260,8 @@ impl Pipeline {
             }
         }
 
-        let depth_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.contains_depth() { format.to_vulkan() } else { vk::Format::UNDEFINED });
-        let stencil_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.contains_stencil() { format.to_vulkan() } else { vk::Format::UNDEFINED });
+        let depth_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.aspect().contains(TextureAspect::Depth) { format.to_vulkan() } else { vk::Format::UNDEFINED });
+        let stencil_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.aspect().contains(TextureAspect::Stencil) { format.to_vulkan() } else { vk::Format::UNDEFINED });
 
         let mut blend_attachments = DynArray::new();
         let blend_state = match desc.blend_state {
@@ -178,8 +271,7 @@ impl Pipeline {
                 .logic_op(logic_op.to_vulkan())
                 .build(),
             ral::BlendState::Blend(blend_states) => {
-                let mut blend_state_count = 0;
-                for (idx, state) in blend_states.iter().enumerate() {
+                for state in blend_states.iter() {
                     blend_attachments.push(state.to_vulkan());
                 }
 
@@ -197,11 +289,11 @@ impl Pipeline {
             vk::DynamicState::DEPTH_BOUNDS,
             vk::DynamicState::STENCIL_REFERENCE,
             vk::DynamicState::PRIMITIVE_TOPOLOGY,
+            vk::DynamicState::VERTEX_INPUT_BINDING_STRIDE,
         ];
     
         let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&dynamic_states)
-            .build();
+            .dynamic_states(&dynamic_states);
 
         let layout = desc.pipeline_layout.interface().as_concrete_type::<PipelineLayout>().layout;
 
@@ -209,11 +301,11 @@ impl Pipeline {
             .color_attachment_formats(&rendertarget_formats[..rendertarget_count])
             .depth_attachment_format(depth_format)
             .stencil_attachment_format(stencil_format)
-            .view_mask(desc.view_mask.unwrap_or_default() as u32)
-            .build();
+            .view_mask(desc.view_mask.unwrap_or_default() as u32);
     
         let create_info = vk::GraphicsPipelineCreateInfo::builder()
             .push_next(&mut rendering_create_info)
+            .flags(vk::PipelineCreateFlags::DESCRIPTOR_BUFFER_EXT)
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_state)
             .input_assembly_state(&input_assembly_state)

@@ -1,14 +1,13 @@
 
-static float2 positions[3] = {
-    float2( 0.0,  0.5),
-    float2( 0.5, -0.5),
-    float2(-0.5, -0.5),
+cbuffer Constants : register(b0) {
+    float4x4 model;
+    float4x4 view;
+    float4x4 proj;
 };
 
-static float3 colors[3] = {
-    float3(1.0, 0.0, 0.0),
-    float3(0.0, 1.0, 0.0),
-    float3(0.0, 0.0, 1.0),
+struct VertexInput {
+    float2 pos : POSITION;
+    float3 col : COLOR;
 };
 
 struct VertexOutput
@@ -17,12 +16,13 @@ struct VertexOutput
     float3 col : COLOR;
 };
 
-VertexOutput main(uint vertexID : SV_VertexID)
+VertexOutput main(VertexInput IN)
 {
     VertexOutput OUT = (VertexOutput)0;
 
-    OUT.pos = float4(positions[vertexID], 0.0f, 1.0f);
-    OUT.col = colors[vertexID];
+    float4x4 mvp = mul(mul(model, view), proj);
+    OUT.pos = mul(float4(IN.pos, 0.0f, 1.0f), mvp);
+    OUT.col = IN.col;
 
     return OUT;
 }

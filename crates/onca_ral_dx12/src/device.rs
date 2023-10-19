@@ -3,7 +3,7 @@ use core::{mem::MaybeUninit, sync::atomic::AtomicU64};
 use onca_core::{utils::EnumCount, prelude::*};
 use onca_ral as ral;
 
-use ral::{constants::{MAX_RENDER_TARGET_VIEWS, MAX_DEPTH_STENCIL_VIEWS}};
+use ral::constants::{MAX_RENDER_TARGET_VIEWS, MAX_DEPTH_STENCIL_VIEWS};
 use windows::Win32::Graphics::{
     Direct3D::*,
     Direct3D12::*,
@@ -14,16 +14,18 @@ use crate::{
     utils::*,
     physical_device::PhysicalDevice,
     command_queue::CommandQueue,
-    descriptors::RTVAndDSVDescriptorHeap,
+    descriptors::{RTVAndDSVDescriptorHeap, DescriptorHeap, DescriptorTableLayout},
     swap_chain::SwapChain,
     command_list::CommandPool,
-    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout},
+    fence::Fence, shader::Shader, pipeline::{Pipeline, PipelineLayout}, buffer::Buffer, memory::MemoryHeap, sampler::{StaticSampler, Sampler},
 };
 
 pub struct Device {
-    pub device:   ID3D12Device10,
-    pub rtv_heap: Arc<RTVAndDSVDescriptorHeap>,
-    pub dsv_heap: Arc<RTVAndDSVDescriptorHeap>,
+    pub device:                   ID3D12Device10,
+    pub rtv_heap:                 Arc<RTVAndDSVDescriptorHeap>,
+    pub dsv_heap:                 Arc<RTVAndDSVDescriptorHeap>,
+    pub resource_descriptor_size: u32,
+    pub sampler_descriptor_size:  u32,
 }
 
 impl Device {
@@ -56,11 +58,16 @@ impl Device {
 
         let rtv_heap = RTVAndDSVDescriptorHeap::new(&device, false, MAX_RENDER_TARGET_VIEWS)?;
         let dsv_heap = RTVAndDSVDescriptorHeap::new(&device, true , MAX_DEPTH_STENCIL_VIEWS)?;
+
+        let resource_descriptor_size = device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        let sampler_descriptor_size = device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     
         Ok((ral::DeviceInterfaceHandle::new(Device {
                 device,
                 rtv_heap: Arc::new(rtv_heap),
                 dsv_heap: Arc::new(dsv_heap),
+                resource_descriptor_size,
+                sampler_descriptor_size,
             }),
             command_queues.assume_init()
         ))
@@ -80,8 +87,20 @@ impl ral::DeviceInterface for Device {
         Ok(ral::FenceInterfaceHandle::new(Fence::new(&self.device)?))
     }
 
+    unsafe fn create_buffer(&self, desc: &ral::BufferDesc, alloc: &ral::GpuAllocator) -> ral::Result<(ral::BufferInterfaceHandle, ral::GpuAllocation, ral::GpuAddress)> {
+        Buffer::new(self, desc, alloc)
+    }
+
     unsafe fn create_shader(&self, code: &[u8], _shader_type: ral::ShaderType) -> ral::Result<ral::ShaderInterfaceHandle> {
         Shader::new(code)
+    }
+
+    unsafe fn create_static_sampler(&self, desc: &ral::StaticSamplerDesc) -> ral::Result<ral::StaticSamplerInterfaceHandle> {
+        Ok(StaticSampler::new(desc))
+    }
+
+    unsafe fn create_sampler(&self, desc: &ral::SamplerDesc) -> ral::Result<ral::SamplerInterfaceHandle> {
+        Ok(Sampler::new(desc))
     }
 
     unsafe fn create_graphics_pipeline(&self, desc: &ral::GraphicsPipelineDesc) -> ral::Result<ral::PipelineInterfaceHandle> {
@@ -90,6 +109,22 @@ impl ral::DeviceInterface for Device {
 
     unsafe fn create_pipeline_layout(&self, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
         PipelineLayout::new(self, desc)
+    }
+
+    unsafe fn create_descriptor_table_layout(&self, desc: &ral::DescriptorTableDesc) -> ral::Result<(ral::DescriptorTableLayoutInterfaceHandle, u32, u32)> {
+        Ok(DescriptorTableLayout::new(self, desc))
+    }
+
+    unsafe fn create_descriptor_heap(&self, desc: &ral::DescriptorHeapDesc, _alloc: &ral::GpuAllocator) -> ral::Result<(ral::DescriptorHeapInterfaceHandle, Option<ral::GpuAllocation>)> {
+        DescriptorHeap::new(self, desc)
+    }
+
+    unsafe fn allocate_heap(&self, size: u64, alignment: u64, memory_type: ral::MemoryType, mem_info: &ral::MemoryInfo) -> ral::Result<ral::MemoryHeapInterfaceHandle> {
+        MemoryHeap::alloc(self, size, alignment, memory_type, mem_info)
+    }
+
+    unsafe fn free_heap(&self, _heap: ral::MemoryHeapHandle) {
+        // Nothing to do, dropping the heap will handle this
     }
 
     unsafe fn flush(&self, queues: &[[ral::CommandQueueHandle; ral::QueuePriority::COUNT]; ral::QueueType::COUNT]) -> ral::Result<()> {

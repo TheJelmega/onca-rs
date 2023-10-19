@@ -15,7 +15,7 @@ use crate::{
 
 pub struct Dx12Ral {
     settings     : Settings,
-    alloc        : UseAlloc,
+    _alloc       : UseAlloc,
     _debug       : Dx12Debug,
     dxgi_factory : IDXGIFactory7,
 }
@@ -34,7 +34,7 @@ impl Dx12Ral {
 
         Ok(Self {
             settings,
-            alloc,
+            _alloc: alloc,
             _debug: debug,
             dxgi_factory
         })

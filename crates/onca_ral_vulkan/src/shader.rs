@@ -7,7 +7,7 @@ use ash::vk;
 use crate::{device::Device, utils::{ToRalError, ToVulkan}, vulkan::AllocationCallbacks};
 
 
-
+/// Shader modules get deprecated in 'VK_KHR_maintenance5'
 pub struct Shader {
     pub shader: vk::ShaderModule,
     pub alloc_callbacks: AllocationCallbacks,
@@ -23,8 +23,7 @@ impl Shader {
         let code_u32 = core::slice::from_raw_parts(code.as_ptr() as *const u32, code.len() / VK_SHADER_WORD_SIZE);
 
         let create_info = vk::ShaderModuleCreateInfo::builder()
-            .code(code_u32)
-            .build();
+            .code(code_u32);
 
         let shader = device.device.create_shader_module(&create_info, device.alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
         
