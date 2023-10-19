@@ -165,10 +165,11 @@ macro_rules! log_location {
 }
 
 pub struct LoggerState {
-    writers:      StaticDynArray<(HeapPtr<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
-    cache:        Option<String>,
-    writer_idx:   usize,
-    always_flush: bool
+    writers:        StaticDynArray<(HeapPtr<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
+    cache:          Option<String>,
+    writer_idx:     usize,
+    always_flush:   bool,
+    log_to_console: bool,
 }
 
 impl LoggerState {
@@ -180,7 +181,8 @@ impl LoggerState {
             writers: StaticDynArray::new(),
             cache: None,
             writer_idx: 0,
-            always_flush: false
+            always_flush: false,
+            log_to_console: true,
         }
     }
 
@@ -217,7 +219,9 @@ impl LoggerState {
 
     fn flush(&mut self) {
         if let Some(cache) = &mut self.cache {
-            _ = Terminal::write(&cache);
+            if self.log_to_console {
+                _ = Terminal::write(&cache);
+            }
 
             for (writer, _) in &mut self.writers {
                 _ = writer.write(cache.as_bytes());
@@ -255,6 +259,15 @@ impl Logger {
     /// Set whether the logger should flush after each write
     pub fn set_always_flush(&self, always_flush: bool) {
         self.state.lock().always_flush = always_flush;
+    }
+
+    /// Set whether the logger should log it's output to console
+    pub fn set_log_to_console(&self, log_to_console: bool) {
+        let mut state = self.state.lock();
+
+        // Make sure to flush first, cause all messages before wanted/didn't want to be log to be written to console
+        state.flush();
+        state.log_to_console = log_to_console;
     }
 
     /// Add a writer. 
