@@ -470,9 +470,9 @@ impl<T: Real> Mat4<T> {
         let y_axis = z_axis.cross(x_axis);
         let zero = T::zero();
 
-        Self { vals: [ x_axis.x       ,  x_axis.y       ,  x_axis.z       , zero    ,
-                       y_axis.x       ,  y_axis.y       ,  y_axis.z       , zero    ,
-                       z_axis.x       ,  z_axis.y       ,  z_axis.z       , zero    ,
+        Self { vals: [ x_axis.x       ,  y_axis.x       ,  z_axis.x       , zero    ,
+                       x_axis.y       ,  y_axis.y       ,  z_axis.y       , zero    ,
+                       x_axis.z       ,  y_axis.z       ,  z_axis.z       , zero    ,
                       -x_axis.dot(eye), -y_axis.dot(eye), -z_axis.dot(eye), T::one()] }
     }
 
@@ -582,7 +582,7 @@ impl<T: Real> Mat4<T> {
     }
 
     // RH would need to be `near - far` for f_range, `-1` for m23, and `near * f_range` for m32
-    /// Create a perspective matrix, with a given vertical `fov` and an `aspect` ratio defined as width / height
+    /// Create a perspective matrix, with a given vertical `fov` and an `aspect` ratio defined as `height / width`
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
     pub fn create_perspective_fov(fov: Radians<T>, aspect: T, near: T, far: T) -> Self {
