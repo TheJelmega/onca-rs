@@ -158,7 +158,7 @@ impl SwapChain {
         queue_index: u32,
         resize_command_pool: vk::CommandPool,
         queue: &CommandQueueHandle,
-    ) -> ral::Result<(vk::SwapchainKHR, DynArray<ral::TextureInterfaceHandle>)> {
+    ) -> ral::Result<(vk::SwapchainKHR, Vec<ral::TextureInterfaceHandle>)> {
         // NOTE: If present queue is different from the graphics queue, we will need to specify the queue family indices and either set sharing move to concurrent, or manually change owndership
         let swap_chain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface)
@@ -177,8 +177,8 @@ impl SwapChain {
         let swapchain = ash_swapchain.create_swapchain(&swap_chain_create_info, alloc_callbacks.get_some_vk_callbacks()).map_err(|err| err.to_ral_error())?;
 
         let images = ash_swapchain.get_swapchain_images(swapchain).map_err(|err| err.to_ral_error())?;
-        let mut backbuffers = DynArray::with_capacity(images.len());
-        let mut initial_transition_barrier = DynArray::with_capacity(images.len());
+        let mut backbuffers = Vec::with_capacity(images.len());
+        let mut initial_transition_barrier = Vec::with_capacity(images.len());
         for image in images {
             backbuffers.push(
                 ral::TextureInterfaceHandle::new(Texture {
@@ -323,7 +323,7 @@ impl ral::SwapChainInterface for SwapChain {
         let present_region;
         let mut present_regions;
         if self.support_incremental {
-            regions = DynArray::new();
+            regions = Vec::new();
 
             if self.support_incremental && let Some(rects) = present_info.update_rects {
                 regions.reserve(rects.len());

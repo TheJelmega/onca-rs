@@ -1,6 +1,6 @@
 use core::{ffi::c_void, mem::ManuallyDrop};
 
-use onca_core::{collections::ByteBuffer, prelude::DynArray};
+use onca_core::collections::ByteBuffer;
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::Win32::Graphics::{
@@ -25,8 +25,8 @@ impl PipelineLayout {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         }
 
-        let mut parameters = DynArray::new();
-        let mut all_ranges = DynArray::new();
+        let mut parameters = Vec::new();
+        let mut all_ranges = Vec::new();
 
         if let Some(tables) = &desc.descriptor_tables {
             parameters.reserve(tables.len());
@@ -77,7 +77,7 @@ impl PipelineLayout {
             }
         }
 
-        let mut static_samplers = DynArray::new();
+        let mut static_samplers = Vec::new();
         if let Some(samplers) = &desc.static_samplers {
             for (reg_idx, sampler) in samplers.iter().enumerate() {
                 let mut desc = sampler.interface().as_concrete_type::<StaticSampler>().desc;
@@ -147,7 +147,7 @@ impl Pipeline {
             pipeline_stream.set_depth_stencil_format(format.to_dx());
         }
 
-        let mut dx_input_layout = DynArray::new();
+        let mut dx_input_layout = Vec::new();
         if let Some(input_layout) = &desc.input_layout {
             dx_input_layout.reserve(input_layout.elements.len());
             for element in &input_layout.elements {

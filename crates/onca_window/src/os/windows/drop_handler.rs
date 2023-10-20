@@ -160,7 +160,7 @@ impl DropHandler {
                     let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
                     let path_len = DragQueryFileA(hdrop, i, None);
-                    let mut buf = DynArray::<u8>::new();
+                    let mut buf = Vec::<u8>::new();
                     buf.reserve(path_len as usize + 1);
                     buf.set_len(path_len as usize + 1);
 

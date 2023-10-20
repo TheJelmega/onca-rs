@@ -8,7 +8,7 @@ use windows::{Win32::{Graphics::Dxgi::{*, Common::DXGI_SAMPLE_DESC}, Foundation:
 use crate::{utils::*, device::Device, physical_device::PhysicalDevice, texture::{Texture, RenderTargetView}, fence::Fence, command_queue::CommandQueue};
 
 pub struct SwapchainDynamic {
-    pub frame_values: DynArray<u64>,
+    pub frame_values: Vec<u64>,
     pub cur_fence_value:  u64,
 }
 
@@ -46,7 +46,7 @@ impl SwapChain {
         // Disable Alt + Tab, exclusive fullscreen is not really needed with the flip model on a modern version of windows
         dx_phys_dev.factory.MakeWindowAssociation(create_info.window_handle.hwnd(), DXGI_MWA_NO_ALT_ENTER).map_err(|err| err.to_ral_error())?;
 
-        let mut backbuffers = DynArray::with_capacity(create_info.num_backbuffers as usize);
+        let mut backbuffers = Vec::with_capacity(create_info.num_backbuffers as usize);
 
         for i in 0..create_info.num_backbuffers as u32 {
             let resource = swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
@@ -59,7 +59,7 @@ impl SwapChain {
         let usages = create_info.usages | ral::TextureUsage::CopySrc | ral::TextureUsage::CopyDst;
 
         let fence = Fence::new(&device.device)?;
-        let mut frame_values = DynArray::new();
+        let mut frame_values = Vec::new();
         frame_values.resize(create_info.num_backbuffers as usize, 0);
 
         let dynamic = Mutex::new(SwapchainDynamic{
@@ -112,7 +112,7 @@ impl ral::SwapChainInterface for SwapChain {
         };
 
         scoped_alloc!(UseAlloc::TlsTemp);
-        let mut dirty_rects = DynArray::new();
+        let mut dirty_rects = Vec::new();
         if let Some(rects) = present_info.update_rects {
             dirty_rects.reserve(rects.len());
             for rect in rects {
@@ -188,7 +188,7 @@ impl ral::SwapChainInterface for SwapChain {
 
         let dx_device = device.interface().as_concrete_type::<Device>();
 
-        let mut backbuffers = DynArray::with_capacity(params.num_backbuffers as usize);
+        let mut backbuffers = Vec::with_capacity(params.num_backbuffers as usize);
         for i in 0..params.num_backbuffers as u32 {
             let resource = self.swap_chain.GetBuffer(i).map_err(|err| err.to_ral_error())?;
             backbuffers.push(ral::TextureInterfaceHandle::new(Texture {

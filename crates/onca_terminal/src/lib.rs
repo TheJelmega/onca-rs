@@ -1,9 +1,12 @@
 #![feature(local_key_cell_methods)]
 
-use core::cell::RefCell;
+use std::{
+    cell::RefCell,
+    io::Write,
+};
 use onca_core::{
     prelude::*,
-    io::{self, prelude::*},
+    io,
 };
 
 mod escape_codes;
@@ -146,11 +149,11 @@ impl Terminal {
 
     /// Write a terminal sequence to the terminal, the sequence is written via the supplied `write_sequence` function
     pub fn exec_terminal_sequence<F>(write_sequence: F)
-        where F : FnOnce(&mut DynArray<u8>)
+        where F : FnOnce(&mut Vec<u8>)
     {
         let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
-        let mut buffer = DynArray::with_capacity(32);
+        let mut buffer = Vec::with_capacity(32);
         write_sequence(&mut buffer);
         let _ = unsafe { os_imp::Terminal::write(core::str::from_utf8_unchecked(&buffer)) };
     }

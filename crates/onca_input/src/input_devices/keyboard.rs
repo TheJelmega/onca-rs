@@ -1008,12 +1008,12 @@ pub struct Keyboard {
 
     // Keys
     state               : RwLock<KeyboardState>,
-    key_changes         : Mutex<DynArray<KeyChange>>,
+    key_changes         : Mutex<Vec<KeyChange>>,
 
     key_timers          : [f32; NUM_KEYS],
 
     // Text
-    text_input          : DynArray<KeyboardTextInput>,
+    text_input          : Vec<KeyboardTextInput>,
     text_input_listener : Mutex<Option<DynEventListenerRef<KeyboardTextInput>>>,
     /// Time between multi-shot key events.
     text_rep_time       : f32,
@@ -1151,9 +1151,9 @@ impl Keyboard {
         os::OSKeyboard::new().map(|os_kb| Keyboard {
             _os_kb: os_kb,
             state: RwLock::new(KeyboardState::new()),
-            key_changes: Mutex::new(DynArray::new()),
+            key_changes: Mutex::new(Vec::new()),
             key_timers: [0f32; NUM_KEYS],
-            text_input: DynArray::new(),
+            text_input: Vec::new(),
             text_input_listener: Mutex::new(None),
             text_rep_time: 0f32,
             text_timer: 0f32,

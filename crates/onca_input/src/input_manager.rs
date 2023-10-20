@@ -19,13 +19,13 @@ use crate::{os::{self, OSInput}, input_devices::{Keyboard, InputDevice}, LOG_INP
 
 // TODO: Register device with custom API, so would ignore `InputDevice::handleInput` and manage it in `InputDevice::tick`
 struct DeviceStorage {
-    devices        : DynArray<Option<(Box<hid::Device>, Box<dyn InputDevice>)>>,
+    devices        : Vec<Option<(Box<hid::Device>, Box<dyn InputDevice>)>>,
     device_mapping : HashMap<hid::DeviceHandle, usize>,
 }
 
 impl DeviceStorage {
     fn new() -> Self {
-        Self { devices: DynArray::new(), device_mapping: HashMap::new() }
+        Self { devices: Vec::new(), device_mapping: HashMap::new() }
     }
 
     fn get_device_mut(&mut self, handle: hid::DeviceHandle) -> Option<(&mut hid::Device, &mut dyn InputDevice)> {
@@ -122,15 +122,15 @@ pub struct InputManager {
     raw_input_listener      : Arc<Mutex<RawInputListener>>,
 
     device_product_creators : Mutex<HashMap<hid::VendorProduct, CreateDevicePtr>>,
-    device_custom_creators  : Mutex<DynArray<(Box<dyn Fn(&hid::Identifier) -> bool>, CreateDevicePtr)>>,
+    device_custom_creators  : Mutex<Vec<(Box<dyn Fn(&hid::Identifier) -> bool>, CreateDevicePtr)>>,
     device_usage_creators   : Mutex<HashMap<hid::Usage, CreateDevicePtr>>,
 
-    mapping_contexts        : Mutex<DynArray<MappingContext>>,
+    mapping_contexts        : Mutex<Vec<MappingContext>>,
 
-    control_schemes         : RwLock<DynArray<ControlScheme>>,
-    users                   : RwLock<DynArray<User>>,
+    control_schemes         : RwLock<Vec<ControlScheme>>,
+    users                   : RwLock<Vec<User>>,
 
-    unused_devices          : DynArray<DeviceHandle>,
+    unused_devices          : Vec<DeviceHandle>,
 
     rebind_context          : Option<RebindContext>
 }
@@ -146,12 +146,12 @@ impl InputManager {
             device_store: RwLock::new(DeviceStorage::new()),
             raw_input_listener: Arc::new(Mutex::new(RawInputListener::new())),
             device_product_creators: Mutex::new(HashMap::new()),
-            device_custom_creators: Mutex::new(DynArray::new()),
+            device_custom_creators: Mutex::new(Vec::new()),
             device_usage_creators: Mutex::new(HashMap::new()),
-            mapping_contexts: Mutex::new(DynArray::new()),
-            control_schemes: RwLock::new(DynArray::new()),
-            users: RwLock::new(DynArray::new()),
-            unused_devices: DynArray::new(),
+            mapping_contexts: Mutex::new(Vec::new()),
+            control_schemes: RwLock::new(Vec::new()),
+            users: RwLock::new(Vec::new()),
+            unused_devices: Vec::new(),
             rebind_context: None,
         });
         ptr.raw_input_listener.lock().init(&ptr);
@@ -298,7 +298,7 @@ impl InputManager {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
         
         // Update devices
-        let mut rebind_axes = DynArray::new();
+        let mut rebind_axes = Vec::new();
         let mut callback = |input: InputAxisId| if self.rebind_context.is_none() { rebind_axes.push(input) };
         
         if let Some(mouse) = &mut self.mouse {

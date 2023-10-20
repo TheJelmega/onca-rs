@@ -47,7 +47,7 @@ pub enum RalApiSpecificSettings {
     None,
     DirectX,
     Vulkan {
-        additional_layers : DynArray<String>,
+        additional_layers : Vec<String>,
     },
     Software,
 }
@@ -173,7 +173,7 @@ pub trait Interface {
     fn get_settings(&self) -> &Settings;
 
     /// Get all physical devices
-    fn get_physical_devices(&self) -> Result<DynArray<PhysicalDevice>>;
+    fn get_physical_devices(&self) -> Result<Vec<PhysicalDevice>>;
 
     // Create a device
     unsafe fn create_device(&self, phys_dev: &PhysicalDevice) -> Result<(DeviceInterfaceHandle, [[(CommandQueueInterfaceHandle, QueueIndex); 2]; 3])>;
@@ -216,7 +216,7 @@ impl Ral {
         self.get().get_settings()
     }
 
-    pub fn get_physical_devices(&self) -> Result<DynArray<PhysicalDevice>> {
+    pub fn get_physical_devices(&self) -> Result<Vec<PhysicalDevice>> {
         self.get().get_physical_devices()
     }
 

@@ -2,7 +2,7 @@ use core::{
     mem,
     ffi::c_void,
 };
-use onca_core::{prelude::*};
+use onca_core::prelude::*;
 use onca_hid as hid;
 use windows::Win32::{
     UI::{
@@ -60,7 +60,7 @@ impl OSInput {
                 }
 
                 size = byte_count.max(mem::size_of::<RAWINPUT>() as u32);
-                let mut buffer = DynArray::<u8>::with_capacity(size as usize);
+                let mut buffer = Vec::<u8>::with_capacity(size as usize);
                 buffer.set_len(size as usize);
                 let byte_count = GetRawInputData(hrawinput, RID_INPUT, Some(buffer.as_mut_ptr() as *mut c_void), &mut size, header_size);
                 if byte_count == u32::MAX {
@@ -103,7 +103,7 @@ impl OSInput {
                                 let mut preparse_size = 0u32;
                                 GetRawInputDeviceInfoA(rawinput.header.hDevice, RIDI_PREPARSEDDATA, None, &mut preparse_size);
                                 
-                                let mut preparse_data = DynArray::with_capacity(preparse_size as usize);
+                                let mut preparse_data = Vec::with_capacity(preparse_size as usize);
                                 preparse_data.set_len(preparse_size as usize);
                                 let res = GetRawInputDeviceInfoA(rawinput.header.hDevice, RIDI_PREPARSEDDATA, Some(preparse_data.as_mut_ptr() as *mut c_void), &mut preparse_size);
                                 if res == u32::MAX {
@@ -159,7 +159,7 @@ impl OSInput {
                             let mut preparse_size = 0u32;
                             GetRawInputDeviceInfoA(win_handle, RIDI_PREPARSEDDATA, None, &mut preparse_size);
                             
-                            let mut preparse_data = DynArray::with_capacity(preparse_size as usize);
+                            let mut preparse_data = Vec::with_capacity(preparse_size as usize);
                             preparse_data.set_len(preparse_size as usize);
                             let res = GetRawInputDeviceInfoA(win_handle, RIDI_PREPARSEDDATA, Some(preparse_data.as_mut_ptr() as *mut c_void), &mut preparse_size);
                             if res == u32::MAX {
@@ -208,17 +208,17 @@ impl OSInput {
     }
 }
 
-unsafe fn get_raw_input_devices() -> DynArray<RAWINPUTDEVICELIST> {
+unsafe fn get_raw_input_devices() -> Vec<RAWINPUTDEVICELIST> {
     let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
     let mut num_devices = 0;
     let res = GetRawInputDeviceList(None, &mut num_devices, mem::size_of::<RAWINPUTDEVICELIST>() as u32);
     if res == u32::MAX {
         log_error!(LOG_INPUT_CAT, get_raw_input_devices, "Failed to get number of raw input devices (err: {:X})", GetLastError().0);
-        return DynArray::new();
+        return Vec::new();
     }
 
-    let mut raw_devices = DynArray::with_capacity(num_devices as usize);
+    let mut raw_devices = Vec::with_capacity(num_devices as usize);
     raw_devices.set_len(num_devices as usize);
     let res = GetRawInputDeviceList(Some(raw_devices.as_mut_ptr()), &mut num_devices, mem::size_of::<RAWINPUTDEVICELIST>() as u32);
     if res == u32::MAX {
@@ -244,10 +244,10 @@ unsafe fn get_raw_device_name(handle: HANDLE) -> String {
     device_name
 }
 
-pub(crate) unsafe fn get_device_infos() -> DynArray<DeviceInfo> {
+pub(crate) unsafe fn get_device_infos() -> Vec<DeviceInfo> {
     let raw_devices = get_raw_input_devices();
 
-    let mut infos = DynArray::with_capacity(raw_devices.len());
+    let mut infos = Vec::with_capacity(raw_devices.len());
     for raw_device in raw_devices {
         let mut dev_info = RID_DEVICE_INFO::default();
         let mut size = mem::size_of::<RID_DEVICE_INFO>() as u32;

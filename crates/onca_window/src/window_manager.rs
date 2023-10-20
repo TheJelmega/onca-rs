@@ -22,7 +22,7 @@ pub enum RawInputEvent {
 /// Window manager
 pub struct WindowManager {
     os_data             : os::WindowManagerData,
-    windows             : DynArray<(WindowId, Box<Window>)>,
+    windows             : Vec<(WindowId, Box<Window>)>,
     alloc               : UseAlloc,
     cur_id              : u32,
     created_callbacks   : Mutex<EventListenerArray<dyn EventListener<Window>>>,
@@ -42,7 +42,7 @@ impl WindowManager {
 
         Box::new(Self {
             os_data,
-            windows: DynArray::new(),
+            windows: Vec::new(),
             alloc: get_active_alloc(),
             cur_id: 0,
             created_callbacks: Mutex::new(EventListenerArray::new()),

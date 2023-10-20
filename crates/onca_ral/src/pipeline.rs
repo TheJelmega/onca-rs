@@ -44,17 +44,17 @@ pub struct PipelineLayoutDesc {
     /// Descriptor tables
     /// 
     /// Takes up 1 slot per table
-    pub descriptor_tables:  Option<DynArray<DescriptorTableLayoutHandle>>,
+    pub descriptor_tables:  Option<Vec<DescriptorTableLayoutHandle>>,
     /// Entries
     /// 
     /// Takes up 1 or 2 slots, depending on entry type
-    pub inline_descriptors: Option<DynArray<InlineDescriptorDesc>>,
+    pub inline_descriptors: Option<Vec<InlineDescriptorDesc>>,
     /// Constant ranges
-    pub constant_ranges:    Option<DynArray<PipelineConstantRange>>,
+    pub constant_ranges:    Option<Vec<PipelineConstantRange>>,
     /// Static samplers
     /// 
     /// This will be bound after all entries
-    pub static_samplers:    Option<DynArray<StaticSamplerHandle>>
+    pub static_samplers:    Option<Vec<StaticSamplerHandle>>
 }
 
 impl PipelineLayoutDesc {
@@ -136,12 +136,12 @@ pub type PipelineLayoutInterfaceHandle = InterfaceHandle<dyn PipelineLayoutInter
 pub struct PipelineLayout {
     handle:          PipelineLayoutInterfaceHandle,
     desc:            PipelineLayoutDesc,
-    static_samplers: DynArray<StaticSamplerHandle>,
+    static_samplers: Vec<StaticSamplerHandle>,
 }
 create_ral_handle!(PipelineLayoutHandle, PipelineLayout, PipelineLayoutInterfaceHandle);
 
 impl PipelineLayoutHandle {
-    pub(crate) fn create(alloc: UseAlloc, handle: PipelineLayoutInterfaceHandle, desc: &PipelineLayoutDesc, static_samplers: DynArray<StaticSamplerHandle>) -> PipelineLayoutHandle {
+    pub(crate) fn create(alloc: UseAlloc, handle: PipelineLayoutInterfaceHandle, desc: &PipelineLayoutDesc, static_samplers: Vec<StaticSamplerHandle>) -> PipelineLayoutHandle {
         scoped_alloc!(alloc);
 
         Self::new(PipelineLayout {
@@ -162,7 +162,7 @@ impl PipelineLayoutHandle {
     }
 
     /// Get the static samplers
-    pub fn static_samplers(&self) -> &DynArray<StaticSamplerHandle> {
+    pub fn static_samplers(&self) -> &Vec<StaticSamplerHandle> {
         &self.static_samplers
     }
 }

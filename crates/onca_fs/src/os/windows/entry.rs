@@ -219,10 +219,10 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
             return Permission::None;
         }
 
-        let mut sid_buf = DynArray::<u8>::with_capacity(sid_len as usize);
+        let mut sid_buf = Vec::<u8>::with_capacity(sid_len as usize);
         sid_buf.set_len(sid_len as usize);
 
-        let mut domain_buf = DynArray::<u8>::with_capacity(domain_len as usize);
+        let mut domain_buf = Vec::<u8>::with_capacity(domain_len as usize);
         domain_buf.set_len(domain_len as usize);
 
         let res = LookupAccountNameA(
@@ -248,7 +248,7 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
             return Permission::None;
         }
         
-        let mut buf = DynArray::<u8>::with_capacity(needed as usize);
+        let mut buf = Vec::<u8>::with_capacity(needed as usize);
         buf.set_len(needed as usize);
         let sec_desc_ptr = PSECURITY_DESCRIPTOR(buf.as_mut_ptr() as *mut c_void);
         let res = GetFileSecurityA(pcstr, requested_info, sec_desc_ptr, needed, &mut needed);

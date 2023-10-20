@@ -25,7 +25,7 @@ pub enum Error {
     /// Format error
     Format(String),
     /// Unsupported formats for swapchain
-    UnsupportedSwapchainFormats(DynArray<Format>),
+    UnsupportedSwapchainFormats(Vec<Format>),
     /// Unsupported format
     UnsupportedFormat(Format),
     /// Unsupported format for a given view

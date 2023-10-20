@@ -46,7 +46,7 @@ impl Interface for Dx12Ral {
         &self.settings
     }
 
-    fn get_physical_devices(&self) -> Result<DynArray<ral::PhysicalDevice>> {
+    fn get_physical_devices(&self) -> Result<Vec<ral::PhysicalDevice>> {
         match physical_device::get_physical_devices(&self.dxgi_factory) {
             Ok(arr) => Ok(arr),
             Err(err) => {

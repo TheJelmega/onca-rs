@@ -12,17 +12,17 @@ pub struct User {
     /// Per-user mapping contexts
     /// 
     /// These are always sorted based on priority
-    mappings_contexts   : Mutex<DynArray<(u16, MappingContext)>>,
+    mappings_contexts   : Mutex<Vec<(u16, MappingContext)>>,
     /// Control set
     control_set         : Option<ControlSet>,
     /// Trigger results for the previous frame
-    prev_trigger_res    : DynArray<(Weak<Mutex<Action>>, TriggerResult)>,
+    prev_trigger_res    : Vec<(Weak<Mutex<Action>>, TriggerResult)>,
     /// Disconnected control set
     disconnected_scheme : ControlSchemeID,
     /// Currently held devices (re-used when reconnecting)
-    cur_held_devs       : DynArray<DeviceHandle>,
+    cur_held_devs       : Vec<DeviceHandle>,
     /// Disconnected device that could reconnect to this user
-    disconnected_devs   : DynArray<DeviceHandle>,
+    disconnected_devs   : Vec<DeviceHandle>,
 
 }
 
@@ -31,19 +31,19 @@ impl User {
     /// Create a new user
     pub fn new() -> Self {
         Self {
-            mappings_contexts: Mutex::new(DynArray::new()),
+            mappings_contexts: Mutex::new(Vec::new()),
             control_set: None,
-            prev_trigger_res: DynArray::new(),
+            prev_trigger_res: Vec::new(),
             disconnected_scheme: ControlSchemeID::default(),
-            cur_held_devs: DynArray::new(),
-            disconnected_devs: DynArray::new()
+            cur_held_devs: Vec::new(),
+            disconnected_devs: Vec::new()
         }
     }   
 
     /// Get the mapping contexts for this user.
     /// 
     /// The contexts are returned sorted by priority
-    pub fn mappings(&self) -> &Mutex<DynArray<(u16, MappingContext)>> {
+    pub fn mappings(&self) -> &Mutex<Vec<(u16, MappingContext)>> {
         &self.mappings_contexts
     }
 
@@ -121,7 +121,7 @@ impl User {
         self.prev_trigger_res = context.trigger_states;
     }
 
-    pub(crate) fn get_currently_held_devices(&self) -> &DynArray<DeviceHandle> {
+    pub(crate) fn get_currently_held_devices(&self) -> &Vec<DeviceHandle> {
         &self.cur_held_devs
     }
 

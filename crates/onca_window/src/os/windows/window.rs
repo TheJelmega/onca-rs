@@ -893,7 +893,7 @@ unsafe extern "system" fn wnd_proc(
             let _scope_alloc: ScopedAlloc = ScopedAlloc::new(UseAlloc::TlsTemp);
             for i in 0..num_files {
                 let path_len = DragQueryFileA(hdrop, i, None);
-                let mut buf = DynArray::<u8>::new();
+                let mut buf = Vec::<u8>::new();
                 buf.reserve(path_len as usize);
                 buf.set_len(path_len as usize);
 

@@ -155,7 +155,7 @@ impl PhysicalDeviceInterface for PhysicalDevice {
     }
 }
 
-pub fn get_physical_devices(factory: &IDXGIFactory7) -> Result<DynArray<ral::PhysicalDevice>> {
+pub fn get_physical_devices(factory: &IDXGIFactory7) -> Result<Vec<ral::PhysicalDevice>> {
     // Check for "allow tearing" support, which is a requirement for VRR (variable refresh rate)
     let mut allow_tearing = 0u32;
     unsafe { factory.CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &mut allow_tearing as *mut _ as *mut c_void, size_of::<u32>() as u32).map_err(|err| err.to_ral_error())? };
@@ -163,7 +163,7 @@ pub fn get_physical_devices(factory: &IDXGIFactory7) -> Result<DynArray<ral::Phy
         return Err(ral::Error::UnmetRequirement("DXGI_FEATURE_PRESENT_ALLOW_TEARING is unsupported, this either means that there is no hardware support or windows is out of date".to_string()));
     }
 
-    let mut physical_devices = DynArray::new();
+    let mut physical_devices = Vec::new();
     let mut idx = 0;
     loop {
         // Use `EnumAdapterByGpuPreference` so we can immediatally can extract `IDXGIAdapter4`

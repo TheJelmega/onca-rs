@@ -33,7 +33,7 @@ impl MonitorHandle {
 }
 
 unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _dc: HDC, _rect: *mut RECT, lparam: LPARAM) -> BOOL {
-    let monitors = &mut *(lparam.0 as *mut DynArray<Monitor>);
+    let monitors = &mut *(lparam.0 as *mut Vec<Monitor>);
     let monitor = get_monitor(hmonitor, false);
     if let Some(mon) = monitor {
         monitors.push(mon);
@@ -100,7 +100,7 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
             monitor_btree.insert(MonitorModeOrdWrapper(mon_mode));
             i += 1;
         }
-        let monitor_modes = DynArray::from_iter(monitor_btree.into_iter().map(|val| val.0));
+        let monitor_modes = Vec::from_iter(monitor_btree.into_iter().map(|val| val.0));
 
         // Current settings
         EnumDisplaySettingsExA(PCSTR(dev_name.as_ptr()), ENUM_CURRENT_SETTINGS, &mut dev_mode as *mut _ as *mut DEVMODEA, EDS_RAWMODE).as_bool();
@@ -131,11 +131,11 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
     }
 }
 
-pub(crate) fn enumerate_monitors() -> DynArray<Monitor> {
+pub(crate) fn enumerate_monitors() -> Vec<Monitor> {
     unsafe {
-        let mut monitors = DynArray::new();
+        let mut monitors = Vec::new();
 
-        let lparam = LPARAM(&mut monitors as *mut DynArray<Monitor> as isize);
+        let lparam = LPARAM(&mut monitors as *mut Vec<Monitor> as isize);
         let res = EnumDisplayMonitors(HDC(0), None, Some(monitor_enum_proc), lparam).as_bool();
         if !res {
             let err_code = GetLastError().0;

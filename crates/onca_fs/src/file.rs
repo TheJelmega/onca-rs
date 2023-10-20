@@ -174,7 +174,7 @@ impl io::AsyncRead for File {
 impl io::AsyncWrite for File {
     type AsyncResult = AsyncWriteResult;
 
-    fn write_async(&mut self, buf: DynArray<u8>) -> io::Result<Self::AsyncResult> {
+    fn write_async(&mut self, buf: Vec<u8>) -> io::Result<Self::AsyncResult> {
         self.handle.write_async(buf).map(|inner| AsyncWriteResult(inner))
     }
 }
@@ -191,7 +191,7 @@ pub fn delete<P: AsRef<Path>>(path: P) -> io::Result<()> {
 pub struct AsyncReadResult(os_imp::file_async::AsyncReadResult);
 
 impl Future for AsyncReadResult {
-    type Output = io::Result<DynArray<u8>>;
+    type Output = io::Result<Vec<u8>>;
  
     fn poll(mut self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
         self.0.poll(cx)
@@ -199,7 +199,7 @@ impl Future for AsyncReadResult {
 }
 
 impl io::AsyncReadResult for AsyncReadResult {
-    fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<DynArray<u8>>> {
+    fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<Vec<u8>>> {
         self.0.wait(timeout)
     }
 

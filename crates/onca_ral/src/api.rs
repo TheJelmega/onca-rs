@@ -5,7 +5,7 @@ use crate::*;
 pub struct SubmitBatch<'a> {
     pub wait_fences:   &'a [FenceWaitSubmitInfo],
     pub signal_fences: &'a [FenceSignalSubmitInfo],
-    pub command_lists: DynArray<Handle<CommandList>>,
+    pub command_lists: Vec<Handle<CommandList>>,
 }
 
 /// Info returned by RAL implementations with resulting values:
@@ -13,7 +13,7 @@ pub struct SubmitBatch<'a> {
 /// - Chosen format
 pub struct SwapChainResultInfo {
     /// Backbuffer handles and rtv handles
-    pub backbuffers:       DynArray<TextureInterfaceHandle>,
+    pub backbuffers:       Vec<TextureInterfaceHandle>,
     /// Width of the swap-chain
     pub width:             u16,
     /// Height of the swap-chain
@@ -41,7 +41,7 @@ pub struct SwapChainChangeParams {
 
 pub struct SwapChainResizeResultInfo {
     /// Backbuffer handles and rtv handles
-    pub backbuffers:       DynArray<TextureInterfaceHandle>,
+    pub backbuffers:       Vec<TextureInterfaceHandle>,
     /// Width of the resized swap-chain
     pub width:             u16,
     /// Height of the resized swap-chain

@@ -41,7 +41,7 @@ use core::{
     hash::{Hash, Hasher},
     iter::FusedIterator,
     str::FromStr,
-    ops::{Deref},
+    ops::Deref,
 };
 use std::collections::TryReserveError;
 use onca_core::{prelude::*, alloc::GetAllocatorId};
@@ -773,7 +773,7 @@ pub struct PathBuf {
 
 impl PathBuf {
     #[inline]
-    fn as_mut_vec(&mut self) -> &mut DynArray<u8> {
+    fn as_mut_vec(&mut self) -> &mut Vec<u8> {
         unsafe { self.inner.as_mut_vec() }
     }
 
@@ -855,7 +855,7 @@ impl PathBuf {
 
         // verbatim paths need . and .. removed
         } else if comps.prefix_verbatim() && !path.inner.is_empty() {
-            let mut buf : DynArray<_> = comps.collect();
+            let mut buf : Vec<_> = comps.collect();
             for c in path.components() {
                 match c {
                     Component::RootDir => {

@@ -90,7 +90,7 @@ struct CommandPool {
     pool_type:    CommandListType,
     flags:        CommandPoolFlags,
     queue_idx:    QueueIndex,
-    lists:        RwLock<DynArray<Handle<CommandList>>>,
+    lists:        RwLock<Vec<Handle<CommandList>>>,
     is_recording: AtomicBool,
 }
 type CommandPoolHandle = Handle<CommandPool>;
@@ -102,7 +102,7 @@ impl CommandPoolHandle {
             pool_type,
             flags,
             queue_idx,
-            lists: RwLock::new(DynArray::new()),
+            lists: RwLock::new(Vec::new()),
             is_recording: AtomicBool::new(false)
         })
     }

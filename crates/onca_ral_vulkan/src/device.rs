@@ -27,7 +27,7 @@ pub enum SupportedExtensions {
 pub struct Device {
     pub device:                   Arc<ash::Device>,
     pub instance:                 Weak<Instance>,
-    pub extensions:               DynArray<&'static str>,
+    pub extensions:               Vec<&'static str>,
     pub alloc_callbacks:          AllocationCallbacks,
     pub queue_indices:            [u8; ral::QueueType::COUNT],
     pub supported_extensions:     SupportedExtensions,
@@ -142,7 +142,7 @@ impl Device {
         let mut image_view_min_lod = vk::PhysicalDeviceImageViewMinLodFeaturesEXT::builder()
             .min_lod(true);
 
-        let mut extensions : DynArray<&str> = Self::REQUIRED_EXTENSIONS.into_iter().collect();
+        let mut extensions : Vec<&str> = Self::REQUIRED_EXTENSIONS.into_iter().collect();
         if vk_phys_dev.options.is_extension_supported(VK_KHR_RAY_TRACING_MAINTENANCE1) {
             extensions.push(VK_KHR_RAY_TRACING_MAINTENANCE1);
         }
@@ -157,7 +157,7 @@ impl Device {
             supported_extensions.enable(SupportedExtensions::SwapChainIncremental)        
         }
 
-        let extensions_i8 = extensions.iter().map(|s| s.as_ptr() as *const i8).collect::<DynArray<_>>();
+        let extensions_i8 = extensions.iter().map(|s| s.as_ptr() as *const i8).collect::<Vec<_>>();
 
         let queue_priorities = [
             // High
@@ -168,7 +168,7 @@ impl Device {
 
         // TODO: only 2 queues at most?
         // TODO: Global realtime
-        let mut queue_create_infos = DynArray::new();
+        let mut queue_create_infos = Vec::new();
         let mut queue_indices = [0; ral::QueueType::COUNT];
 
         for (i, queue_info) in phys_dev.queue_infos.iter().enumerate() {

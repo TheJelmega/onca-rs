@@ -43,7 +43,7 @@ impl ral::FenceInterface for Fence {
     unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: onca_core::time::Duration) -> ral::Result<()> {
         scoped_alloc!(UseAlloc::TlsTemp);
 
-        let mut events = DynArray::with_capacity(fences.len());
+        let mut events = Vec::with_capacity(fences.len());
         for (fence, value) in fences {
             let fence = fence.interface().as_concrete_type::<Fence>();
             fence.fence.SetEventOnCompletion(*value, fence.event).map_err(|err| err.to_ral_error())?;

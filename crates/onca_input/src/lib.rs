@@ -129,14 +129,14 @@ impl Add for AxisValue {
 }
 
 pub(crate) struct InputProcessContext {
-    processed_actions : DynArray<Arc<Mutex<Action>>>,
-    triggered_actions : DynArray<Arc<Mutex<Action>>>,
+    processed_actions : Vec<Arc<Mutex<Action>>>,
+    triggered_actions : Vec<Arc<Mutex<Action>>>,
     consumed_inputs   : HashSet<InputAxisId>,
-    trigger_states    : DynArray<(Weak<Mutex<Action>>, TriggerResult)>,
+    trigger_states    : Vec<(Weak<Mutex<Action>>, TriggerResult)>,
 }
 
 impl InputProcessContext {
     pub fn new() -> Self {
-        Self { processed_actions: DynArray::new(), triggered_actions: DynArray::new(), consumed_inputs: HashSet::new(), trigger_states: DynArray::new() }
+        Self { processed_actions: Vec::new(), triggered_actions: Vec::new(), consumed_inputs: HashSet::new(), trigger_states: Vec::new() }
     }
 }

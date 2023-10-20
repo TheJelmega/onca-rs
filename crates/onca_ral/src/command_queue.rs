@@ -60,7 +60,7 @@ impl CommandQueueHandle {
     pub fn submit_batches<T: AsRef<Handle<CommandList>>>(&self, submit_infos: &[CommandListSubmitInfo<'_, T>]) -> Result<()> {
         scoped_alloc!(UseAlloc::TlsTemp);
 
-        let mut submit_batches = DynArray::with_capacity(submit_infos.len());
+        let mut submit_batches = Vec::with_capacity(submit_infos.len());
         for submit_info in submit_infos {
             submit_batches.push(submit_info_to_batch_and_validate(submit_info, self.index)?)
         }
@@ -83,7 +83,7 @@ fn submit_info_to_batch_and_validate<'a, T: AsRef<Handle<CommandList>>>(submit_i
         }
     }
 
-    let mut command_lists = DynArray::with_capacity(submit_info.command_lists.len());
+    let mut command_lists = Vec::with_capacity(submit_info.command_lists.len());
     for command_list in submit_info.command_lists {
         let command_list = command_list.as_ref();
         if command_list.queue_idx != index {

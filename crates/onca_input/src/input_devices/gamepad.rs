@@ -303,7 +303,7 @@ impl GamepadState
 pub struct Gamepad {
     state           : RwLock<GamepadState>,
 
-    button_changes  : Mutex<DynArray<ButtonChange>>,
+    button_changes  : Mutex<Vec<ButtonChange>>,
     dpad_dir        : Mutex<(DPadDirection, f32)>,
     left_stick      : Mutex<StickMove>,
     right_stick     : Mutex<StickMove>,
@@ -366,7 +366,7 @@ impl Gamepad {
     pub fn new() -> Option<Gamepad> {
         Some(Self {
             state: RwLock::new(GamepadState::new()),
-            button_changes: Mutex::new(DynArray::new()),
+            button_changes: Mutex::new(Vec::new()),
             dpad_dir: Mutex::new((DPadDirection::Neutral, 0f32)),
             left_stick: Mutex::new(StickMove::new()),
             right_stick: Mutex::new(StickMove::new()),

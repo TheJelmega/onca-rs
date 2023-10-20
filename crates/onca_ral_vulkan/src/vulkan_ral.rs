@@ -44,7 +44,7 @@ impl ral::Interface for VulkanRal {
         &self.settings
     }
 
-    fn get_physical_devices(&self) -> ral::Result<DynArray<ral::PhysicalDevice>> {
+    fn get_physical_devices(&self) -> ral::Result<Vec<ral::PhysicalDevice>> {
         match get_physical_devices(&self.instance) {
             Ok(arr) => Ok(arr),
             Err(err) => {

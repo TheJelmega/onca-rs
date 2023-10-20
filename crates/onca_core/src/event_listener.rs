@@ -4,7 +4,6 @@ use core::{
 };
 use std::sync::Arc;
 use crate::{
-    collections::DynArray,
     sync::Mutex,
     alloc::{Layout, GetAllocatorId}
 };
@@ -26,7 +25,7 @@ pub type EventListenerRef<Listener> = Arc<Mutex<Listener>>;
 /// 
 /// Listeners can be defined as specific implementation of the event listener, or a dyn trait object.
 pub struct EventListenerArray<Listener: ?Sized> {
-    listeners: DynArray<EventListenerRef<Listener>>,
+    listeners: Vec<EventListenerRef<Listener>>,
 }
 
 impl<Listener: ?Sized> EventListenerArray<Listener> {
@@ -34,14 +33,14 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
     #[inline]
     #[must_use]
     pub fn new() -> Self { 
-        Self { listeners: DynArray::new() }
+        Self { listeners: Vec::new() }
     }
 
     /// Create a new callback array with a given capacity
     #[inline]
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
-        Self { listeners: DynArray::with_capacity(capacity) }
+        Self { listeners: Vec::with_capacity(capacity) }
     }
 
     #[inline]
@@ -163,7 +162,7 @@ impl<Event> AsMut<[EventListenerRef<Event>]> for EventListenerArray<Event> {
 
 impl<Event> IntoIterator for EventListenerArray<Event> {
     type Item =EventListenerRef<Event>;
-    type IntoIter = <DynArray<EventListenerRef<Event>> as IntoIterator>::IntoIter;
+    type IntoIter = <Vec<EventListenerRef<Event>> as IntoIterator>::IntoIter;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {

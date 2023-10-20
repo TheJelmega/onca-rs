@@ -16,7 +16,7 @@ pub struct RTVAndDSVDescriptorHeap {
     // Heap is here to hold a reference to the heap, not used for anything else
     _heap:       ID3D12DescriptorHeap,
     heap_start: D3D12_CPU_DESCRIPTOR_HANDLE,
-    entries:    DynArray<RTVAndDSVEntry>,
+    entries:    Vec<RTVAndDSVEntry>,
     head:       AtomicU16,
     desc_size:  u32,
     max_count:  u16
@@ -35,7 +35,7 @@ impl RTVAndDSVDescriptorHeap {
 
         let heap : ID3D12DescriptorHeap = device.CreateDescriptorHeap(&desc).map_err(|err| err.to_ral_error())?;
 
-        let mut entries = DynArray::with_capacity(max_count as usize);
+        let mut entries = Vec::with_capacity(max_count as usize);
         for i in 1..=max_count {
             entries.push(RTVAndDSVEntry { next: Cell::new(i) });
         }
@@ -95,7 +95,7 @@ impl RTVAndDSVDescriptorHeap {
 //==============================================================================================================================
 
 pub struct DescriptorTableLayout {
-    pub ranges:     DynArray<D3D12_DESCRIPTOR_RANGE1>,
+    pub ranges:     Vec<D3D12_DESCRIPTOR_RANGE1>,
     pub visibility: D3D12_SHADER_VISIBILITY,
 }
 
@@ -105,7 +105,7 @@ impl DescriptorTableLayout {
             ral::DescriptorTableDesc::Resource { ranges, visibility } => {
                 let mut base_register = 0;
                 let mut num_descriptors = 0;
-                let mut dx_ranges = DynArray::with_capacity(ranges.len());
+                let mut dx_ranges = Vec::with_capacity(ranges.len());
                 dx_ranges.reserve(ranges.len());
                 for range in ranges {
                     let mut flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
@@ -164,7 +164,7 @@ impl DescriptorTableLayout {
                     ral::DescriptorCount::Unbounded(_) => u32::MAX, // Signal DX12 that this is an unbounded range
                 };
 
-                let mut dx_ranges = DynArray::with_capacity(1);
+                let mut dx_ranges = Vec::with_capacity(1);
                 dx_ranges.push(D3D12_DESCRIPTOR_RANGE1 {
                     RangeType: D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
                     NumDescriptors: count,
@@ -189,8 +189,8 @@ impl DescriptorTableLayout {
         )
     }
 
-    pub fn get_ranges_and_parameter(&self, binding_idx: u32) -> (DynArray<D3D12_DESCRIPTOR_RANGE1>, D3D12_ROOT_PARAMETER1) {
-        let mut ranges = DynArray::with_capacity(self.ranges.len());
+    pub fn get_ranges_and_parameter(&self, binding_idx: u32) -> (Vec<D3D12_DESCRIPTOR_RANGE1>, D3D12_ROOT_PARAMETER1) {
+        let mut ranges = Vec::with_capacity(self.ranges.len());
         for range in &self.ranges {
             let mut range = *range;
             range.RegisterSpace = binding_idx;
@@ -282,10 +282,10 @@ impl ral::DescriptorHeapInterface for DescriptorHeap {
             dev.unwrap_unchecked()
         };
 
-        let mut src_starts = DynArray::with_capacity(src_ranges.len());
-        let mut src_sizes = DynArray::with_capacity(src_ranges.len());
-        let mut dst_starts = DynArray::with_capacity(src_ranges.len());
-        let mut dst_sizes = DynArray::with_capacity(src_ranges.len());
+        let mut src_starts = Vec::with_capacity(src_ranges.len());
+        let mut src_sizes = Vec::with_capacity(src_ranges.len());
+        let mut dst_starts = Vec::with_capacity(src_ranges.len());
+        let mut dst_sizes = Vec::with_capacity(src_ranges.len());
 
         for dst_range in dst_ranges {
             dst_starts.push(self.cpu_descriptor(dst_range.start));

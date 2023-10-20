@@ -30,12 +30,12 @@ pub struct Monitor {
     pub(crate) primary      : bool,
     pub(crate) dev_name     : [u8; 32],
     pub(crate) name         : [u8; 128],
-    pub(crate) modes        : DynArray<MonitorMode>,
+    pub(crate) modes        : Vec<MonitorMode>,
 }
 
 impl Monitor {
     /// Enumerate over all attached monitors and return a array of them.
-    pub fn enumerate_monitors() -> DynArray<Monitor> {
+    pub fn enumerate_monitors() -> Vec<Monitor> {
         os::monitor::enumerate_monitors()
     }
 
@@ -120,7 +120,7 @@ impl Monitor {
     }
 
     /// Get all available monitor modes
-    pub fn modes(&self) -> &DynArray<MonitorMode> {
+    pub fn modes(&self) -> &Vec<MonitorMode> {
         &self.modes
     }
 }

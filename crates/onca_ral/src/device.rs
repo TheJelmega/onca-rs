@@ -149,7 +149,7 @@ impl DeviceHandle {
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDesc) -> Result<PipelineLayoutHandle> {
         scoped_alloc!(self.cpu_alloc);
         let handle = unsafe { self.handle.create_pipeline_layout(desc)? };
-        let static_samplers = desc.static_samplers.as_ref().map_or(DynArray::new(), |arr| arr.clone());
+        let static_samplers = desc.static_samplers.as_ref().map_or(Vec::new(), |arr| arr.clone());
         Ok(PipelineLayoutHandle::create(self.cpu_alloc, handle, desc, static_samplers))
     }
 

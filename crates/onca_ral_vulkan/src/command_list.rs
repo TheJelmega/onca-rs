@@ -132,9 +132,9 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn barrier(&self, barriers: &[ral::Barrier], cur_queue_idx: ral::QueueIndex) {
         scoped_alloc!(UseAlloc::TlsTemp);
         
-        let mut global_barriers = DynArray::new();
-        let mut buffer_barriers = DynArray::new();
-        let mut image_barriers = DynArray::new();
+        let mut global_barriers = Vec::new();
+        let mut buffer_barriers = Vec::new();
+        let mut image_barriers = Vec::new();
 
         for barrier in barriers {
             match barrier {
@@ -195,7 +195,7 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn copy_buffer_regions(&self, src: &ral::BufferHandle, dst: &ral::BufferHandle, regions: &[ral::BufferCopyRegion]) {
         scoped_alloc!(UseAlloc::TlsTemp);
-        let mut vk_regions = DynArray::with_capacity(regions.len());
+        let mut vk_regions = Vec::with_capacity(regions.len());
         for region in regions {
             vk_regions.push(vk::BufferCopy2::builder()
                 .src_offset(region.src_offset)
@@ -216,7 +216,7 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn copy_buffer(&self, src: &ral::BufferHandle, dst: &ral::BufferHandle) {
         scoped_alloc!(UseAlloc::TlsTemp);
-        let mut vk_regions = DynArray::with_capacity(1);
+        let mut vk_regions = Vec::with_capacity(1);
         vk_regions.push(vk::BufferCopy2::builder()
             .src_offset(0)
             .dst_offset(0)
@@ -239,7 +239,7 @@ impl ral::CommandListInterface for CommandList {
         let src_image = src.interface().as_concrete_type::<Texture>().image;
         let dst_image = dst.interface().as_concrete_type::<Texture>().image;
 
-        let mut vk_regions = DynArray::with_capacity(regions.len());
+        let mut vk_regions = Vec::with_capacity(regions.len());
         for region in regions {
             let (aspect, mip, layer) = match region.src_view.subresource {
                 ral::TextureSubresourceIndex::Texture { aspect, mip_level } => (aspect, mip_level as u32, 0),
@@ -293,7 +293,7 @@ impl ral::CommandListInterface for CommandList {
         let (width, height, depth, layers) = src.size().as_tuple();
         let aspect = src.format().aspect();
         let mip_levels = src.mip_levels();
-        let mut regions = DynArray::with_capacity(layers as usize);
+        let mut regions = Vec::with_capacity(layers as usize);
         for mip in 0..mip_levels as u32 {
             let subresource_layers = vk::ImageSubresourceLayers::builder()
                 .aspect_mask(aspect.to_vulkan())
@@ -326,7 +326,7 @@ impl ral::CommandListInterface for CommandList {
         let buffer = src.interface().as_concrete_type::<Buffer>().buffer;
         let image = dst.interface().as_concrete_type::<Texture>().image;
 
-        let mut vk_regions = DynArray::with_capacity(regions.len());
+        let mut vk_regions = Vec::with_capacity(regions.len());
         for region in regions {
 
             let (row_length, height) = region.buffer_row_length_and_height.map_or((0, 0), |vals| (vals.0.get() as u32, vals.1.get() as u32));
@@ -372,7 +372,7 @@ impl ral::CommandListInterface for CommandList {
         let image = src.interface().as_concrete_type::<Texture>().image;
         let buffer = dst.interface().as_concrete_type::<Buffer>().buffer;
 
-        let mut vk_regions = DynArray::with_capacity(regions.len());
+        let mut vk_regions = Vec::with_capacity(regions.len());
         for region in regions {
 
             let (row_length, height) = region.buffer_row_length_and_height.map_or((0, 0), |vals| (vals.0.get() as u32, vals.1.get() as u32));
@@ -522,7 +522,7 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) {
         scoped_alloc!(UseAlloc::TlsTemp);
 
-        let mut vk_rts = DynArray::with_capacity(rendering_info.render_targets.len());
+        let mut vk_rts = Vec::with_capacity(rendering_info.render_targets.len());
         for rt in rendering_info.render_targets {
             let vk_view = rt.rtv.interface().as_concrete_type::<RenderTargetView>();
 

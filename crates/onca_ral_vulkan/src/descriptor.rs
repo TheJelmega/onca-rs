@@ -23,7 +23,7 @@ pub const MUTABLE_DESCRIPTOR_TYPES : [vk::DescriptorType; ral::DescriptorType::C
 pub struct DescriptorTableLayout {
     pub handle:          vk::DescriptorSetLayout,
     pub size:            u64,
-    pub offsets:         DynArray<u64>,
+    pub offsets:         Vec<u64>,
     pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks
 }
@@ -35,9 +35,9 @@ impl DescriptorTableLayout {
             .descriptor_types(&MUTABLE_DESCRIPTOR_TYPES)
             .build();
 
-        let mut bindings = DynArray::new();
-        let mut binding_flags = DynArray::new();
-        let mut mutable_types = DynArray::new();
+        let mut bindings = Vec::new();
+        let mut binding_flags = Vec::new();
+        let mut mutable_types = Vec::new();
         let (num_bindings, num_descriptors) = match desc {
             ral::DescriptorTableDesc::Resource { ranges, visibility } => {
                 let mut num_descriptors = 0;
@@ -96,7 +96,7 @@ impl DescriptorTableLayout {
 
         let size = device.descriptor_buffer.get_descriptor_set_layout_size(handle);
 
-        let mut offsets = DynArray::with_capacity(num_bindings as usize);
+        let mut offsets = Vec::with_capacity(num_bindings as usize);
         for i in 0..num_bindings {
             offsets.push(device.descriptor_buffer.get_descriptor_set_layout_binding_offset(handle, i))
         }

@@ -65,8 +65,8 @@ impl ral::FenceInterface for Fence {
 
         let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
-        let mut semaphores = DynArray::with_capacity(fences.len());
-        let mut values = DynArray::with_capacity(fences.len());
+        let mut semaphores = Vec::with_capacity(fences.len());
+        let mut values = Vec::with_capacity(fences.len());
         for (fence, value) in fences {
             let fence = fence.interface().as_concrete_type::<Fence>();
             semaphores.push(fence.semaphore);

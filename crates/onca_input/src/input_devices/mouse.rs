@@ -142,7 +142,7 @@ impl MouseState {
 pub struct Mouse {
     _os_mouse        : os::OSMouse,
     state            : RwLock<MouseState>,
-    button_changes   : Mutex<DynArray<ButtonChange>>,
+    button_changes   : Mutex<Vec<ButtonChange>>,
     move_pos         : Mutex<MousePosition>,
     scroll           : Mutex<MouseScroll>,
     button_timers    : [f32; NUM_BUTTONS]
@@ -184,7 +184,7 @@ impl Mouse {
         os::OSMouse::new().map(|os_mouse| Self {
             _os_mouse: os_mouse,
             state: RwLock::new(MouseState::new()),
-            button_changes: Mutex::new(DynArray::new()),
+            button_changes: Mutex::new(Vec::new()),
             move_pos: Mutex::new(MousePosition::zero()),
             scroll: Mutex::new(MouseScroll::zero()),
             button_timers: [0f32; NUM_BUTTONS]

@@ -26,7 +26,7 @@ pub struct SwapChainDesc {
     /// Number of back-buffers to use, commonly 2 or 3
     pub num_backbuffers:        u8,
     /// Array with format, order from most preferred to least preferred, the first supported format will be used
-    pub formats:                DynArray<Format>,
+    pub formats:                Vec<Format>,
     /// Usages to try and create the backbuffers with
     pub usages:                 TextureUsage,
     /// Present mode to use
@@ -45,7 +45,7 @@ impl SwapChainDesc {
     /// The following values will be set to a default value:
     /// - `preserve_after_present`
     /// - `alpha_mode`
-    pub fn from_window(window: &Window, num_backbuffers: u8, formats: DynArray<Format>, usages: TextureUsage, present_mode: PresentMode, queue: CommandQueueHandle) -> Self {
+    pub fn from_window(window: &Window, num_backbuffers: u8, formats: Vec<Format>, usages: TextureUsage, present_mode: PresentMode, queue: CommandQueueHandle) -> Self {
         let window_settings = window.settings();
         Self {
             app_handle: get_app_handle(),
@@ -105,12 +105,12 @@ struct SwapChainDynamic {
     width:         u16,
     height:        u16,
     present_mode:  PresentMode,
-    backbuffers:   DynArray<(TextureHandle, RenderTargetViewHandle)>,
+    backbuffers:   Vec<(TextureHandle, RenderTargetViewHandle)>,
     current_index: u8
 }
 
 impl SwapChainDynamic {
-    pub fn new(width: u16, height: u16, present_mode: PresentMode, backbuffers: DynArray<(TextureHandle, RenderTargetViewHandle)>) -> Self {
+    pub fn new(width: u16, height: u16, present_mode: PresentMode, backbuffers: Vec<(TextureHandle, RenderTargetViewHandle)>) -> Self {
         Self {
             width,
             height,
@@ -141,7 +141,7 @@ pub type SwapChainHandle = Handle<SwapChain>;
 
 impl SwapChain {
     pub(crate) fn new(device: &DeviceHandle, desc: SwapChainDesc, handle: SwapChainInterfaceHandle, result_info: api::SwapChainResultInfo) -> Result<SwapChainHandle> {
-        let mut backbuffers = DynArray::with_capacity(result_info.backbuffers.len());
+        let mut backbuffers = Vec::with_capacity(result_info.backbuffers.len());
 
         let texture_size = TextureSize::new_2d(result_info.width, result_info.height, 1).unwrap();
         let rtv_desc = RenderTargetViewDesc {
@@ -311,7 +311,7 @@ impl SwapChain {
     }
 
     /// Get the backbuffers
-    pub fn get_backbuffers(&self) -> MappedRwLockReadGuard<DynArray<(TextureHandle, RenderTargetViewHandle)>> {
+    pub fn get_backbuffers(&self) -> MappedRwLockReadGuard<Vec<(TextureHandle, RenderTargetViewHandle)>> {
         RwLockReadGuard::map(self.dynamic.read(), |dy| &dy.backbuffers)
     }
 

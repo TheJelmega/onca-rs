@@ -30,13 +30,13 @@ pub fn get_drive_type(mut path: PathBuf) -> DriveType {
     }
 }
 
-pub fn get_all_drive_info() -> DynArray<DriveInfo> {
+pub fn get_all_drive_info() -> Vec<DriveInfo> {
     unsafe {
         let names = {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
             let needed = GetLogicalDriveStringsA(None) as usize;
-            let mut names = DynArray::with_capacity(needed);
+            let mut names = Vec::with_capacity(needed);
             names.set_len(needed);
             
             let written = GetLogicalDriveStringsA(Some(&mut *names)) as usize;
@@ -47,7 +47,7 @@ pub fn get_all_drive_info() -> DynArray<DriveInfo> {
             names
         };
 
-        let mut infos = DynArray::new();
+        let mut infos = Vec::new();
         for utf8 in names.split_inclusive(|&c| c == 0) {
             let path = PathBuf::from_str(core::str::from_utf8_unchecked(utf8));
             let drv_info = get_drive_info_internal(path);
@@ -108,16 +108,16 @@ pub fn get_volume_info(path: PathBuf) -> Option<VolumeInfo> {
     get_volume_info_internal(path)
 }
 
-pub fn get_all_volume_info() -> DynArray<VolumeInfo> {
+pub fn get_all_volume_info() -> Vec<VolumeInfo> {
     unsafe {
         let mut guid_buf = [0u8; 65];
         let handle = FindFirstVolumeA(&mut guid_buf);
         let handle = match handle {
             Ok(handle) => handle,
-            Err(_) => return DynArray::new(),
+            Err(_) => return Vec::new(),
         };
 
-        let mut infos = DynArray::new();
+        let mut infos = Vec::new();
         loop {
 
             let mut roots = get_drive_names_for_volume(&guid_buf);
@@ -190,7 +190,7 @@ fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
     fs_flags
 }
 
-unsafe fn get_drive_names_for_volume(guid: &[u8]) -> DynArray<PathBuf> {
+unsafe fn get_drive_names_for_volume(guid: &[u8]) -> Vec<PathBuf> {
     let utf8_paths = {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
@@ -198,16 +198,16 @@ unsafe fn get_drive_names_for_volume(guid: &[u8]) -> DynArray<PathBuf> {
         let mut needed = 0;
         let res = GetVolumePathNamesForVolumeNameA(pcstr, None, &mut needed).as_bool();
         if !res && GetLastError() != ERROR_MORE_DATA {
-            return DynArray::new();
+            return Vec::new();
         }
 
         let needed = needed as usize;
-        let mut utf8_paths = DynArray::with_capacity(needed);
+        let mut utf8_paths = Vec::with_capacity(needed);
         utf8_paths.set_len(needed);
 
         let mut written = 0;
         if !GetVolumePathNamesForVolumeNameA(pcstr, Some(&mut *utf8_paths), &mut written).as_bool() {
-            return DynArray::new();
+            return Vec::new();
         }
         let written = written as usize;
         debug_assert_eq!(needed, written);
@@ -215,7 +215,7 @@ unsafe fn get_drive_names_for_volume(guid: &[u8]) -> DynArray<PathBuf> {
         utf8_paths
     };
 
-    let mut paths = DynArray::with_capacity(utf8_paths.len());
+    let mut paths = Vec::with_capacity(utf8_paths.len());
     for utf8 in utf8_paths.split(|&c| c == 0) {
         if utf8.is_empty() {
             continue;
@@ -253,7 +253,7 @@ fn get_volume_info_internal(mut path: PathBuf) -> Option<VolumeInfo> {
         let fs_flags = get_volume_fs_flags(win32_fs_flags);
         
         // TODO: dynarr!(path, ...) macro
-        let mut roots = DynArray::with_capacity(1);
+        let mut roots = Vec::with_capacity(1);
         roots.push(path);
 
         Some(VolumeInfo {

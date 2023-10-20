@@ -12,13 +12,10 @@ use core::{
     str::pattern::Pattern,
     ops::{RangeBounds, Range}, 
 };
-use std::{
-    collections::TryReserveError, 
-};
+use std::collections::TryReserveError;
 
 use crate::{
     alloc::{UseAlloc, Layout, ScopedAlloc, GetAllocatorId},
-    collections::DynArray,
     mem,
 };
 

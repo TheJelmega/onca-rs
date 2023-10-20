@@ -41,7 +41,7 @@ pub(crate) mod link;
 pub(crate) fn get_working_dir() -> io::Result<PathBuf> {
     unsafe {
         let expected_len = GetCurrentDirectoryA(None) as usize;
-        let mut dynarr = DynArray::with_capacity(expected_len);
+        let mut dynarr = Vec::with_capacity(expected_len);
         
         let len = GetCurrentDirectoryA(Some(&mut *dynarr)) as usize;
         dynarr.set_len(len);

@@ -1,6 +1,5 @@
 use crate::{
     sync::Mutex,
-    collections::DynArray,
     alloc::*,
 };
 use super::*;
@@ -10,7 +9,7 @@ pub struct ExpandableArena<A, Args>
     where A    : Allocator + ComposableAllocator<Args>,
           Args : Copy
 {
-    allocs         : Mutex<DynArray<A>>,
+    allocs         : Mutex<Vec<A>>,
     args           : Args,
     arena_alloc_id : u16,
     id             : u16
@@ -23,7 +22,7 @@ where A    : Allocator + ComposableAllocator<Args>,
     pub fn new(args: Args, arena_alloc: UseAlloc) -> Self {
         let _scope_alloc = ScopedAlloc::new(arena_alloc);
         Self {
-            allocs: Mutex::new(DynArray::new()),
+            allocs: Mutex::new(Vec::new()),
             args,
             arena_alloc_id: arena_alloc.get_id(),
             id: 0

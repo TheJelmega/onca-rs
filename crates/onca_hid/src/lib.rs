@@ -84,14 +84,14 @@ impl fmt::Debug for DeviceHandle {
 
 pub(crate) enum PreparseDataInternal {
 	Address(usize),
-	Blob(DynArray<u8>)
+	Blob(Vec<u8>)
 }
 
 /// Hid preparsed data
 pub struct PreparseData(pub(crate) PreparseDataInternal);
 
 impl PreparseData {
-	pub fn new_blob(blob: DynArray<u8>) -> Self {
+	pub fn new_blob(blob: Vec<u8>) -> Self {
 		PreparseData(PreparseDataInternal::Blob(blob))
 	}
 
@@ -161,11 +161,11 @@ impl CollectionKind {
 /// Hid top-level collection
 pub struct TopLevelCollection<'a> {
 	/// All collections in the top-level collections
-	nodes : DynArray<CollectionNode<'a>>,
+	nodes : Vec<CollectionNode<'a>>,
 }
 
 impl<'a> TopLevelCollection<'a> {
-	pub(crate) fn new(mut nodes: DynArray<CollectionNode<'a>>, children: DynArray<DynArray<u16>>) -> Self {
+	pub(crate) fn new(mut nodes: Vec<CollectionNode<'a>>, children: Vec<Vec<u16>>) -> Self {
 		debug_assert!(nodes.len() > 0, "TopLevelCollection::new() should never be called if there are no nodes");
 
 		// Setup references to nodes
@@ -204,11 +204,11 @@ pub struct CollectionNode<'a> {
 	// NOTE: this is not the element idx into `TopLevelCollection::nodes`
 	pub ids        : ValueRange<u16>,
 	/// All usages for this collection (as defined by aliassed delimiters)
-	pub usages     : DynArray<Usage>,
+	pub usages     : Vec<Usage>,
 	/// Kind/type of collection
 	pub kind       : CollectionKind,
 	/// Child collections
-	pub children   : DynArray<&'a CollectionNode<'a>>,
+	pub children   : Vec<&'a CollectionNode<'a>>,
 }
 
 impl CollectionNode<'_> {
@@ -286,7 +286,7 @@ pub(crate) const NUM_REPORT_TYPES : usize = ReportType::Feature as usize + 1;
 
 pub(crate) enum ReportData<'a> {
 	Slice(&'a [u8]),
-	Blob(DynArray<u8>)
+	Blob(Vec<u8>)
 }
 
 impl ReportData<'_> {
@@ -318,22 +318,22 @@ impl<'a> InputReport<'a> {
 	}
 
 	/// Get the usage of all button that are currently set to 'on'
-	pub fn get_buttons(&self) -> Option<DynArray<Usage>> {
+	pub fn get_buttons(&self) -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, 0, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific collection
-	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<DynArray<Usage>> {
+	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, collection_id, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page
-	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<DynArray<UsageId>> {
+	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, 0, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection
-	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<DynArray<UsageId>> {
+	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Input, self.data.get_data())
 	}
 
@@ -348,7 +348,7 @@ impl<'a> InputReport<'a> {
 	}
 
 	/// Get data from the report, this will return all buttons that are on and all values
-	pub fn get_data(&self) -> Option<DynArray<Data>> {
+	pub fn get_data(&self) -> Option<Vec<Data>> {
 		os::get_data(self.device, ReportType::Input, self.data.get_data())
 	}
 }
@@ -412,22 +412,22 @@ pub struct FeatureReport<'a> {
 
 impl FeatureReport<'_> {
 	/// Get the usage of all button that are currently set to 'on'
-	pub fn get_buttons(&self) -> Option<DynArray<Usage>> {
+	pub fn get_buttons(&self) -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, 0, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific collection
-	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<DynArray<Usage>> {
+	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, collection_id, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page
-	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<DynArray<UsageId>> {
+	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, 0, ReportType::Input, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection
-	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<DynArray<UsageId>> {
+	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Input, self.data.get_data())
 	}
 
@@ -442,7 +442,7 @@ impl FeatureReport<'_> {
 	}
 
 	/// Get data from the report, this will return all buttons that are on and all values
-	pub fn get_data(&self) -> Option<DynArray<Data>> {
+	pub fn get_data(&self) -> Option<Vec<Data>> {
 		os::get_data(self.device, ReportType::Input, self.data.get_data())
 	}
 
@@ -568,7 +568,7 @@ pub enum RawValue {
 	/// Sequentially stored values and a bit-size
 	/// 
 	/// To extract the values, the bit-size indicated the number of bits per packed value. Values are not byte aligned!
-	Array(DynArray<u8>, u16)
+	Array(Vec<u8>, u16)
 }
 
 impl RawValue {
@@ -605,9 +605,9 @@ pub struct Device {
 	identifier    : Identifier,
 	preparse_data : PreparseData,
 	capabilities  : Capabilities,
-	button_caps   : [DynArray<ButtonCaps>; NUM_REPORT_TYPES],
-	value_caps    : [DynArray<ValueCaps>; NUM_REPORT_TYPES],
-	read_buffer   : DynArray<u8>,
+	button_caps   : [Vec<ButtonCaps>; NUM_REPORT_TYPES],
+	value_caps    : [Vec<ValueCaps>; NUM_REPORT_TYPES],
+	read_buffer   : Vec<u8>,
 	owns_handle   : bool,
 	read_pending  : bool,
 }
@@ -668,7 +668,7 @@ impl Device {
 			None => return None,
 		};
 
-		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, read_buffer: DynArray::new(), owns_handle, read_pending: false })
+		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, read_buffer: Vec::new(), owns_handle, read_pending: false })
 	}
 
 	/// Get the device handle
@@ -735,7 +735,7 @@ impl Device {
 	}
 
 	/// Get the device's button capabilities
-	pub fn get_button_capabilities(&self, report_type: ReportType) -> &DynArray<ButtonCaps> {
+	pub fn get_button_capabilities(&self, report_type: ReportType) -> &Vec<ButtonCaps> {
 		&self.button_caps[report_type as usize]
 	}
 
@@ -757,7 +757,7 @@ impl Device {
 	}
 
 	/// Get the device's value capabilities
-	pub fn get_value_capabilities(&self, report_type: ReportType) -> &DynArray<ValueCaps> {
+	pub fn get_value_capabilities(&self, report_type: ReportType) -> &Vec<ValueCaps> {
 		&self.value_caps[report_type as usize]
 	}
 

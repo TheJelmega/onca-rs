@@ -123,9 +123,9 @@ impl ral::PhysicalDeviceInterface for PhysicalDevice {
 
 // For multi-adapter, look into VkPhsyicalDeviceGroup...
 // NOTE: Since ash uses `Vec`, we cannot track memory in these temp allocations
-pub fn get_physical_devices(instance: &Arc<Instance>) -> ral::Result<DynArray<ral::PhysicalDevice>> {
+pub fn get_physical_devices(instance: &Arc<Instance>) -> ral::Result<Vec<ral::PhysicalDevice>> {
     let vk_phys_devs = unsafe { instance.instance.enumerate_physical_devices().map_err(|err| err.to_ral_error())? };
-    let mut physical_devices = DynArray::new();
+    let mut physical_devices = Vec::new();
     for phys_dev in vk_phys_devs {
         match get_device(instance, phys_dev) {
             Ok(phys_dev) => physical_devices.push(phys_dev),
@@ -744,7 +744,7 @@ cfg_if::cfg_if!{
 
 fn get_queue_infos(instance: &Instance, phys_dev: vk::PhysicalDevice) -> ral::Result<[QueueInfo; QueueType::COUNT]> {
     let queue_family_count = unsafe { instance.instance.get_physical_device_queue_family_properties2_len(phys_dev) };
-    let mut queue_families = DynArray::with_capacity(queue_family_count);
+    let mut queue_families = Vec::with_capacity(queue_family_count);
     for _ in 0..queue_family_count {
         queue_families.push(vk::QueueFamilyProperties2::default());
     }
@@ -845,8 +845,8 @@ pub struct VulkanOptions {
     pub image_view_min_lod_feats:  vk::PhysicalDeviceImageViewMinLodFeaturesEXT,
 
     /// Extensions and Layers
-    pub extensions          : DynArray<ExtensionProperties>,
-    pub layers              : DynArray<LayerProperties>,
+    pub extensions          : Vec<ExtensionProperties>,
+    pub layers              : Vec<LayerProperties>,
 }
 
 impl VulkanOptions {
@@ -920,7 +920,7 @@ impl VulkanOptions {
         unsafe { instance.instance.get_physical_device_features2(phys_dev, &mut feats) }
 
         let vk_extensions = unsafe { instance.instance.enumerate_device_extension_properties(phys_dev) }.map_err(|err| err.to_ral_error())?;
-        let mut extensions = DynArray::with_capacity(vk_extensions.len());
+        let mut extensions = Vec::with_capacity(vk_extensions.len());
         for vk_ext in vk_extensions {
             extensions.push(ExtensionProperties{
                 name: unsafe { String::from_null_terminated_utf8_unchecked_i8(&vk_ext.extension_name) },
@@ -929,7 +929,7 @@ impl VulkanOptions {
         }
 
         let vk_layers = unsafe { instance.instance.enumerate_device_layer_properties(phys_dev) }.map_err(|err| err.to_ral_error())?;
-        let mut layers = DynArray::with_capacity(vk_layers.len());
+        let mut layers = Vec::with_capacity(vk_layers.len());
         for vk_layer in vk_layers {
             layers.push(LayerProperties {
                 name: unsafe { String::from_null_terminated_utf8_unchecked_i8(&vk_layer.layer_name) },

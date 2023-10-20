@@ -8,7 +8,7 @@ pub enum SchemeItem {
     /// The device is required for this mapping
     Required(DeviceType),
     /// Either device can be used, but one is required to exists
-    Either(DynArray<DeviceType>),
+    Either(Vec<DeviceType>),
     /// The device is optional for this mapping
     Optional(DeviceType),
 }
@@ -39,7 +39,7 @@ impl Default for ControlSchemeID {
 pub struct ControlScheme {
     identifier : ControlSchemeID,
     /// Items
-    items      : DynArray<SchemeItem>,
+    items      : Vec<SchemeItem>,
     /// Index of the first `Optional` item (this is also the number of required/either devices)
     opt_start  : Option<NonZeroUsize>,
 }
@@ -52,7 +52,7 @@ impl ControlScheme {
     /// # Errors
     /// 
     /// Return an error when 0 or more than 64 items are passed, or when duplicate device 
-    pub fn new(identifier: ControlSchemeID, mut items: DynArray<SchemeItem>) -> Result<Self, DynArray<SchemeItem>> {
+    pub fn new(identifier: ControlSchemeID, mut items: Vec<SchemeItem>) -> Result<Self, Vec<SchemeItem>> {
         if !items.is_empty() && items.len() <= Self::MAX_SCHEME_ITEMS {
             if items.iter().position(|val| !matches!(val, SchemeItem::Optional(_))).is_none() {
                 log_warning!(LOG_INPUT_CAT, "Trying to create an input scheme with a Required/Either item");
@@ -74,12 +74,12 @@ impl ControlScheme {
     /// Returns an option with the created control set, if the control scheme can be created
     /// 
     /// If there is not exact match for a device, but there is a device with the support needed for the wanted control scheme, the first device that fits will be selected.
-    pub fn create_control_set<'a, F>(&self, available_devices: &DynArray<DeviceHandle>, get_dev_type: F) -> Option<ControlSet>
+    pub fn create_control_set<'a, F>(&self, available_devices: &Vec<DeviceHandle>, get_dev_type: F) -> Option<ControlSet>
         where F : Fn(DeviceHandle) -> DeviceType
     {
-        let mut scheme_devs = DynArray::new();
+        let mut scheme_devs = Vec::new();
         scheme_devs.resize(self.items.len(), DeviceHandle::Invalid);
-        let mut cur_matches = DynArray::new();
+        let mut cur_matches = Vec::new();
         cur_matches.resize(self.items.len(), DeviceTypeMatchSupport::None);
 
         for dev in available_devices {
@@ -115,7 +115,7 @@ impl ControlScheme {
 /// Control set containing device handles for current layout
 pub struct ControlSet {
     pub(crate) scheme  : ControlSchemeID,
-    pub(crate) devices : DynArray<DeviceHandle>,
+    pub(crate) devices : Vec<DeviceHandle>,
 }
 
 impl ControlSet {
@@ -123,11 +123,11 @@ impl ControlSet {
         &self.scheme
     }
 
-    pub fn devices(&self) -> &DynArray<DeviceHandle> {
+    pub fn devices(&self) -> &Vec<DeviceHandle> {
         &self.devices
     }
 
-    pub(crate) fn take_devices(&mut self) -> DynArray<DeviceHandle> {
+    pub(crate) fn take_devices(&mut self) -> Vec<DeviceHandle> {
         core::mem::take(&mut self.devices)
     }
 }

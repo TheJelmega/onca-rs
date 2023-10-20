@@ -22,7 +22,7 @@ pub enum Item {
 	Integer(i64),
 	Float(f64),
 	Boolean(bool),
-	Array(DynArray<Item>),
+	Array(Vec<Item>),
 	Table(Table),
 }
 
@@ -30,7 +30,7 @@ pub enum Item {
 #[derive(Clone)]
 pub struct Table {
 	/// Actual items (including comments)
-	items   : DynArray<Item>,
+	items   : Vec<Item>,
 	/// Mapping from key to an index
 	mapping : HashMap<String, usize>,
 }
@@ -46,7 +46,7 @@ impl fmt::Debug for Table {
 
 impl Table {
 	pub fn new() -> Self {
-		Self { items: DynArray::new(), mapping: HashMap::new() }
+		Self { items: Vec::new(), mapping: HashMap::new() }
 	}
 
 	/// Append an item to the toml
@@ -129,7 +129,7 @@ impl Table {
 					}
 				},
 				None => {
-					self.push(keys[0].clone(), Item::Array(DynArray::new()));
+					self.push(keys[0].clone(), Item::Array(Vec::new()));
 					match self.items.last_mut().unwrap() {
 						Item::Array(arr) => arr,
 						_ => unreachable!("Last item should always be an array here")
@@ -275,7 +275,7 @@ impl<'a> Parser<'a> {
 		Ok(toml)
 	}
 
-	fn parse_key_item(&mut self) -> Result<(DynArray<String>, Item), TomlParseError> {
+	fn parse_key_item(&mut self) -> Result<(Vec<String>, Item), TomlParseError> {
 		let keys = self.parse_keys()?;
 		self.parser.consume_whitespace(false);
 		if !self.parser.consume_char('=') {
@@ -286,8 +286,8 @@ impl<'a> Parser<'a> {
 		Ok((keys, item))
 	}
 
-	fn parse_keys(&mut self) -> Result<DynArray<String>, TomlParseError> {	
-		let mut arr = DynArray::new();
+	fn parse_keys(&mut self) -> Result<Vec<String>, TomlParseError> {	
+		let mut arr = Vec::new();
 		loop {
 			let key = if self.parser.string.starts_with('"') {
 				match self.parser.extract_string('"', '"', false) {
@@ -413,10 +413,10 @@ impl<'a> Parser<'a> {
 		self.parser.consume_whitespace(false);
 
 		if self.parser.consume_char(']') {
-			return Ok(Item::Array(DynArray::new()));
+			return Ok(Item::Array(Vec::new()));
 		}
 		
-		let mut arr = DynArray::new();
+		let mut arr = Vec::new();
 		arr.push(self.parse_item()?);
 		self.parser.consume_whitespace(false);
 		

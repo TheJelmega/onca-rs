@@ -590,12 +590,12 @@ pub struct Action {
     /// 
     /// These triggers are used to instantiate the mapping specific triggers and are not use themselves
     // TODO: Have these associated to the action only when in its asset?
-    pub triggers            : DynArray<TriggerData>,
+    pub triggers            : Vec<TriggerData>,
     /// Modifiers that apply to all mappings for this action. (Modifiers will be applied after the mapping specific modifiers have been applied)
     /// 
     /// These modifiers are used to instantiate the mapping specific triggers and are not use themselves
     // TODO: Have these associated to the action only when in its asset?
-    pub modifiers           : DynArray<Modifier>,
+    pub modifiers           : Vec<Modifier>,
     /// Action event listeners
     pub listeners           : DynEventListenerArray<(TriggerState, AxisValue, u8)>,
 }
@@ -607,8 +607,8 @@ impl Action {
             consume_input,
             trigger_when_paused,
             axis_type,
-            triggers: DynArray::new(),
-            modifiers: DynArray::new(),
+            triggers: Vec::new(),
+            modifiers: Vec::new(),
             listeners: DynEventListenerArray::new()
         }
     }
@@ -648,9 +648,9 @@ pub struct Binding {
     /// Input axis that the binding is bound to.
     pub input_axis     : InputAxisId,
     /// Binding specific triggers
-    pub triggers       : DynArray<TriggerData>,
+    pub triggers       : Vec<TriggerData>,
     /// Binding specific modifiers
-    pub modifiers      : DynArray<Modifier>,
+    pub modifiers      : Vec<Modifier>,
     /// Binding rebind options
     pub rebind_options : Option<RebindOptions>
 }
@@ -659,8 +659,8 @@ impl Binding {
     pub fn new(input_axis: InputAxisId) -> Self {
         Self {
             input_axis,
-            triggers: DynArray::new(),
-            modifiers: DynArray::new(),
+            triggers: Vec::new(),
+            modifiers: Vec::new(),
             rebind_options: None
         }
     }
@@ -693,11 +693,11 @@ pub struct Mapping {
     /// Input action associated with this binding
     pub action    : Arc<Mutex<Action>>,
     /// Instance of the action triggers that will actually be used
-    pub triggers  : DynArray<TriggerData>,
+    pub triggers  : Vec<TriggerData>,
     /// Instance of the action triggers that will actually be used
-    pub modifiers : DynArray<Modifier>,
+    pub modifiers : Vec<Modifier>,
     /// Input 
-    pub bindings  : DynArray<Binding>,
+    pub bindings  : Vec<Binding>,
 }
 
 impl Mapping {
@@ -708,7 +708,7 @@ impl Mapping {
             (action.triggers.clone(), action.modifiers.clone())
         };
 
-        Self { action, triggers, modifiers, bindings: DynArray::new() }
+        Self { action, triggers, modifiers, bindings: Vec::new() }
     }
 
     pub fn set_action(&mut self, action: Arc<Mutex<Action>>) {
@@ -804,12 +804,12 @@ pub struct MappingContext {
     // TODO: Id should be something associated to the asset
     pub identifier  : String,
     /// Input mappings
-    pub mappings    : DynArray<Mapping>,
+    pub mappings    : Vec<Mapping>,
 }
 
 impl MappingContext {
     pub fn new(identifier: String) -> Self {
-        Self { description: (), identifier, mappings: DynArray::new() }
+        Self { description: (), identifier, mappings: Vec::new() }
     }
 
     pub fn add_mapping(&mut self, mapping: Mapping) {

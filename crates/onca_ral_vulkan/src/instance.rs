@@ -60,8 +60,8 @@ impl Instance {
         
         let (available_layers, available_extensions) = Self::enumerate_instance_layer_and_extension_properties(&entry)?;
 
-        let mut layers = DynArray::<String>::new();
-        let mut extensions = DynArray::<String>::new();
+        let mut layers = Vec::<String>::new();
+        let mut extensions = Vec::<String>::new();
 
         if settings.debug_enabled {
             layers.push(String::from("VK_LAYER_KHRONOS_validation"));
@@ -88,12 +88,12 @@ impl Instance {
         }
 
 
-        let mut layer_ptrs = DynArray::new();
+        let mut layer_ptrs = Vec::new();
         for layer in &layers {
             layer_ptrs.push(layer.as_ptr() as *const i8);
         }
 
-        let mut extension_ptrs = DynArray::new();
+        let mut extension_ptrs = Vec::new();
         for extension in &extensions {
             extension_ptrs.push(extension.as_ptr() as *const i8);
         }
@@ -117,8 +117,8 @@ impl Instance {
         // -------------------------------------------------------------
         
 
-        let layer_cstrs = layers.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<DynArray<_>>();
-        let extension_cstrs = extensions.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<DynArray<_>>();
+        let layer_cstrs = layers.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<Vec<_>>();
+        let extension_cstrs = extensions.iter().map(|extension| extension.as_null_terminated_bytes().as_ptr() as *const i8).collect::<Vec<_>>();
 
         let mut create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
@@ -156,9 +156,9 @@ impl Instance {
     }
 
     // NOTE: Since ash uses `Vec`, we cannot track memory in these temp allocations
-    fn enumerate_instance_layer_and_extension_properties(entry: &ash::Entry) -> VkResult<(DynArray<(LayerProperties, DynArray<ExtensionProperties>)>, DynArray<ExtensionProperties>)> {
+    fn enumerate_instance_layer_and_extension_properties(entry: &ash::Entry) -> VkResult<(Vec<(LayerProperties, Vec<ExtensionProperties>)>, Vec<ExtensionProperties>)> {
         let vk_extensions = entry.enumerate_instance_extension_properties(None)?;
-        let mut extensions = DynArray::with_capacity(vk_extensions.len());
+        let mut extensions = Vec::with_capacity(vk_extensions.len());
         vk_extensions.iter().for_each(|vk_ext| {
             extensions.push(ExtensionProperties {
                 name: unsafe { String::from_null_terminated_utf8_unchecked_i8(&vk_ext.extension_name) },
@@ -167,12 +167,12 @@ impl Instance {
         });
 
         let vk_layers = entry.enumerate_instance_layer_properties()?;
-        let mut layers = DynArray::with_capacity(vk_layers.len());
+        let mut layers = Vec::with_capacity(vk_layers.len());
         vk_layers.iter().for_each(|vk_layer| {
             let vk_layer_extensions = entry.enumerate_instance_extension_properties(Some(unsafe { CStr::from_ptr(vk_layer.layer_name.as_ptr() as *mut _) }));
             let layer_extensions = match vk_layer_extensions {
                 Ok(vk_layer_extensions) => {
-                    let mut layer_extensions = DynArray::with_capacity(vk_layer_extensions.len());
+                    let mut layer_extensions = Vec::with_capacity(vk_layer_extensions.len());
                     vk_layer_extensions.iter().for_each(|vk_ext| {
                     layer_extensions.push(ExtensionProperties {
                             name: unsafe { String::from_null_terminated_utf8_unchecked_i8(&vk_ext.extension_name) },
@@ -181,7 +181,7 @@ impl Instance {
                     });
                     layer_extensions
                 }
-                Err(_) => DynArray::new(),
+                Err(_) => Vec::new(),
             };
 
             layers.push((LayerProperties {

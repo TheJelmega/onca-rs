@@ -197,7 +197,7 @@ pub enum DescriptorTableDesc {
     /// Resource descritpro table
     Resource {
         /// descriptor ranges
-        ranges:     DynArray<DescriptorRange>,
+        ranges:     Vec<DescriptorRange>,
         /// Shader stages in which the bindings are visible
         visibility: ShaderVisibility,
     },

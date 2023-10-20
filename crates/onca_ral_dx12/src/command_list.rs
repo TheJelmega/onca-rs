@@ -58,15 +58,15 @@ impl ral::CommandPoolInterface for CommandPool {
 }
 
 pub struct CommandListDynamic {
-    rendering_rt_subresources:  [DynArray<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>; 8],
-    rendering_dsv_subresources: DynArray<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>,
+    rendering_rt_subresources:  [Vec<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>; 8],
+    rendering_dsv_subresources: Vec<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>,
 }
 
 impl CommandListDynamic {
     pub fn new() -> Self {
         Self {
-            rendering_rt_subresources:  [DynArray::new(), DynArray::new(), DynArray::new(), DynArray::new(), DynArray::new(), DynArray::new(), DynArray::new(), DynArray::new()],
-            rendering_dsv_subresources: DynArray::new(),
+            rendering_rt_subresources:  [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+            rendering_dsv_subresources: Vec::new(),
         }
     }
 }
@@ -103,9 +103,9 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn barrier(&self, barriers: &[ral::Barrier], _cur_queue_index: ral::QueueIndex) {
         scoped_alloc!(UseAlloc::TlsTemp);
 
-        let mut global_barriers = DynArray::with_capacity(barriers.len());
-        let mut buffer_barriers = DynArray::with_capacity(barriers.len());
-        let mut texture_barriers = DynArray::with_capacity(barriers.len());
+        let mut global_barriers = Vec::with_capacity(barriers.len());
+        let mut buffer_barriers = Vec::with_capacity(barriers.len());
+        let mut texture_barriers = Vec::with_capacity(barriers.len());
 
         for barrier in barriers {
             match barrier {
@@ -154,7 +154,7 @@ impl ral::CommandListInterface for CommandList {
             }
         }
 
-        let mut dx_barriers = DynArray::new();
+        let mut dx_barriers = Vec::new();
         if !global_barriers.is_empty() {
             dx_barriers.push(D3D12_BARRIER_GROUP {
                 Type: D3D12_BARRIER_TYPE_GLOBAL,
@@ -419,7 +419,7 @@ impl ral::CommandListInterface for CommandList {
 
         let dynamic = self.dynamic.write();
 
-        let mut dx_rts = DynArray::with_capacity(rendering_info.render_targets.len());
+        let mut dx_rts = Vec::with_capacity(rendering_info.render_targets.len());
         for (idx, rt) in rendering_info.render_targets.iter().enumerate() {
             let dx_rt = rt.rtv.interface().as_concrete_type::<RenderTargetView>();
             let begin_access = load_op_to_dx(rt.load_op, rt.rtv.desc().format);

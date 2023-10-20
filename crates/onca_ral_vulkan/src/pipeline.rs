@@ -17,7 +17,7 @@ pub struct PipelineLayout {
 
 impl PipelineLayout {
     pub unsafe fn new(device: &Device, desc: &ral::PipelineLayoutDesc) -> ral::Result<ral::PipelineLayoutInterfaceHandle> {
-        let mut layouts = DynArray::new();
+        let mut layouts = Vec::new();
 
         if let Some(tables) = &desc.descriptor_tables {
             for table in tables {
@@ -53,7 +53,7 @@ impl PipelineLayout {
         }
 
         let mut push_constant_offset = 0;
-        let mut push_constants = DynArray::new();
+        let mut push_constants = Vec::new();
 
         if let Some(constants) = &desc.constant_ranges {
             for constant in constants {
@@ -70,7 +70,7 @@ impl PipelineLayout {
 
         match &desc.static_samplers {
             Some(samplers) => {
-                let mut bindings = DynArray::new();
+                let mut bindings = Vec::new();
                 for (idx, sampler) in samplers.iter().enumerate() {
                     let vk_sampler = sampler.interface().as_concrete_type::<Sampler>().sampler;
 
@@ -139,14 +139,14 @@ impl Pipeline {
         let vertex_shader = desc.vertex_shader.interface().as_concrete_type::<Shader>();
         let pixel_shader = desc.pixel_shader.interface().as_concrete_type::<Shader>();
 
-        let mut shader_stages = DynArray::with_capacity(2);
+        let mut shader_stages = Vec::with_capacity(2);
         shader_stages.push(vertex_shader.get_shader_stage_info(ral::ShaderType::Vertex));
         shader_stages.push(pixel_shader.get_shader_stage_info(ral::ShaderType::Pixel));
 
         
-        let mut vertex_bindings = DynArray::new();
-        let mut vertex_binding_divisors = DynArray::new();
-        let mut vertex_attributes = DynArray::new();
+        let mut vertex_bindings = Vec::new();
+        let mut vertex_binding_divisors = Vec::new();
+        let mut vertex_attributes = Vec::new();
         
         if let Some(input_layout) = &desc.input_layout {
             vertex_bindings.reserve(input_layout.elements.len());
@@ -265,7 +265,7 @@ impl Pipeline {
         let depth_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.aspect().contains(TextureAspect::Depth) { format.to_vulkan() } else { vk::Format::UNDEFINED });
         let stencil_format = desc.depth_stencil_format.map_or(vk::Format::UNDEFINED, |format| if format.aspect().contains(TextureAspect::Stencil) { format.to_vulkan() } else { vk::Format::UNDEFINED });
 
-        let mut blend_attachments = DynArray::new();
+        let mut blend_attachments = Vec::new();
         let blend_state = match desc.blend_state {
             ral::BlendState::None => vk::PipelineColorBlendStateCreateInfo::default(),
             ral::BlendState::LogicOp(logic_op) => vk::PipelineColorBlendStateCreateInfo::builder()

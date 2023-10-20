@@ -22,9 +22,9 @@ impl ral::CommandQueueInterface for CommandQueue {
         scoped_alloc!(UseAlloc::TlsTemp);
 
         // Create data for batches
-        let mut vk_data = DynArray::with_capacity(batches.len());
+        let mut vk_data = Vec::with_capacity(batches.len());
         for batch in batches {
-            let mut command_buffer_infos = DynArray::with_capacity(batch.command_lists.len());
+            let mut command_buffer_infos = Vec::with_capacity(batch.command_lists.len());
             for command_list in &batch.command_lists {
                 command_buffer_infos.push(vk::CommandBufferSubmitInfo::builder()
                     .command_buffer(command_list.interface().as_concrete_type::<CommandList>().buffer)
@@ -32,7 +32,7 @@ impl ral::CommandQueueInterface for CommandQueue {
                 );
             }
 
-            let mut wait_semaphores = DynArray::with_capacity(batch.wait_fences.len());
+            let mut wait_semaphores = Vec::with_capacity(batch.wait_fences.len());
             for fence_info in batch.wait_fences {
                 wait_semaphores.push(vk::SemaphoreSubmitInfo::builder()
                     .semaphore(fence_info.fence.interface().as_concrete_type::<Fence>().semaphore)
@@ -42,7 +42,7 @@ impl ral::CommandQueueInterface for CommandQueue {
                 );
             }
 
-            let mut signal_semaphores = DynArray::with_capacity(batch.wait_fences.len());
+            let mut signal_semaphores = Vec::with_capacity(batch.wait_fences.len());
             for fence_info in batch.signal_fences {
                 signal_semaphores.push(vk::SemaphoreSubmitInfo::builder()
                     .semaphore(fence_info.fence.interface().as_concrete_type::<Fence>().semaphore)
@@ -56,7 +56,7 @@ impl ral::CommandQueueInterface for CommandQueue {
         }
 
         // Create batches referencing the previously created data
-        let mut vk_batches = DynArray::with_capacity(batches.len());
+        let mut vk_batches = Vec::with_capacity(batches.len());
         for data in &vk_data {
             let submit_info = vk::SubmitInfo2::builder()
                 .command_buffer_infos(&data.0)

@@ -295,7 +295,7 @@ pub fn get_capabilities(preparse_data: &PreparseData) -> Option<Capabilities> {
     }
 }
 
-pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[DynArray<ButtonCaps>; NUM_REPORT_TYPES]> {
+pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ButtonCaps>; NUM_REPORT_TYPES]> {
     unsafe {
         let preparse_data = preparse_data.get_address() as isize;
 
@@ -305,7 +305,7 @@ pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
         
         let output_caps = if caps.num_output_button_caps > 0 {
@@ -314,7 +314,7 @@ pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
 
         let feature_caps = if caps.num_feature_button_caps > 0 {
@@ -323,17 +323,17 @@ pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
 
         Some([input_caps, output_caps, feature_caps])
     }
 }
 
-unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<DynArray<ButtonCaps>> {
+unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ButtonCaps>> {
     let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
-    let mut win_caps = DynArray::with_capacity(num_caps as usize);
+    let mut win_caps = Vec::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
     
     drop(scoped_alloc);
@@ -344,7 +344,7 @@ unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_da
         return None;
     }
 
-    let mut caps = DynArray::with_capacity(num_caps as usize);
+    let mut caps = Vec::with_capacity(num_caps as usize);
     for cap in win_caps {
 
         let (usage, data_index) = if cap.IsRange.as_bool() {
@@ -385,7 +385,7 @@ unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_da
     Some(caps)
 }
 
-pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[DynArray<ValueCaps>; NUM_REPORT_TYPES]> {
+pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ValueCaps>; NUM_REPORT_TYPES]> {
     unsafe {
         let preparse_data = preparse_data.get_address() as isize;
 
@@ -395,7 +395,7 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities)
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
 
         let output_caps = if caps.num_output_value_caps > 0 {
@@ -404,7 +404,7 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities)
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
 
         let feature_caps = if caps.num_feature_value_caps > 0 {
@@ -413,17 +413,17 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities)
                 None => return None,
             }
         } else {
-            DynArray::new()
+            Vec::new()
         };
 
         Some([input_caps, output_caps, feature_caps])
     }
 }
 
-unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<DynArray<ValueCaps>> {
+unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ValueCaps>> {
     let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
-    let mut win_caps = DynArray::with_capacity(num_caps as usize);
+    let mut win_caps = Vec::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
 
     drop(scoped_alloc);
@@ -434,7 +434,7 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
         return None;
     }
 
-    let mut caps = DynArray::with_capacity(num_caps as usize);
+    let mut caps = Vec::with_capacity(num_caps as usize);
     for cap in win_caps {
 
         let (usage, data_index) = if cap.IsRange.as_bool() {
@@ -491,7 +491,7 @@ pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollectio
         let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
         let num_collection_nodes = dev.capabilities.num_collection_nodes;
-        let mut win_nodes = DynArray::with_capacity(num_collection_nodes as usize);
+        let mut win_nodes = Vec::with_capacity(num_collection_nodes as usize);
         win_nodes.set_len(num_collection_nodes as usize);
 
         drop(scoped_alloc);
@@ -506,18 +506,18 @@ pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollectio
             },
         }
 
-        let mut nodes = DynArray::new();
-        let mut children = DynArray::new();
+        let mut nodes = Vec::new();
+        let mut children = Vec::new();
         process_collection_nodes(&win_nodes, &mut nodes, &mut children, 0, None);
 
         Some(TopLevelCollection::new(nodes, children))
     }
 }
 
-fn process_collection_nodes(win_nodes: &DynArray<HIDP_LINK_COLLECTION_NODE>, nodes: &mut DynArray<CollectionNode>, children: &mut DynArray<DynArray<u16>>, mut win_idx: usize, parent_idx: Option<usize>) {
+fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &mut Vec<CollectionNode>, children: &mut Vec<Vec<u16>>, mut win_idx: usize, parent_idx: Option<usize>) {
     loop {
         let mut node = &win_nodes[win_idx];
-        let mut usages = DynArray::new();
+        let mut usages = Vec::new();
         
         // handle aliased usages
         let range_start = win_idx as u16;
@@ -536,7 +536,7 @@ fn process_collection_nodes(win_nodes: &DynArray<HIDP_LINK_COLLECTION_NODE>, nod
                 let node_idx = nodes.len() - 1;
 
                 if let Some(parent_idx) = parent_idx {
-                    children.resize_with(parent_idx + 1, || DynArray::new());
+                    children.resize_with(parent_idx + 1, || Vec::new());
                     children[parent_idx].push(node_idx as u16);
                 }
 
@@ -548,7 +548,7 @@ fn process_collection_nodes(win_nodes: &DynArray<HIDP_LINK_COLLECTION_NODE>, nod
                     ids: (range_start..=id).into(),
                     usages,
                     kind: kind,
-                    children: DynArray::new()
+                    children: Vec::new()
                 });
             },
             None => {
@@ -569,13 +569,13 @@ fn process_collection_nodes(win_nodes: &DynArray<HIDP_LINK_COLLECTION_NODE>, nod
 // REPORT CREATION
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) -> Option<DynArray<u8>> {
+pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) -> Option<Vec<u8>> {
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
         let report_type = to_native_report_type(report_type);
 
         let report_size = dev.capabilities.output_report_byte_len as usize;
-        let mut blob = DynArray::with_capacity(report_size);
+        let mut blob = Vec::with_capacity(report_size);
         blob.set_len(report_size);
 
         let res = HidP_InitializeReportForID(report_type, report_id, preparse_data, &mut blob);
@@ -631,7 +631,7 @@ pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<I
 
         if res && bytes_read > 0 {
             dev.read_buffer.set_len(bytes_read as usize);
-            let report_buf = mem::replace(&mut dev.read_buffer, DynArray::with_capacity(report_len as usize));
+            let report_buf = mem::replace(&mut dev.read_buffer, Vec::with_capacity(report_len as usize));
             Ok(Some(InputReport { data: crate::ReportData::Blob(report_buf), device: dev }))
         } else {
             Err(())
@@ -686,7 +686,7 @@ pub fn get_feature_report(dev: &mut Device) -> Option<FeatureReport<'_>> {
         let handle = HANDLE(dev.handle.0 as isize);
         let report_len = dev.capabilities.feature_report_byte_len as u32;
 
-        let mut report_blob = DynArray::with_capacity(report_len as usize);
+        let mut report_blob = Vec::with_capacity(report_len as usize);
         report_blob.set_len(report_len as usize);
 
         let res = HidD_GetFeature(handle, report_blob.as_mut_ptr() as *mut c_void, report_len).as_bool();
@@ -718,7 +718,7 @@ pub fn set_feature_report<'a>(dev: &mut Device, report: FeatureReport<'a>) -> Re
 // REPORTS GETTERS
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<DynArray<Usage>> {
+pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<Vec<Usage>> {
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
         let report_type = to_native_report_type(report_type);
@@ -726,7 +726,7 @@ pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, re
         let mut button_count = 0;
         _ = HidP_GetUsagesEx(report_type, collection_id, null_mut(), &mut button_count, preparse_data, report);
 
-        let mut win_buttons = DynArray::with_capacity(button_count as usize);
+        let mut win_buttons = Vec::with_capacity(button_count as usize);
         
         let res = HidP_GetUsagesEx(report_type, collection_id, win_buttons.as_mut_ptr(), &mut button_count, preparse_data, report);
         if let Err(err) = res {
@@ -742,7 +742,7 @@ pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, re
     }
 }
 
-pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<DynArray<UsageId>> {
+pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<Vec<UsageId>> {
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
         let report_type = to_native_report_type(report_type);
@@ -755,7 +755,7 @@ pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16,
 
         _ = HidP_GetUsages(report_type, page.as_u16(), collection_id, null_mut(), &mut button_count, preparse_data, report_data);
 
-        let mut win_buttons = DynArray::with_capacity(button_count as usize);
+        let mut win_buttons = Vec::with_capacity(button_count as usize);
         
         let res = HidP_GetUsages(report_type, page.as_u16(), collection_id, win_buttons.as_mut_ptr(), &mut button_count, preparse_data, report_data);
         if let Err(err) = res {
@@ -793,7 +793,7 @@ pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type
                 },
             }
         } else {
-            let mut values = DynArray::with_capacity(report_count as usize);
+            let mut values = Vec::with_capacity(report_count as usize);
             values.set_len(report_count as usize);
 
             let slice = slice::from_raw_parts_mut(values.as_mut_ptr() as *mut u8, report_count as usize * mem::size_of::<u32>());
@@ -845,7 +845,7 @@ pub fn get_scaled_value(dev: &Device, usage: Usage, collection_id: u16, report_t
     }
 }
 
-pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<DynArray<Data>> {
+pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<Vec<Data>> {
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
         let win_report_type = to_native_report_type(report_type);
@@ -857,7 +857,7 @@ pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<
         let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
         let mut data_len = HidP_MaxDataListLength(win_report_type, preparse_data);
-        let mut data = DynArray::with_capacity(data_len as usize);
+        let mut data = Vec::with_capacity(data_len as usize);
         
         drop(scoped_alloc);
 
@@ -956,7 +956,7 @@ pub fn set_data(dev: &Device, data: &[Data], report_type: ReportType, report: &m
         let preparse_data = dev.preparse_data.get_address() as isize;
         let report_type = to_native_report_type(report_type);
 
-        let mut win_data = DynArray::new();
+        let mut win_data = Vec::new();
         win_data.reserve(data.len());
         for datum in data {
             let mut hid_data = HIDP_DATA::default();

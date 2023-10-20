@@ -56,13 +56,13 @@ impl AsyncIOCompletionData {
 
 pub(crate) struct AsyncReadResult {
     file_handle     : HANDLE, 
-    buffer          : DynArray<u8>,
+    buffer          : Vec<u8>,
     overlapped      : Box<OVERLAPPED>,
     completion_data : Box<AsyncIOCompletionData>,
 }
 
 impl AsyncReadResult {
-    pub fn poll(&mut self, cx: &mut core::task::Context<'_>) -> Poll<io::Result<DynArray<u8>>> {
+    pub fn poll(&mut self, cx: &mut core::task::Context<'_>) -> Poll<io::Result<Vec<u8>>> {
         match self.completion_data.state {
             AsyncIOCompletionState::InFlight => {
                 self.completion_data.waker = Some(cx.waker().clone());
@@ -74,7 +74,7 @@ impl AsyncReadResult {
         }
     }
 
-    pub fn wait(&mut self, timeout: u32) -> Poll<io::Result<DynArray<u8>>> {
+    pub fn wait(&mut self, timeout: u32) -> Poll<io::Result<Vec<u8>>> {
         unsafe {
             let res = WaitForSingleObjectEx(self.file_handle, timeout, BOOL(1));
             if res == ERROR_SUCCESS || res == ERROR_TIMEOUT {
@@ -101,7 +101,7 @@ impl AsyncReadResult {
         }
     }
 
-    fn take_buffer_and_exhaust(&mut self, bytes_read: u64) -> DynArray<u8> {
+    fn take_buffer_and_exhaust(&mut self, bytes_read: u64) -> Vec<u8> {
         self.completion_data.state = AsyncIOCompletionState::Exhausted;
         let mut buffer = mem::take(&mut self.buffer);
         unsafe { buffer.set_len(bytes_read as usize) };
@@ -112,7 +112,7 @@ impl AsyncReadResult {
 pub(crate) struct AsyncWriteResult {
     file_handle : HANDLE,
     #[allow(dead_code)] // we need to keep the buffer alive until this operation is finished, but the compiler complains that it's not read
-    buffer      : DynArray<u8>,
+    buffer      : Vec<u8>,
     overlapped  : Box<OVERLAPPED>,
     completion_data : Box<AsyncIOCompletionData>,
 }
@@ -170,7 +170,7 @@ impl FileHandle {
             let completion_data = Box::new(AsyncIOCompletionData::new());
             overlapped.hEvent = core::mem::transmute(&*completion_data);
 
-            let mut buffer = DynArray::with_capacity(bytes_to_read as usize);
+            let mut buffer = Vec::with_capacity(bytes_to_read as usize);
             buffer.set_len(bytes_to_read as usize);
             let res = ReadFileEx(
                 self.0,
@@ -192,7 +192,7 @@ impl FileHandle {
         }
     }
 
-    pub(crate) fn write_async(&mut self, buffer: DynArray<u8>) -> io::Result<AsyncWriteResult> {
+    pub(crate) fn write_async(&mut self, buffer: Vec<u8>) -> io::Result<AsyncWriteResult> {
         unsafe {
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 

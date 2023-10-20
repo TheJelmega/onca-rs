@@ -661,7 +661,7 @@ impl TextureBufferSubresourceLayout {
 #[derive(Clone)]
 pub struct TextureBufferLayout {
     /// Subresources
-    pub subresources: DynArray<(TextureSubresourceIndex, TextureBufferSubresourceLayout)>,
+    pub subresources: Vec<(TextureSubresourceIndex, TextureBufferSubresourceLayout)>,
     /// Total size of the buffer
     pub total_size: u64,
 }
@@ -688,7 +688,7 @@ impl TextureBufferLayout {
 
         let plane_count = components.num_planes();
 
-        let mut subresources = DynArray::with_capacity(0);
+        let mut subresources = Vec::with_capacity(0);
         let mut total_size = 0;
         for plane in 0..plane_count {
             for layer in 0..num_layers {
@@ -1801,13 +1801,13 @@ pub struct InputLayoutElement {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct InputLayout {
     /// Elements
-    pub elements: DynArray<InputLayoutElement>,
+    pub elements: Vec<InputLayoutElement>,
 }
 
 impl InputLayout {
     /// Create a new [`InputLayout`]
     pub fn new() -> Self {
-        Self { elements: DynArray::new() }
+        Self { elements: Vec::new() }
     }
 
     /// Push an element into the [`InputLayout`]
@@ -3168,7 +3168,7 @@ pub struct FrameBufferRenderTargetDesc {
     /// Size of the render target attachment
     pub size:    RenderTargetSize,
     /// Possible formats the render target can be used as (allowed formats for views)
-    pub formats: DynArray<Format>,
+    pub formats: Vec<Format>,
 }
 
 //==============================================================================================================================

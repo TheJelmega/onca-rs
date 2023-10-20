@@ -83,7 +83,7 @@ pub enum FilesystemFlags {
 #[derive(Default, Debug)]
 pub struct VolumeInfo {
     /// Path representing the drive roots of this volume
-    pub roots        : DynArray<PathBuf>,
+    pub roots        : Vec<PathBuf>,
     /// Volume name
     pub name         : String,
     /// Serial number associated with the volume by the OS (0 if no serial number is associated)
@@ -109,7 +109,7 @@ pub fn get_drive_type(path: PathBuf) -> DriveType {
 
 /// Retrieve the drive info for all available drives
 // TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_drive_info() -> DynArray<DriveInfo> {
+pub fn get_all_drive_info() -> Vec<DriveInfo> {
     os_imp::drive_volume::get_all_drive_info()
 }
 
@@ -123,7 +123,7 @@ pub fn get_volume_info(path: PathBuf) -> Option<VolumeInfo> {
 
 /// Retrieve th evolume info for all available volumes
 // TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_volume_info() -> DynArray<VolumeInfo> {
+pub fn get_all_volume_info() -> Vec<VolumeInfo> {
     os_imp::drive_volume::get_all_volume_info()
 }
 

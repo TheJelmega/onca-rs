@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use onca_core::{time::Duration, prelude::DynArray};
+use onca_core::time::Duration;
 use onca_ral as ral;
 use ral::{HandleImpl, FenceInterface};
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};
@@ -29,7 +29,7 @@ impl ral::CommandQueueInterface for CommandQueue {
 
     unsafe fn submit(&self, batches: &[ral::api::SubmitBatch]) -> ral::Result<()> {
         
-        let mut dx_command_lists = DynArray::new();
+        let mut dx_command_lists = Vec::new();
         for batch in batches {
             for fence in batch.wait_fences {
                 let dx_fence = &fence.fence.interface().as_concrete_type::<Fence>().fence;

@@ -26,9 +26,6 @@ impl<T> GetAllocatorId for Vec<T> {
     }
 }
 
-
-pub type DynArray<T> = Vec<T>;
-
 //--------------------------------------------------------------
 
 macro_rules! impl_slice_partial_eq_generic {

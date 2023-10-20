@@ -206,6 +206,6 @@ impl fmt::Display for DeviceInfo {
     }
 }
 
-pub fn get_device_infos() -> DynArray<DeviceInfo> {
+pub fn get_device_infos() -> Vec<DeviceInfo> {
     unsafe { os::get_device_infos() }
 }
