@@ -6,6 +6,7 @@ mod os;
 
 mod input_manager;
 use core::ops::Add;
+use std::{collections::HashSet, sync::{Arc, Weak}};
 
 pub use input_manager::*;
 
@@ -19,7 +20,7 @@ mod control_scheme;
 pub use control_scheme::*;
 
 mod user;
-use onca_core::{prelude::*, sync::Mutex, collections::HashSet};
+use onca_core::{prelude::*, sync::Mutex};
 pub use user::*;
 
 use onca_logging::LogCategory;
@@ -131,7 +132,7 @@ pub(crate) struct InputProcessContext {
     processed_actions : DynArray<Arc<Mutex<Action>>>,
     triggered_actions : DynArray<Arc<Mutex<Action>>>,
     consumed_inputs   : HashSet<InputAxisId>,
-    trigger_states    : DynArray<(AWeak<Mutex<Action>>, TriggerResult)>,
+    trigger_states    : DynArray<(Weak<Mutex<Action>>, TriggerResult)>,
 }
 
 impl InputProcessContext {

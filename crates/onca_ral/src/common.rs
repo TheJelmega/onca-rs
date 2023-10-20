@@ -1,5 +1,6 @@
 use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16, NonZeroU64}, hash::Hash};
-use onca_core::{prelude::*, collections::{HashSet, StaticDynArray}};
+use std::collections::HashSet;
+use onca_core::{prelude::*, collections::StaticDynArray};
 use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
 use onca_logging::{log_verbose, LogCategory};
 use crate::*;
@@ -35,7 +36,7 @@ impl fmt::Display for Version {
         scoped_alloc!(UseAlloc::TlsTemp);
 
         // TODO: format to a stack string ??
-        f.pad(&onca_format!("{}.{}.{}", self.major, self.minor, self.patch))
+        f.pad(&format!("{}.{}.{}", self.major, self.minor, self.patch))
     }
 }
 
@@ -775,10 +776,10 @@ impl SparseFlags {
             if !self.contains(SparseFlags::Sparse) {
 
                 if self.contains(SparseFlags::SparseResidency) {
-                    return Err(Error::InvalidParameter("`SparseFlags::SparseResidency` requires `SparseFlags::Sparse` to be set".to_onca_string()));
+                    return Err(Error::InvalidParameter("`SparseFlags::SparseResidency` requires `SparseFlags::Sparse` to be set".to_string()));
                 }
                 if self.contains(SparseFlags::SparseAliassed) {
-                    return Err(Error::InvalidParameter("`SparseFlags::SparseAliassed` requires `SparseFlags::Sparse` to be set".to_onca_string()));
+                    return Err(Error::InvalidParameter("`SparseFlags::SparseAliassed` requires `SparseFlags::Sparse` to be set".to_string()));
                 }
             }
         }
@@ -814,13 +815,13 @@ impl VertexBufferView {
         #[cfg(feature = "validation")]
         {
             if self.input_slot >= constants::MAX_VERTEX_INPUT_BUFFERS as u8 {
-                return Err(Error::InvalidParameter(onca_format!("Vertex input buffer slot out of range ({}), only up to {} input slots are allowed", self.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
+                return Err(Error::InvalidParameter(format!("Vertex input buffer slot out of range ({}), only up to {} input slots are allowed", self.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
             }
             if self.offset >= self.buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("Vertex buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
+                return Err(Error::InvalidParameter(format!("Vertex buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
             }
             if !self.buffer.usages().contains(BufferUsage::VertexBuffer) {
-                return Err(Error::InvalidParameter("Buffer needs to have the `VertexBuffer` usage to be able to bound as a vertex buffer".to_onca_string()));
+                return Err(Error::InvalidParameter("Buffer needs to have the `VertexBuffer` usage to be able to bound as a vertex buffer".to_string()));
             }
         }
         Ok(())
@@ -853,7 +854,7 @@ impl IndexBufferView {
         #[cfg(feature = "validation")]
         {
             if self.offset >= self.buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("Index buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
+                return Err(Error::InvalidParameter(format!("Index buffer offset out of range ({}), the offset must be smaller than the buffer size ({})", self.offset, self.buffer.size())));
             }
         }
         Ok(())
@@ -1818,7 +1819,7 @@ impl InputLayout {
         #[cfg(feature = "validation")]
         {
             if self.elements.len() > constants::MAX_VERTEX_INPUT_ATTRIBUTES as usize {
-                return Err(Error::InvalidParameter(onca_format!("Number of vertex attributes `{}` must not exceed exceeed MAX_VERTEX_INPUT_ATTRIBUTES ({})", self.elements.len(), constants::MAX_VERTEX_INPUT_ATTRIBUTES)));
+                return Err(Error::InvalidParameter(format!("Number of vertex attributes `{}` must not exceed exceeed MAX_VERTEX_INPUT_ATTRIBUTES ({})", self.elements.len(), constants::MAX_VERTEX_INPUT_ATTRIBUTES)));
             }
 
             let mut encountered_semantics = HashSet::<(String, u8)>::new();
@@ -1827,27 +1828,27 @@ impl InputLayout {
 
             for element in &self.elements {
                 if element.input_slot as u32 >= constants::MAX_VERTEX_INPUT_BUFFERS {
-                    return Err(Error::InvalidParameter(onca_format!("input layout element slot `{}` must not exceed MAX_VERTEX_INPUT_BUFFERS ({})", element.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
+                    return Err(Error::InvalidParameter(format!("input layout element slot `{}` must not exceed MAX_VERTEX_INPUT_BUFFERS ({})", element.input_slot, constants::MAX_VERTEX_INPUT_BUFFERS)));
                 }
 
                 if !encountered_semantics.insert((element.semantic.clone(), element.semantic_index)) {
-                    return Err(Error::InvalidParameter(onca_format!("Duplicate vertex attribute `{}` found in an input layout as slot `{}`", element.semantic, element.input_slot)));
+                    return Err(Error::InvalidParameter(format!("Duplicate vertex attribute `{}` found in an input layout as slot `{}`", element.semantic, element.input_slot)));
                 }
 
                 if element.semantic_index as u32 >= constants::MAX_VERTEX_INPUT_ATTRIBUTES {
-                    return Err(Error::InvalidParameter(onca_format!("Input element semantic index `{}` must not exceed MAX_VERTEX_INPUT_ATTRIBUTES ({})", element.semantic_index, constants::MAX_VERTEX_INPUT_ATTRIBUTES)))
+                    return Err(Error::InvalidParameter(format!("Input element semantic index `{}` must not exceed MAX_VERTEX_INPUT_ATTRIBUTES ({})", element.semantic_index, constants::MAX_VERTEX_INPUT_ATTRIBUTES)))
                 }
 
                 if element.offset as u32 >= constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET {
-                    return Err(Error::InvalidParameter(onca_format!("Vertex input element offset out of bounds `{}` as slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET ({})", element.offset, element.input_slot, constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET)));
+                    return Err(Error::InvalidParameter(format!("Vertex input element offset out of bounds `{}` as slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET ({})", element.offset, element.input_slot, constants::MAX_VERTEX_INPUT_ATTRIBUTE_OFFSET)));
                 }
 
                 let elem_size = element.format.byte_size();
 
                 if elem_size == 2 && element.offset & 0x1 != 0 {
-                    return Err(Error::InvalidParameter(onca_format!("Invalid offset `{}`, vertex input attributes that require 2 bytes need to have their offset aligned to 2 bytes", element.offset)));
+                    return Err(Error::InvalidParameter(format!("Invalid offset `{}`, vertex input attributes that require 2 bytes need to have their offset aligned to 2 bytes", element.offset)));
                 } else if elem_size != 1 && element.offset & 0x3 != 0 {
-                    return Err(Error::InvalidParameter(onca_format!("Invalid offset `{}`, vertex input attributes that require more than 2 bytes need to have their offset aligned to 4 bytes", element.offset)));
+                    return Err(Error::InvalidParameter(format!("Invalid offset `{}`, vertex input attributes that require more than 2 bytes need to have their offset aligned to 4 bytes", element.offset)));
                 }
 
                 strides[element.input_slot as usize] = strides[element.input_slot as usize].max(element.offset + elem_size as u16);
@@ -1855,7 +1856,7 @@ impl InputLayout {
                 match step_rates[element.input_slot as usize] {
                     Some(step_rate) => {
                         if element.step_rate != step_rate {
-                            return Err(Error::InvalidParameter(onca_format!("Mismatched step rate for attribute in input slot {}", element.input_slot)));
+                            return Err(Error::InvalidParameter(format!("Mismatched step rate for attribute in input slot {}", element.input_slot)));
                         }
                     },
                     None => step_rates[element.input_slot as usize] = Some(element.step_rate),
@@ -1864,7 +1865,7 @@ impl InputLayout {
 
             for (idx, stride) in strides.iter().enumerate() {
                 if *stride as u32 > constants::MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE {
-                    return Err(Error::InvalidParameter(onca_format!("Vertex input stride `{}` out of bound for slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE ({})", stride, idx, constants::MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE)));
+                    return Err(Error::InvalidParameter(format!("Vertex input stride `{}` out of bound for slot `{}`, must be smaller or equal to MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE ({})", stride, idx, constants::MAX_VERTEX_INPUT_ATTRIBUTE_STRIDE)));
                 }
             }
         }
@@ -1964,7 +1965,7 @@ impl GraphicsPipelineDesc {
                 if !input_layout.elements.is_empty() &&
                 !self.pipeline_layout.flags().contains(PipelineLayoutFlags::ContainsInputLayout)
                 {
-                    return Err(Error::InvalidParameter("Pipeline description contains input layout, but pipeline layout does not support it".to_onca_string()));
+                    return Err(Error::InvalidParameter("Pipeline description contains input layout, but pipeline layout does not support it".to_string()));
                 }
                 
                 input_layout.validate()?;

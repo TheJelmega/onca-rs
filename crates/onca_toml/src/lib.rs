@@ -1,10 +1,8 @@
 #![feature(let_chains)]
 
 use core::fmt;
-use onca_core::{
-	prelude::*,
-	collections::HashMap,
-};
+use std::collections::HashMap;
+use onca_core::prelude::*;
 use onca_parser_utils::{str_parser::*, ParserError};
 
 /// TOML parsing error
@@ -104,12 +102,12 @@ impl Table {
 
 	/// Get an element from the toml
 	pub fn get(&self, key: &str) -> Option<&Item> {
-		self.mapping.get(&key.to_onca_string()).map(|idx| &self.items[*idx])
+		self.mapping.get(&key.to_string()).map(|idx| &self.items[*idx])
 	}
 
 	/// Get a mutable element from the toml
 	pub fn get_mut(&mut self, key: &str) -> Option<&mut Item> {
-		self.mapping.get(&key.to_onca_string()).map(|idx| &mut self.items[*idx])
+		self.mapping.get(&key.to_string()).map(|idx| &mut self.items[*idx])
 	}
 
 	fn get_or_add_table(&mut self, keys: &[String]) -> Result<&mut Table, i32> {
@@ -152,7 +150,7 @@ impl Table {
 	}
 
 	fn get_or_add_single_table(&mut self, key: &String) -> Result<&mut Table, i32> {
-		match self.mapping.get(&key) {
+		match self.mapping.get(key) {
 			Some(idx) => {
 				match &mut self.items[*idx] {
 					Item::Table(table) => Ok(table),
@@ -293,14 +291,14 @@ impl<'a> Parser<'a> {
 		loop {
 			let key = if self.parser.string.starts_with('"') {
 				match self.parser.extract_string('"', '"', false) {
-					Some(s) => s.to_onca_string(),
+					Some(s) => s.to_string(),
 					None => return Err(self.error_and_skip_to_eol("Invalid key")),
 				}
 			} else {
 				let end = self.parser.string.find(|ch: char| !ch.is_alphanumeric() && ch != '-' && ch != '_').unwrap_or(self.parser.string.len());
 				let key = &self.parser.string[..end];
 				self.parser.consume_count(key.len());
-				key.to_onca_string()
+				key.to_string()
 			};
 			arr.push(key);
 
@@ -331,12 +329,12 @@ impl<'a> Parser<'a> {
 				let long_delim = "\"\"\"";
 				if self.parser.string.starts_with(long_delim) {
 					match self.parser.extract_string(long_delim, long_delim, true) {
-						Some(string) => Ok(Item::String(string.to_onca_string())),
+						Some(string) => Ok(Item::String(string.to_string())),
 						None => Err(self.error_and_skip_to_eol("Invalid string"))
 					}
 				} else {
 					match self.parser.extract_string('"', '"', false) {
-						Some(string) => Ok(Item::String(string.to_onca_string())),
+						Some(string) => Ok(Item::String(string.to_string())),
 						None => Err(self.error_and_skip_to_eol("Invalid string"))
 					}
 				}
@@ -362,7 +360,7 @@ impl<'a> Parser<'a> {
 			ch if ch.is_numeric() || ch == '-' || ch == '+' => {
 				let s = self.parser.extract_until(|ch: char| ch.is_whitespace() || ch == '\n' || ch == ',');
 				// remove `_`
-				let mut s = s.to_onca_string();
+				let mut s = s.to_string();
 				s.retain(|ch| ch != '_');
 
 				if s.contains("inf") {
@@ -479,12 +477,12 @@ impl<'a> Parser<'a> {
 					eol_idx
 				};
 
-				let comment = self.parser.string[..str_end].to_onca_string();
+				let comment = self.parser.string[..str_end].to_string();
 				self.parser.consume_to_eol();
 				comment
 			},
 		    None => {
-				let comment = self.parser.string.to_onca_string();
+				let comment = self.parser.string.to_string();
 				self.parser.end();
 				comment
 			},

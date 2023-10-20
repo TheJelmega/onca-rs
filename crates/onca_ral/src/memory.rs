@@ -155,7 +155,7 @@ pub enum GpuAllocatorImpl {
     /// Use the default GPU allocator provided by the RAL
     Default,
     /// Use a custom user-provided gpu allocator
-    Custom(HeapPtr<dyn GpuAllocatorInterface>),
+    Custom(Box<dyn GpuAllocatorInterface>),
 }
 
 /// Wrapper around the chosen GPU alloctor
@@ -185,7 +185,7 @@ impl GpuAllocator {
     /// Allocate memory on the GPU
     pub unsafe fn alloc(&self, size: u64, desc: GpuAllocationDesc, api_req: ApiMemoryRequest) -> Result<GpuAllocation> {
         if !api_req.memory_types.contains(&desc.memory_type) {
-            return Err(Error::InvalidParameter(onca_format!("Memory type '{}' is not allowed for the allocation", desc.memory_type)))
+            return Err(Error::InvalidParameter(format!("Memory type '{}' is not allowed for the allocation", desc.memory_type)))
         }
 
         let device = WeakHandle::upgrade(&self.device).ok_or(Error::UseAfterDeviceDropped)?;

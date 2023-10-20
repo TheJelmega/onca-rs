@@ -1,9 +1,6 @@
 use core::{num::NonZeroU32, mem::ManuallyDrop};
 
-use onca_core::{
-    prelude::*,
-    onca_format,
-};
+use onca_core::prelude::*;
 use onca_core_macros::{EnumDisplay, EnumCount};
 
 use crate::{
@@ -39,7 +36,7 @@ impl DescriptorHeapDesc {
         #[cfg(feature = "validation")]
         {
             if self.shader_visible && self.heap_type == DescriptorHeapType::Samplers && self.max_descriptors >= constants::MAX_PIPELINE_DESCRIPTOR_SAMPLERS {
-                return Err(Error::InvalidParameter(onca_format!("Cannot support a descriptor heap with more than {} samplers", constants::MAX_PIPELINE_DESCRIPTOR_SAMPLERS)));
+                return Err(Error::InvalidParameter(format!("Cannot support a descriptor heap with more than {} samplers", constants::MAX_PIPELINE_DESCRIPTOR_SAMPLERS)));
             }
         }
         Ok(())
@@ -224,13 +221,13 @@ impl DescriptorTableDesc {
             match self {
                 DescriptorTableDesc::Resource { ranges, .. } => {
                     if ranges.is_empty() {
-                        return Err(Error::InvalidParameter("A resource descriptor table needs at least 1 range ".to_onca_string()));
+                        return Err(Error::InvalidParameter("A resource descriptor table needs at least 1 range ".to_string()));
                     }
                     
                     let mut encountered_unbound = false;
                     for range in ranges {
                         if encountered_unbound {
-                            return Err(Error::InvalidParameter("Cannot have a range after a an unbounded range".to_onca_string()));
+                            return Err(Error::InvalidParameter("Cannot have a range after a an unbounded range".to_string()));
                         }
 
                         range.count.validate()?;
@@ -415,14 +412,14 @@ impl DescriptorHeapHandle {
         #[cfg(feature = "validation")]
         {
             if src.is_shader_visible() {
-                return Err(Error::InvalidParameter("Cannot copy from a shader visible heap".to_onca_string()));
+                return Err(Error::InvalidParameter("Cannot copy from a shader visible heap".to_string()));
             }
 
             let num_dst_descriptors = dst_ranges.iter().map(|range| range.count).sum::<u32>();
             let num_src_descriptors = src_ranges.iter().map(|range| range.count).sum::<u32>();
 
             if num_src_descriptors != num_dst_descriptors {
-                return Err(Error::InvalidParameter("Number of source descriptors to copy does not match destination descriptors".to_onca_string()))
+                return Err(Error::InvalidParameter("Number of source descriptors to copy does not match destination descriptors".to_string()))
             }
         }
 
@@ -436,7 +433,7 @@ impl DescriptorHeapHandle {
         #[cfg(feature = "validation")]
         {
             if src_heap.is_shader_visible() {
-                return Err(Error::InvalidParameter("Cannot copy from a shader visible heap".to_onca_string()));
+                return Err(Error::InvalidParameter("Cannot copy from a shader visible heap".to_string()));
             }
         }
         unsafe { self.handle.copy_single(dst_index, &src_heap, src.index) }
@@ -448,7 +445,7 @@ impl DescriptorHeapHandle {
         #[cfg(feature = "validation")]
         {
             if self.desc.heap_type != DescriptorHeapType::Samplers {
-                return Err(Error::InvalidParameter("Can only write a sampler to a sampler descriptor heap".to_onca_string()));
+                return Err(Error::InvalidParameter("Can only write a sampler to a sampler descriptor heap".to_string()));
             }
             if index > self.desc.max_descriptors {
                 return Err(Error::DescriptorOutOfRange { index, max: self.desc.max_descriptors });
@@ -464,7 +461,7 @@ impl DescriptorHeapHandle {
         #[cfg(feature = "validation")]
         {
             if self.desc.heap_type != DescriptorHeapType::Resources {
-                return Err(Error::InvalidParameter("Can only write a sampled texture view to a resource descriptor heap".to_onca_string()));
+                return Err(Error::InvalidParameter("Can only write a sampled texture view to a resource descriptor heap".to_string()));
             }
             if index > self.desc.max_descriptors {
                 return Err(Error::DescriptorOutOfRange { index, max: self.desc.max_descriptors });
@@ -480,7 +477,7 @@ impl DescriptorHeapHandle {
         #[cfg(feature = "validation")]
         {
             if self.desc.heap_type != DescriptorHeapType::Resources {
-                return Err(Error::InvalidParameter("Can only write a storage texture view to a resource descriptor heap".to_onca_string()));
+                return Err(Error::InvalidParameter("Can only write a storage texture view to a resource descriptor heap".to_string()));
             }
             if index > self.desc.max_descriptors {
                 return Err(Error::DescriptorOutOfRange { index, max: self.desc.max_descriptors });
@@ -498,7 +495,7 @@ impl DescriptorHeapHandle {
             range.validate(buffer)?;
 
             if range.size() % CONSTANT_BUFFER_SIZE_ALIGN.alignment() != 0 {
-                return Err(Error::InvalidParameter(onca_format!("Constant buffer size needs to be a multiple of {}, size: {}", CONSTANT_BUFFER_SIZE_ALIGN.alignment(), range.size())));
+                return Err(Error::InvalidParameter(format!("Constant buffer size needs to be a multiple of {}, size: {}", CONSTANT_BUFFER_SIZE_ALIGN.alignment(), range.size())));
             }
         }
 
@@ -558,7 +555,7 @@ impl DescriptorHeapHandle {
         {
             desc.validate(buffer)?;
             if counter_offset & 0x3 != 0 {
-                return Err(Error::InvalidParameter(onca_format!("An append buffer's `counter_offset` must be a multiple of 4: {counter_offset}")));
+                return Err(Error::InvalidParameter(format!("An append buffer's `counter_offset` must be a multiple of 4: {counter_offset}")));
             }
         }
 
@@ -574,7 +571,7 @@ impl DescriptorHeapHandle {
         {
             desc.validate(buffer)?;
             if counter_offset & 0x3 != 0 {
-                return Err(Error::InvalidParameter(onca_format!("A consume buffer's `counter_offset` must be a multiple of 4: {counter_offset}")));
+                return Err(Error::InvalidParameter(format!("A consume buffer's `counter_offset` must be a multiple of 4: {counter_offset}")));
             }
         }
 

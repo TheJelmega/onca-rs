@@ -1,8 +1,11 @@
-use core::{ffi::c_void, ptr::null};
+use std::{
+    ffi::c_void,
+    ptr::null,
+    fmt::Write,
+};
 
 use onca_core::{
-    prelude::*,
-    io::Write
+    prelude::*
 };
 use onca_logging::{get_logger, LogCategory, LogLevel, log_location};
 use onca_ral::Settings;

@@ -1,4 +1,5 @@
 use core::{ffi::c_void, cell::Cell};
+use std::sync::{Weak, Arc};
 
 use cfg_if::cfg_if;
 
@@ -15,7 +16,7 @@ pub struct SwapChain {
     pub surface:                 vk::SurfaceKHR,
     pub swapchain:               Cell<vk::SwapchainKHR>,
 
-    pub device:                  AWeak<ash::Device>,
+    pub device:                  Weak<ash::Device>,
 
     pub ash_surface:             khr::Surface,
     pub ash_swapchain:           khr::Swapchain,
@@ -270,7 +271,7 @@ impl SwapChain {
         
                 let instance = match device.instance.upgrade() {
                     Some(instance) => instance,
-                    None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_onca_string())),
+                    None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_string())),
                 };
                 
                 let win32_surface = khr::Win32Surface::new(&instance.entry, &instance.instance);
@@ -284,7 +285,7 @@ impl SwapChain {
 impl ral::SwapChainInterface for SwapChain {
     unsafe fn present(&self, present_mode: ral::PresentMode, back_buffer_idx: u32, queue: &ral::CommandQueueHandle, present_info: &ral::PresentInfo<'_>) -> ral::Result<()> {
         scoped_alloc!(UseAlloc::TlsTemp);
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         let queue = queue.handle.as_concrete_type::<CommandQueue>().queue;
 
@@ -360,7 +361,7 @@ impl ral::SwapChainInterface for SwapChain {
     }
 
     unsafe fn acquire_next_backbuffer(&self) -> ral::Result<u8> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         let acquire_info = vk::AcquireNextImageInfoKHR::builder()
             .swapchain(self.swapchain.get())
@@ -388,7 +389,7 @@ impl ral::SwapChainInterface for SwapChain {
         let phys_dev = device.get_physical_device();
         let vk_phys_dev = phys_dev.handle.as_concrete_type::<PhysicalDevice>();
         let vk_device = device.interface().as_concrete_type::<Device>();
-        let instance = AWeak::upgrade(&vk_device.instance).unwrap();
+        let instance = Weak::upgrade(&vk_device.instance).unwrap();
 
         let capabilities = self.ash_surface.get_physical_device_surface_capabilities(vk_phys_dev.phys_dev, self.surface).map_err(|err| err.to_ral_error())?;
 
@@ -452,7 +453,7 @@ impl ral::SwapChainInterface for SwapChain {
 impl Drop for SwapChain {
     fn drop(&mut self) {
         unsafe {
-            let device = AWeak::upgrade(&self.device).unwrap();
+            let device = Weak::upgrade(&self.device).unwrap();
             device.destroy_fence(self.acquire_fence, self.alloc_callbacks.get_some_vk_callbacks());
             device.destroy_semaphore(self.present_wait_semaphore, self.alloc_callbacks.get_some_vk_callbacks());
             device.destroy_command_pool(self.resize_command_pool, self.alloc_callbacks.get_some_vk_callbacks());

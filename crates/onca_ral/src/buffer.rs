@@ -1,6 +1,6 @@
 use core::{mem::ManuallyDrop, num::NonZeroU64};
 
-use onca_core::{prelude::*, sync::{Mutex, RwLock, RwLockUpgradableReadGuard}, collections::HashMap};
+use onca_core::{prelude::*, sync::{Mutex, RwLock, RwLockUpgradableReadGuard}};
 use onca_core_macros::flags;
 use onca_logging::log_error;
 
@@ -128,12 +128,12 @@ impl BufferHandle {
         #[cfg(feature = "validation")]
         {
             if offset >= self.desc.size {
-                return Err(Error::InvalidParameter(onca_format!("Memory map offset out of range, offset: {offset}, buffer size: {}", self.desc.size)));
+                return Err(Error::InvalidParameter(format!("Memory map offset out of range, offset: {offset}, buffer size: {}", self.desc.size)));
             }
             
             let mut validation = self.validation.lock();
             if validation.is_mapped {
-                return Err(Error::InvalidParameter("Buffer is already mapped".to_onca_string()));
+                return Err(Error::InvalidParameter("Buffer is already mapped".to_string()));
             }
             validation.is_mapped = true;
         }
@@ -234,10 +234,10 @@ impl BufferRange {
         #[cfg(feature = "validation")]
         {
             if self.offset >= buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The buffer range's offset ({}) cannot be the same or exceed the buffer's lenght ({})", self.offset, buffer.size())));
+                return Err(Error::InvalidParameter(format!("The buffer range's offset ({}) cannot be the same or exceed the buffer's lenght ({})", self.offset, buffer.size())));
             }
             if self.offset + self.size() > buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The buffer range's end (offset + size) ({} + {} = {}) goes past the end of the buffer's lenght ({})", self.offset, self.size(), self.offset + self.size(), buffer.size())));
+                return Err(Error::InvalidParameter(format!("The buffer range's end (offset + size) ({} + {} = {}) goes past the end of the buffer's lenght ({})", self.offset, self.size(), self.offset + self.size(), buffer.size())));
             }
         }
         Ok(())
@@ -297,10 +297,10 @@ impl StructuredBufferViewDesc {
         {
             let start = self.offset * self.elem_size();
             if start >= buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The structured buffer's `offset` ({start}) cannot be the same or exceed the buffer's lenght ({})", buffer.size())));
+                return Err(Error::InvalidParameter(format!("The structured buffer's `offset` ({start}) cannot be the same or exceed the buffer's lenght ({})", buffer.size())));
             }
             if start + self.elem_size() * self.count() > buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The structured buffer's range `((offset + element size) * count)` ({start} + {} * {} = {}) goes past the end of the buffer's lenght ({})",
+                return Err(Error::InvalidParameter(format!("The structured buffer's range `((offset + element size) * count)` ({start} + {} * {} = {}) goes past the end of the buffer's lenght ({})",
                     self.elem_size(),
                     self.count(),
                     self.offset + self.elem_size() * self.count(),
@@ -359,10 +359,10 @@ impl TexelBufferViewDesc {
         #[cfg(feature = "validation")]
         {
             if self.offset >= buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The buffer range's offset ({}) cannot be the same or exceed the buffer's lenght ({})", self.offset, buffer.size())));
+                return Err(Error::InvalidParameter(format!("The buffer range's offset ({}) cannot be the same or exceed the buffer's lenght ({})", self.offset, buffer.size())));
             }
             if self.offset + self.size() > buffer.size() {
-                return Err(Error::InvalidParameter(onca_format!("The buffer range's end (offset + size) ({} + {} = {}) goes past the end of the buffer's lenght ({})", self.offset, self.size(), self.offset + self.size(), buffer.size())));
+                return Err(Error::InvalidParameter(format!("The buffer range's end (offset + size) ({} + {} = {}) goes past the end of the buffer's lenght ({})", self.offset, self.size(), self.offset + self.size(), buffer.size())));
             }
         }
         Ok(())

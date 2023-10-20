@@ -180,12 +180,12 @@ impl FormatComponents {
     /// Get the plane index from an aspect
     pub fn get_plane_from_aspect(self, aspect: TextureAspect) -> crate::Result<u8> {
         if !aspect.bits().is_power_of_two() {
-            return Err(crate::Error::Format(onca_format!("Cannot get a plane for multiple aspects: {self}")))
+            return Err(crate::Error::Format(format!("Cannot get a plane for multiple aspects: {self}")))
         }
 
         let format_aspect = self.aspect();
         if !format_aspect.contains(aspect) {
-            return Err(Error::Format(onca_format!("format '{self}' does not support the '{aspect}' aspect")));
+            return Err(Error::Format(format!("format '{self}' does not support the '{aspect}' aspect")));
         }
 
         // Stencil planes are interpreted as being on plane 1
@@ -195,7 +195,7 @@ impl FormatComponents {
     /// Get the aspect corespronding to a plane
     pub fn get_aspect_from_plane(self, plane_idx: u8) -> crate::Result<TextureAspect> {
         if plane_idx >= self.num_planes() {
-            return Err(crate::Error::Format(onca_format!("Plane index `{plane_idx}` out of range, only {} planes are available", self.num_planes())))
+            return Err(crate::Error::Format(format!("Plane index `{plane_idx}` out of range, only {} planes are available", self.num_planes())))
         }
 
         let aspect = self.aspect();
@@ -490,12 +490,12 @@ impl Format {
 
     pub fn get_plane_from_aspect(self, aspect: TextureAspect) -> crate::Result<u8> {
         if !aspect.bits().is_power_of_two() {
-            return Err(crate::Error::Format(onca_format!("Cannot get a plane for multiple aspects: {self}")))
+            return Err(crate::Error::Format(format!("Cannot get a plane for multiple aspects: {self}")))
         }
 
         let format_aspect = self.aspect();
         if !format_aspect.contains(aspect) {
-            return Err(Error::Format(onca_format!("format '{self}' does not support the '{aspect}' aspect")));
+            return Err(Error::Format(format!("format '{self}' does not support the '{aspect}' aspect")));
         }
 
         // Stencil planes are interpreted as being on plane 1

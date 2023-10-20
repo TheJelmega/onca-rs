@@ -2,11 +2,11 @@ use core::{
     ops::{Deref, DerefMut},
     slice
 };
+use std::sync::Arc;
 use crate::{
     collections::DynArray,
-    mem::Arc,
     sync::Mutex,
-    alloc::Layout
+    alloc::{Layout, GetAllocatorId}
 };
 
 pub type DynEventListenerRef<Event> = EventListenerRef<dyn EventListener<Event>>;
@@ -106,12 +106,6 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
         self.listeners.is_empty()
     }
     
-    #[inline]
-    #[must_use]
-    pub fn layout(&self) -> Layout {
-        self.listeners.layout()
-    }
-
     #[inline]
     #[must_use]
     pub fn allocator_id(&self) -> u16 {

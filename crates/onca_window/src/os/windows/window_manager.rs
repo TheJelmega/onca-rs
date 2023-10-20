@@ -1,8 +1,9 @@
-use core::mem;
+use std::{
+    mem,
+    fmt::Write, collections::HashMap,
+};
 use onca_core::{
     prelude::*,
-    collections::HashMap,
-    io::Write,
     sys::get_app_handle,
 };
 

@@ -1,4 +1,4 @@
-use onca_core::{prelude::*, onca_format};
+use onca_core::prelude::*;
 use onca_core_macros::flags;
 
 use crate::{
@@ -69,7 +69,7 @@ impl PipelineLayoutDesc {
             let num_entries = num_tables + num_inline + has_static_samplers as u32;
 
             if num_entries + has_static_samplers as u32 > constants::MAX_PIPELINE_BOUND_DESCRIPTORS {
-                return Err(Error::InvalidParameter(onca_format!(
+                return Err(Error::InvalidParameter(format!(
                     "Too many pipeline layout entries ('{num_entries}'), only {} bindings are allowed", 
                     constants::MAX_PIPELINE_BOUND_DESCRIPTORS
                 ) ));
@@ -91,26 +91,26 @@ impl PipelineLayoutDesc {
                     String::new()
                 } else {
                     needs_comma = true;
-                    onca_format!("{} descriptor tables ({} slots)", num_tables, num_tables)
+                    format!("{} descriptor tables ({} slots)", num_tables, num_tables)
                 };
                 let inline_err = if num_inline == 0 {
                     String::new()
                 } else {
                     needs_comma = true;
-                    onca_format!("{}{} inline descriptors ({} slots, 2 slots/descriptor)", if needs_comma { ", " } else { "" }, num_inline, num_inline * 2)
+                    format!("{}{} inline descriptors ({} slots, 2 slots/descriptor)", if needs_comma { ", " } else { "" }, num_inline, num_inline * 2)
                 };
                 let constants_err = if num_constants == 0 {
                     String::new()
                 } else {
-                    onca_format!("{}{} 32-bit constants ({} slots)", if needs_comma { ", " } else { "" }, num_constants, num_constants)
+                    format!("{}{} 32-bit constants ({} slots)", if needs_comma { ", " } else { "" }, num_constants, num_constants)
                 };
                 let static_sampler_err = if has_static_samplers {
-                    ", static samplers (1 slot)".to_onca_string()
+                    ", static samplers (1 slot)".to_string()
                 } else {
                     String::new()
                 };
 
-                return Err(Error::InvalidParameter(onca_format!(
+                return Err(Error::InvalidParameter(format!(
                     "Too many layout slots used ({used_slots}), only {} slots are allowed. Slots used by:{}{}{}{}",
                     Self::MAX_SLOTS,
                     table_err,

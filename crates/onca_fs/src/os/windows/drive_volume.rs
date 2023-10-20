@@ -258,11 +258,11 @@ fn get_volume_info_internal(mut path: PathBuf) -> Option<VolumeInfo> {
 
         Some(VolumeInfo {
             roots,
-            name: String::from_utf8_lossy(utils::null_terminate_slice(&name)),
+            name: String::from_utf8_lossy(utils::null_terminate_slice(&name)).into(),
             serial,
             max_comp_len,
             fs_flags,
-            fs_name: String::from_utf8_lossy(utils::null_terminate_slice(&fs_name)),
+            fs_name: String::from_utf8_lossy(utils::null_terminate_slice(&fs_name)).into(),
         })
     }
 }

@@ -31,6 +31,10 @@
 
 #![feature(local_key_cell_methods)]
 
+// Used in containers
+#![feature(vec_split_at_spare)]
+#![feature(can_vector)]
+
 
 // General
 #![allow(incomplete_features)]
@@ -53,7 +57,6 @@ pub mod sync;
 pub mod mem;
 pub mod collections;
 pub mod strings;
-
 pub mod io;
 
 pub mod time;

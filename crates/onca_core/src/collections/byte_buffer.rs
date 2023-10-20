@@ -3,33 +3,32 @@ use core::{
     mem::MaybeUninit,
     hash::Hash, slice::{SliceIndex, self},
 };
+use std::{vec, io};
 
-use crate::{alloc::Layout, mem::HeapPtr, io};
+use crate::alloc::{Layout, GetAllocatorId};
 
 use super::{
-    DynArray,
     bitset::IntoIter,
-    dyn_array,
     impl_slice_partial_eq,
 };
 
 /// A buffer containing data as an untyped block of bytes
 #[derive(Default, Debug)]
-pub struct ByteBuffer(DynArray<u8>);
+pub struct ByteBuffer(Vec<u8>);
 
 impl ByteBuffer {
     /// Create a new [`ByteBuffer`]
     #[must_use]
     #[inline]
     pub fn new() -> Self {
-        Self(DynArray::new())
+        Self(Vec::new())
     }
 
     /// Create a new [`ByteBuffer`] with a given capacity
     #[must_use]
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(DynArray::with_capacity(capacity))
+        Self(Vec::with_capacity(capacity))
     }
 
     /// Get the [`ByteBuffer`]'s capacity
@@ -138,7 +137,7 @@ impl ByteBuffer {
 
     /// Drain a range of bytes from the [`ByteBuffer`]
     #[inline]
-    pub fn drain<R: RangeBounds<usize>>(&mut self, range: R) -> dyn_array::Drain<'_, u8> {
+    pub fn drain<R: RangeBounds<usize>>(&mut self, range: R) -> vec::Drain<'_, u8> {
         self.0.drain(range)
     }
 
@@ -198,18 +197,11 @@ impl ByteBuffer {
 
     /// Replace a range of bytes in the [`ByteBuffer`] with a given range of data
     #[inline]
-    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> dyn_array::Splice<'_, I::IntoIter> where
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> vec::Splice<'_, I::IntoIter> where
         R: RangeBounds<usize>,
         I : IntoIterator<Item = u8>
     {
         self.0.splice(range, replace_with)
-    }
-
-    /// Get the layout of the [`ByteBuffer`]
-    #[inline]
-    #[must_use]
-    pub fn layout(&self) -> Layout {
-        self.0.layout()
     }
 
     /// Get the id of the allocator used by the [`ByteBuffer`]
@@ -221,8 +213,8 @@ impl ByteBuffer {
 
     /// Convert the [`ByteBuffer`] into a `HeapPtr` with a slice
     #[inline]
-    pub fn into_heap_slice(self) -> HeapPtr<[u8]> {
-        self.0.into_heap_slice()
+    pub fn into_heap_slice(self) -> Box<[u8]> {
+        self.0.into_boxed_slice()
     }
 
     /// Pad the [`ByteBuffer`] with `0` to have a length that's a multiple of a given base
@@ -299,7 +291,7 @@ impl FromIterator<u8> for ByteBuffer {
 
 impl IntoIterator for ByteBuffer {
     type Item = u8;
-    type IntoIter = dyn_array::IntoIter<u8>;
+    type IntoIter = vec::IntoIter<u8>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {

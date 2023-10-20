@@ -1,6 +1,7 @@
+use std::fmt::Write;
 use onca_core::{
     prelude::*,
-    io::{self, Write}
+    io
 };
 use onca_core_macros::flags;
 
@@ -32,23 +33,23 @@ impl TerminalColor {
     /// Get an escape code representing the terminal foreground color
     pub fn fore_to_escape_code(&self) -> String {
         match self {
-            TerminalColor::Black           => "\x1B[30m".to_onca_string(),
-            TerminalColor::DarkRed         => "\x1B[31m".to_onca_string(),
-            TerminalColor::DarkGreen       => "\x1B[32m".to_onca_string(),
-            TerminalColor::DarkYellow      => "\x1B[33m".to_onca_string(),
-            TerminalColor::DarkBlue        => "\x1B[34m".to_onca_string(),
-            TerminalColor::DarkMagenta     => "\x1B[35m".to_onca_string(),
-            TerminalColor::DarkCyan        => "\x1B[36m".to_onca_string(),
-            TerminalColor::DarkGray        => "\x1B[37m".to_onca_string(),
-            TerminalColor::Gray            => "\x1B[90m".to_onca_string(),
-            TerminalColor::Red             => "\x1B[91m".to_onca_string(),
-            TerminalColor::Green           => "\x1B[92m".to_onca_string(),
-            TerminalColor::Yellow          => "\x1B[93m".to_onca_string(),
-            TerminalColor::Blue            => "\x1B[94m".to_onca_string(),
-            TerminalColor::Magenta         => "\x1B[95m".to_onca_string(),
-            TerminalColor::Cyan            => "\x1B[96m".to_onca_string(),
-            TerminalColor::White           => "\x1B[97m".to_onca_string(),
-            TerminalColor::Custom(r, g, b) => onca_format!("\x1B[38;2;{r};{g};{b}m"),
+            TerminalColor::Black           => "\x1B[30m".to_string(),
+            TerminalColor::DarkRed         => "\x1B[31m".to_string(),
+            TerminalColor::DarkGreen       => "\x1B[32m".to_string(),
+            TerminalColor::DarkYellow      => "\x1B[33m".to_string(),
+            TerminalColor::DarkBlue        => "\x1B[34m".to_string(),
+            TerminalColor::DarkMagenta     => "\x1B[35m".to_string(),
+            TerminalColor::DarkCyan        => "\x1B[36m".to_string(),
+            TerminalColor::DarkGray        => "\x1B[37m".to_string(),
+            TerminalColor::Gray            => "\x1B[90m".to_string(),
+            TerminalColor::Red             => "\x1B[91m".to_string(),
+            TerminalColor::Green           => "\x1B[92m".to_string(),
+            TerminalColor::Yellow          => "\x1B[93m".to_string(),
+            TerminalColor::Blue            => "\x1B[94m".to_string(),
+            TerminalColor::Magenta         => "\x1B[95m".to_string(),
+            TerminalColor::Cyan            => "\x1B[96m".to_string(),
+            TerminalColor::White           => "\x1B[97m".to_string(),
+            TerminalColor::Custom(r, g, b) => format!("\x1B[38;2;{r};{g};{b}m"),
         }
     }
 
@@ -77,23 +78,23 @@ impl TerminalColor {
     /// Get an escape code representing the terminal foreground color
     pub fn back_to_escape_code(&self) -> String {
         match self {
-            TerminalColor::Black           => "\x1B[40m".to_onca_string(),
-            TerminalColor::DarkRed         => "\x1B[41m".to_onca_string(),
-            TerminalColor::DarkGreen       => "\x1B[42m".to_onca_string(),
-            TerminalColor::DarkYellow      => "\x1B[43m".to_onca_string(),
-            TerminalColor::DarkBlue        => "\x1B[44m".to_onca_string(),
-            TerminalColor::DarkMagenta     => "\x1B[45m".to_onca_string(),
-            TerminalColor::DarkCyan        => "\x1B[46m".to_onca_string(),
-            TerminalColor::DarkGray        => "\x1B[47m".to_onca_string(),
-            TerminalColor::Gray            => "\x1B[100m".to_onca_string(),
-            TerminalColor::Red             => "\x1B[101m".to_onca_string(),
-            TerminalColor::Green           => "\x1B[102m".to_onca_string(),
-            TerminalColor::Yellow          => "\x1B[103m".to_onca_string(),
-            TerminalColor::Blue            => "\x1B[104m".to_onca_string(),
-            TerminalColor::Magenta         => "\x1B[105m".to_onca_string(),
-            TerminalColor::Cyan            => "\x1B[106m".to_onca_string(),
-            TerminalColor::White           => "\x1B[107m".to_onca_string(),
-            TerminalColor::Custom(r, g, b) => onca_format!("\x1B[48;2;{r};{g};{b}m"),
+            TerminalColor::Black           => "\x1B[40m".to_string(),
+            TerminalColor::DarkRed         => "\x1B[41m".to_string(),
+            TerminalColor::DarkGreen       => "\x1B[42m".to_string(),
+            TerminalColor::DarkYellow      => "\x1B[43m".to_string(),
+            TerminalColor::DarkBlue        => "\x1B[44m".to_string(),
+            TerminalColor::DarkMagenta     => "\x1B[45m".to_string(),
+            TerminalColor::DarkCyan        => "\x1B[46m".to_string(),
+            TerminalColor::DarkGray        => "\x1B[47m".to_string(),
+            TerminalColor::Gray            => "\x1B[100m".to_string(),
+            TerminalColor::Red             => "\x1B[101m".to_string(),
+            TerminalColor::Green           => "\x1B[102m".to_string(),
+            TerminalColor::Yellow          => "\x1B[103m".to_string(),
+            TerminalColor::Blue            => "\x1B[104m".to_string(),
+            TerminalColor::Magenta         => "\x1B[105m".to_string(),
+            TerminalColor::Cyan            => "\x1B[106m".to_string(),
+            TerminalColor::White           => "\x1B[107m".to_string(),
+            TerminalColor::Custom(r, g, b) => format!("\x1B[48;2;{r};{g};{b}m"),
         }
     }
 
@@ -141,11 +142,11 @@ impl CursorMove {
     /// Get an escape code representing the terminal cursor move
     pub fn to_escape_code(&self) -> String {
         match self {
-            CursorMove::Up(n)          => onca_format!("\0x1B[{n}A"),
-            CursorMove::Down(n)        => onca_format!("\0x1B[{n}B"),
-            CursorMove::Forward(n)     => onca_format!("\0x1B[{n}C"),
-            CursorMove::Backward(n)    => onca_format!("\0x1B[{n}D"),
-            CursorMove::Position(x, y) => onca_format!("\0x1B[{y};{x}H"),
+            CursorMove::Up(n)          => format!("\0x1B[{n}A"),
+            CursorMove::Down(n)        => format!("\0x1B[{n}B"),
+            CursorMove::Forward(n)     => format!("\0x1B[{n}C"),
+            CursorMove::Backward(n)    => format!("\0x1B[{n}D"),
+            CursorMove::Position(x, y) => format!("\0x1B[{y};{x}H"),
         }
     }
 
@@ -184,13 +185,13 @@ impl CursorShape {
     /// Get an escape code representing the terminal cursor move
     pub fn to_escape_code(&self) -> String {
         match self {
-            CursorShape::User              => onca_format!("\x1B[0 q"),
-            CursorShape::BlinkingBlock     => onca_format!("\x1B[1 q"),
-            CursorShape::SteadyBlock       => onca_format!("\x1B[2 q"),
-            CursorShape::BlinkingUnderline => onca_format!("\x1B[3 q"),
-            CursorShape::SteadyUnderline   => onca_format!("\x1B[4 q"),
-            CursorShape::BlinkingBar       => onca_format!("\x1B[5 q"),
-            CursorShape::SteadyBar         => onca_format!("\x1B[6 q"),
+            CursorShape::User              => format!("\x1B[0 q"),
+            CursorShape::BlinkingBlock     => format!("\x1B[1 q"),
+            CursorShape::SteadyBlock       => format!("\x1B[2 q"),
+            CursorShape::BlinkingUnderline => format!("\x1B[3 q"),
+            CursorShape::SteadyUnderline   => format!("\x1B[4 q"),
+            CursorShape::BlinkingBar       => format!("\x1B[5 q"),
+            CursorShape::SteadyBar         => format!("\x1B[6 q"),
         }
     }
 
@@ -271,11 +272,11 @@ impl TextMod {
     /// Get an escape code representing the terminal text  mod
     pub fn to_escape_code(&self) -> String {
         match self {
-            TextMod::Insert(n)     => onca_format!("\x1B[{n}@"),
-            TextMod::Delete(n)     => onca_format!("\x1B[{n}P"),
-            TextMod::Erase(n)      => onca_format!("\x1B[{n}X"),
-            TextMod::InsertLine(n) => onca_format!("\x1B[{n}L"),
-            TextMod::DeleteLine(n) => onca_format!("\x1B[{n}M"),
+            TextMod::Insert(n)     => format!("\x1B[{n}@"),
+            TextMod::Delete(n)     => format!("\x1B[{n}P"),
+            TextMod::Erase(n)      => format!("\x1B[{n}X"),
+            TextMod::InsertLine(n) => format!("\x1B[{n}L"),
+            TextMod::DeleteLine(n) => format!("\x1B[{n}M"),
         }
     }
 
@@ -306,17 +307,17 @@ impl TextFormatting {
     /// Get an escape code representing the terminal text formatting
     pub fn to_escape_code(&self) -> String {
         let mut string = String::new();
-        if self.is_set(TextFormatting::Bold) {
+        if self.contains(TextFormatting::Bold) {
             _ = write!(string, "\x1B[1m")
         } else {
             _ = write!(string, "\x1B[22m")
         };
-        if self.is_set(TextFormatting::Underline) {
+        if self.contains(TextFormatting::Underline) {
             _ = write!(string, "\x1B[4m")
         } else {
             _ = write!(string, "\x1B[24m")
         };
-        if self.is_set(TextFormatting::Negative) {
+        if self.contains(TextFormatting::Negative) {
             _ = write!(string, "\x1B[7m")
         } else {
             _ = write!(string, "\x1B[27m")
@@ -326,17 +327,17 @@ impl TextFormatting {
 
     /// Write the terminal text formatting escape code to an `io::Write`
     pub fn write_escape_code(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        if self.is_set(TextFormatting::Bold) {
+        if self.contains(TextFormatting::Bold) {
             write!(writer, "\x1B[1m")
         } else {
             write!(writer, "\x1B[22m")
         }?;
-        if self.is_set(TextFormatting::Underline) {
+        if self.contains(TextFormatting::Underline) {
             write!(writer, "\x1B[4m")
         } else {
             write!(writer, "\x1B[24m")
         }?;
-        if self.is_set(TextFormatting::Negative) {
+        if self.contains(TextFormatting::Negative) {
             write!(writer, "\x1B[7m")
         } else {
             write!(writer, "\x1B[27m")

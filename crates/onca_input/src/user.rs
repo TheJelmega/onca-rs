@@ -1,4 +1,5 @@
 use core::mem::take;
+use std::sync::{Weak, Arc};
 use onca_core::{
     prelude::*,
     sync::Mutex,
@@ -15,7 +16,7 @@ pub struct User {
     /// Control set
     control_set         : Option<ControlSet>,
     /// Trigger results for the previous frame
-    prev_trigger_res    : DynArray<(AWeak<Mutex<Action>>, TriggerResult)>,
+    prev_trigger_res    : DynArray<(Weak<Mutex<Action>>, TriggerResult)>,
     /// Disconnected control set
     disconnected_scheme : ControlSchemeID,
     /// Currently held devices (re-used when reconnecting)
@@ -139,7 +140,7 @@ impl User {
     }
 
     pub(crate) fn get_previous_action_trigger_result(&self, action: &Arc<Mutex<Action>>) -> TriggerResult {
-        match self.prev_trigger_res.iter().position(|val| AWeak::ptr_eq(&val.0, &Arc::downgrade(action))) {
+        match self.prev_trigger_res.iter().position(|val| Weak::ptr_eq(&val.0, &Arc::downgrade(action))) {
             Some(idx) => self.prev_trigger_res[idx].1,
             None => TriggerResult::Idle,
         }

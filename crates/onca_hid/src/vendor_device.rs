@@ -111,7 +111,7 @@ impl VendorProduct {
 
     pub fn get_vendor_string(&self) -> Option<String> {
         match UsbVendor::new(self.vendor) {
-            Some(vendor) => Some(vendor.name.to_onca_string()),
+            Some(vendor) => Some(vendor.name.to_string()),
             None => None,
         }
     }
@@ -119,7 +119,7 @@ impl VendorProduct {
     pub fn get_device_string(&self) -> Option<String> {
         match UsbVendor::new(self.vendor) {
             Some(vendor) => match vendor.get_device(self.device) {
-                Some(device) => Some(device.name.to_onca_string()),
+                Some(device) => Some(device.name.to_string()),
                 None => None,
             },
             None => None,

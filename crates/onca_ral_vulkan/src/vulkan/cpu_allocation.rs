@@ -1,9 +1,9 @@
 use core::{ptr::null_mut, ffi::c_void, mem::ManuallyDrop};
+use std::{collections::HashMap, sync::Arc};
 
 use onca_core::{
     prelude::*,
     alloc::{Layout, Allocation},
-    collections::HashMap,
     mem::{AllocInitState, get_memory_manager},
     sync::Mutex
 };
@@ -40,7 +40,7 @@ impl AllocationCallbacks {
             })),
         };
 
-        this.callbacks.p_user_data = unsafe { Arc::data_ptr(&this.user_data) as *mut c_void };
+        this.callbacks.p_user_data = unsafe { Arc::as_ptr(&this.user_data) as *mut c_void };
         this
     }
 

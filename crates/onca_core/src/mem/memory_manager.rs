@@ -1,14 +1,14 @@
 use core::{
     cell::{UnsafeCell, Cell},
     ptr::{copy_nonoverlapping, write_bytes, null},
-    borrow::BorrowMut
+    borrow::BorrowMut, sync::atomic::AtomicUsize
 };
 use crate::{
     alloc::{
         Allocator, Allocation, Layout, UseAlloc, NUM_RESERVED_ALLOC_IDS, get_active_alloc, ScopedAlloc,
         primitives::{Mallocator, FreelistAllocator},
     },
-    sync::{RwLock, Mutex}, MiB, collections::HashMap
+    sync::{RwLock, Mutex}, MiB
 };
 
 thread_local! {

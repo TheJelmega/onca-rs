@@ -6,7 +6,6 @@ use core::fmt;
 use onca_core::{
     alloc::ScopedAlloc,
     event_listener::{EventListenerArray, EventListenerRef, EventListener},
-    mem::HeapPtr,
     prelude::*,
     sync::Mutex,
 };
@@ -466,7 +465,7 @@ impl Window {
     pub(crate) fn create(
         manager: &mut WindowManager,
         settings: WindowSettings,
-    ) -> Option<HeapPtr<Window>> {
+    ) -> Option<Box<Window>> {
         os::window::create(manager, settings)
     }
 

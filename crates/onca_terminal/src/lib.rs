@@ -49,9 +49,11 @@ impl Terminal {
                 buf.reserve(needed_size - buf.capacity());
             }
 
-            _ = fore.write_fore_escape_code(&mut buf);
-            _ = back.write_back_escape_code(&mut buf);
-            _ = formatting.write_escape_code(&mut buf);
+
+            // SAFETY: We only write valid UTF-8, so we can safely write to the buffer as if it was a string
+            _ = fore.write_fore_escape_code(unsafe { buf.as_mut_vec() });
+            _ = back.write_back_escape_code(unsafe { buf.as_mut_vec() });
+            _ = formatting.write_escape_code(unsafe { buf.as_mut_vec() });
             buf.push_str(text);
             buf.push_str("\x1B[0m");
             Self::write(&buf)

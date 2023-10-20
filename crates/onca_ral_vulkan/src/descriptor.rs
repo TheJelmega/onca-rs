@@ -1,4 +1,5 @@
 use core::mem::ManuallyDrop;
+use std::sync::{Weak, Arc};
 
 use onca_core::{prelude::*, sync::Mutex};
 use onca_ral as ral;
@@ -23,7 +24,7 @@ pub struct DescriptorTableLayout {
     pub handle:          vk::DescriptorSetLayout,
     pub size:            u64,
     pub offsets:         DynArray<u64>,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks
 }
 
@@ -119,7 +120,7 @@ impl ral::DescriptorTableLayoutInterface for DescriptorTableLayout {
 
 impl Drop for DescriptorTableLayout {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { device.destroy_descriptor_set_layout(self.handle, self.alloc_callbacks.get_some_vk_callbacks()) };
     }
 }
@@ -137,7 +138,7 @@ pub enum DescriptorHeapBuffer {
         mapped_memory: Mutex<ral::MappedMemory>,
     },
     Cpu {
-        heap:          Mutex<HeapPtr<[u8]>>,
+        heap:          Mutex<Box<[u8]>>,
     }
 }
 
@@ -184,14 +185,12 @@ impl DescriptorHeap {
                 mapped_memory: Mutex::new(mapped_memory),
             }
         } else {
-            let uninit_buffer = HeapPtr::new_uninit_slice(heap_size as usize);
-            let mut heap = uninit_buffer.assume_init();
-
-            // PERF: This is only needed when debugging and it isn't expected that this will be that expensive, as it should only be done on creation
-            heap.fill(0);
+            let mut vec = Vec::new();
+            // PERF: This is only needs to be filled with 0 when debugging and it isn't expected that this will be that expensive, as it should only be done on creation
+            vec.resize(heap_size as usize, 0);
 
             DescriptorHeapBuffer::Cpu { 
-                heap: Mutex::new(heap),
+                heap: Mutex::new(vec.into_boxed_slice()),
             }
         };
 

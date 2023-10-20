@@ -232,14 +232,14 @@ unsafe fn get_raw_device_name(handle: HANDLE) -> String {
     let mut device_name_len = 0;
     GetRawInputDeviceInfoA(handle, RIDI_DEVICENAME, None, &mut device_name_len);
     let mut device_name = String::with_capacity(device_name_len as usize);
-    device_name.as_mut_dynarr().set_len(device_name_len as usize);
+    device_name.as_mut_vec().set_len(device_name_len as usize);
 
     let bytes_written = GetRawInputDeviceInfoA(handle, RIDI_DEVICENAME, Some(device_name.as_mut_ptr() as *mut c_void), &mut device_name_len);
     if bytes_written == u32::MAX {
         log_warning!(LOG_INPUT_CAT, "Failed to retrieve device name (err: {:X})", GetLastError().0);
     } else {
         // '- 1', as the last '\0' is included in the written length
-        device_name.as_mut_dynarr().set_len(bytes_written as usize - 1);
+        device_name.as_mut_vec().set_len(bytes_written as usize - 1);
     }
     device_name
 }

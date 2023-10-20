@@ -1,3 +1,5 @@
+use std::sync::{Arc, Weak};
+
 use onca_core::prelude::*;
 use onca_ral as ral;
 use ash::vk;
@@ -7,7 +9,7 @@ use crate::{utils::ToRalError, device::Device, vulkan::AllocationCallbacks};
 
 pub struct Fence {
     pub semaphore:       vk::Semaphore,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -31,12 +33,12 @@ impl Fence {
 
 impl ral::FenceInterface for Fence {
     unsafe fn get_value(&self) -> ral::Result<u64> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         device.get_semaphore_counter_value(self.semaphore).map_err(|err| err.to_ral_error())
     }
 
     unsafe fn signal(&self, value: u64) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let signal_info = vk::SemaphoreSignalInfo::builder()
             .semaphore(self.semaphore)
@@ -46,7 +48,7 @@ impl ral::FenceInterface for Fence {
     }
     
     unsafe fn wait(&self, value: u64, timeout: onca_core::time::Duration) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let semaphores = [self.semaphore];
         let values = [value];
@@ -61,7 +63,7 @@ impl ral::FenceInterface for Fence {
     unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: std::time::Duration) -> ral::Result<()> {
         scoped_alloc!(UseAlloc::TlsTemp);
 
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         let mut semaphores = DynArray::with_capacity(fences.len());
         let mut values = DynArray::with_capacity(fences.len());
@@ -82,7 +84,7 @@ impl ral::FenceInterface for Fence {
 
 impl Drop for Fence {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { device.destroy_semaphore(self.semaphore, self.alloc_callbacks.get_some_vk_callbacks()) };
     }
 }

@@ -653,3 +653,19 @@ impl<T: Copy> SliceToStaticDynArray<T> for [T] {
         StaticDynArray(self.to_imp_dynarray::<StaticBuf<T, N>>())
     }
 }
+
+#[macro_export]
+macro_rules! static_dynarr {
+    () => {
+        $crate::__rust_force_expr!(StaticDynArray::new())
+    };
+    ($($val:expr),* $(,)?) => {
+        $crate::__rust_force_expr!({
+            let mut arr = StaticDynArray::new();
+            $(
+                arr.push($val);
+            )*
+            arr
+        })
+    }
+}

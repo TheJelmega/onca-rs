@@ -25,8 +25,8 @@ use windows::{
 use crate::*;
 
 pub struct OSDevice {
-    read_overlapped  : HeapPtr<OVERLAPPED>,
-    write_overlapped : HeapPtr<OVERLAPPED>
+    read_overlapped  : Box<OVERLAPPED>,
+    write_overlapped : Box<OVERLAPPED>
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -73,7 +73,7 @@ pub fn create_os_device(_handle: &DeviceHandle) -> Option<OSDevice> {
     }
 }
 
-unsafe fn create_overlapped(err_kind: &str) -> Option<HeapPtr<OVERLAPPED>> {
+unsafe fn create_overlapped(err_kind: &str) -> Option<Box<OVERLAPPED>> {
     let event = CreateEventA(None, BOOL(0), BOOL(0), PCSTR(null_mut()));
    let read_event = match event {
        Ok(event) => event,
@@ -83,7 +83,7 @@ unsafe fn create_overlapped(err_kind: &str) -> Option<HeapPtr<OVERLAPPED>> {
        },
    };
 
-   let mut overlapped = HeapPtr::new(OVERLAPPED::default());
+   let mut overlapped = Box::new(OVERLAPPED::default());
    overlapped.hEvent = read_event;
 
    Some(overlapped)
@@ -594,7 +594,7 @@ pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<I
     unsafe {
         let handle = HANDLE(dev.handle.0 as isize);
         let event = dev.os_dev.read_overlapped.hEvent;
-        let overlapped = dev.os_dev.write_overlapped.ptr_mut();
+        let overlapped = &mut *dev.os_dev.write_overlapped;
 
         let report_len = dev.capabilities.input_report_byte_len as u32;
         let mut bytes_read = 0;
@@ -643,7 +643,7 @@ pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Re
     unsafe {
         let handle = HANDLE(dev.handle.0 as isize);
         let event = dev.os_dev.read_overlapped.hEvent;
-        let overlapped = dev.os_dev.write_overlapped.ptr_mut();
+        let overlapped = &mut *dev.os_dev.write_overlapped;
 
         let mut bytes_written = 0;
         let data = report.data.get_data();

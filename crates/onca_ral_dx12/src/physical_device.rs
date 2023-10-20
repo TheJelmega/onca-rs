@@ -47,7 +47,7 @@ macro_rules! check_required_feature {
 macro_rules! check_require_at_least_tier {
     ($src:expr, $iden:ident, $requirement:expr) => {
         if $src.$iden.0 < $requirement.0 {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden.0, stringify!($requirement), $requirement.0)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden.0, stringify!($requirement), $requirement.0)));
         }
     };
 }
@@ -55,12 +55,12 @@ macro_rules! check_require_at_least_tier {
 macro_rules! check_require_at_least_constant {
     ($constant:expr, $requirement:expr) => {
         if $constant < $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
         }
     };
     ($constant:expr, $requirement:expr, $type:ty) => {
         if $constant as $type < $requirement as $type {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -68,7 +68,7 @@ macro_rules! check_require_at_least_constant {
 macro_rules! check_require_at_most_constant {
     ($constant:expr, $requirement:expr) => {
         if $constant > $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -76,7 +76,7 @@ macro_rules! check_require_at_most_constant {
 macro_rules! check_require_alignment {
     ($constant:expr, $requirement:expr) => {
         if MemAlign::new($constant as u64) < $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum alignment of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum alignment of {} ({})", stringify!($constant), $constant, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -160,7 +160,7 @@ pub fn get_physical_devices(factory: &IDXGIFactory7) -> Result<DynArray<ral::Phy
     let mut allow_tearing = 0u32;
     unsafe { factory.CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &mut allow_tearing as *mut _ as *mut c_void, size_of::<u32>() as u32).map_err(|err| err.to_ral_error())? };
     if allow_tearing == 0 {
-        return Err(ral::Error::UnmetRequirement("DXGI_FEATURE_PRESENT_ALLOW_TEARING is unsupported, this either means that there is no hardware support or windows is out of date".to_onca_string()));
+        return Err(ral::Error::UnmetRequirement("DXGI_FEATURE_PRESENT_ALLOW_TEARING is unsupported, this either means that there is no hardware support or windows is out of date".to_string()));
     }
 
     let mut physical_devices = DynArray::new();
@@ -530,21 +530,21 @@ fn get_format_properties_for_single(device: &ID3D12Device, format: Format) -> Re
                       D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX |
                       D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX;
     if matches!(format, ral::Format::R32UInt | ral::Format::R32SInt) && !format_support.Support2.contains(all_atomics) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires all atomic operations to be supported")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires all atomic operations to be supported")));
     }
     if format == ral::Format::R32SFloat && !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires atomic exchange support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires atomic exchange support")));
     }
 
     let required_buffer_support = format.get_support();
     if required_buffer_support.contains(FormatSupport::ConstantTexelBuffer) && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_BUFFER) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires constant texel buffer support (DX12 Buffer)")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires constant texel buffer support (DX12 Buffer)")));
     }
     if required_buffer_support.contains(ral::FormatSupport::StorageTexelBuffer) &&
         !(format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) &&
           format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE))
     {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texel buffer support (DX12 Typed load & store)")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires storage texel buffer support (DX12 Typed load & store)")));
     }
     
     let components = format.components();
@@ -552,16 +552,16 @@ fn get_format_properties_for_single(device: &ID3D12Device, format: Format) -> Re
     let required_texture_support = format.get_support();
     if required_texture_support.intersects(ral::FormatSupport::Sampled | ral::FormatSupport::Storage) {
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_TEXTURE2D) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texture support (DX12 Texture 2D)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texture support (DX12 Texture 2D)")));
         }
         if components.supports_1d() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_TEXTURE1D) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texture support (DX12 Texture 1D)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texture support (DX12 Texture 1D)")));
         }
         if components.supports_3d() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_TEXTURE3D) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texture support (DX12 Texture 3D)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texture support (DX12 Texture 3D)")));
         }
         if components.supports_cubemap() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_TEXTURECUBE) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texture support (DX12 Cube Texture)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texture support (DX12 Cube Texture)")));
         }
     }
 
@@ -603,13 +603,13 @@ fn get_format_properties_for_single(device: &ID3D12Device, format: Format) -> Re
         // Special case, ignore as they are read used in sampled with a different format
         if !matches!(format, Format::D32SFloat | Format::D32SFloatS8UInt | Format::S8UInt) {
             if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_SHADER_LOAD) {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Load)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Load)")));
             }
             if data_type.is_non_integer() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Sample on non-integer format)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Sample on non-integer format)")));
             }
             if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_SHADER_GATHER) && format.data_type().is_non_integer() {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Gather)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Gather)")));
             }
 
             // Comparison versions for ops
@@ -624,71 +624,71 @@ fn get_format_properties_for_single(device: &ID3D12Device, format: Format) -> Re
                         query_dx12_feature_support(device, D3D12_FEATURE_FORMAT_SUPPORT, &mut format_support)?;
 
                         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE_COMPARISON) {
-                            return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Samole Comparison)")));
+                            return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Samole Comparison)")));
                         }
                         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_SHADER_GATHER_COMPARISON) {
-                            return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Gather Comparison)")));
+                            return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Gather Comparison)")));
                         }
                     },
-                    None => return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Sample/Gather Comparison)"))),
+                    None => return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Sample/Gather Comparison)"))),
                 }
             }
             if !format.is_video_format() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_MIP) {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Texture Mipmap)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Texture Mipmap)")));
             }
             if !(format.is_video_format() || aspect.contains(ral::TextureAspect::Depth) || aspect.contains(ral::TextureAspect::Stencil) ) && !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_TILED) {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (DX12 Tiled Resource)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (DX12 Tiled Resource)")));
             }
         }
     }
     if required_texture_support.contains(ral::FormatSupport::Storage) {
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texture support (DX12 UAV Typed Unordered Access View)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires storage texture support (DX12 UAV Typed Unordered Access View)")));
         }
         if !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texture support (DX12 UAV Type Load)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires storage texture support (DX12 UAV Type Load)")));
         }
         if !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texture support (DX12 UAV Type Store)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires storage texture support (DX12 UAV Type Store)")));
         }
     }
     if required_texture_support.contains(ral::FormatSupport::RenderTarget) && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_RENDER_TARGET) {
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_RENDER_TARGET) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires render target texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires render target texture support")));
         }
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires render target texture support (DX12 Multisample Rendertarget)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires render target texture support (DX12 Multisample Rendertarget)")));
         }
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires render target texture support (DX12 Multisample Load support)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires render target texture support (DX12 Multisample Load support)")));
         }
         if data_type.is_non_integer() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_BLENDABLE) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires blendable render target texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires blendable render target texture support")));
         }
         if data_type == ral::FormatDataType::UInt && !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires logic op texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires logic op texture support")));
         }
         if data_type.is_non_integer() && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires render target texture support (DX12 Multisample Resolve support)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires render target texture support (DX12 Multisample Resolve support)")));
         }
     }
     if required_texture_support.contains(ral::FormatSupport::DepthStencil) && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires blendable depth/stencil texture support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires blendable depth/stencil texture support")));
     }
     if required_texture_support.contains(FormatSupport::Display) && !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_DISPLAY) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires display output support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires display output support")));
     }
 
     if components.get_valid_data_types().len() > 1 || aspect.contains(ral::TextureAspect::Depth) || aspect.contains(ral::TextureAspect::Stencil) {
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_CAST_WITHIN_BIT_LAYOUT) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires cast within bit layout support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires cast within bit layout support")));
         }
     }
 
     if matches!(components, FormatComponents::SamplerFeedbackMinMip | FormatComponents::SamplerFeedbackMipRegionUsed) &&
         !format_support.Support2.contains(D3D12_FORMAT_SUPPORT2_SAMPLER_FEEDBACK)
     {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires cast within bit layout support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires cast within bit layout support")));
     }
 
     let mut format_info = D3D12_FEATURE_DATA_FORMAT_INFO {
@@ -698,7 +698,7 @@ fn get_format_properties_for_single(device: &ID3D12Device, format: Format) -> Re
     query_dx12_feature_support(device, D3D12_FEATURE_FORMAT_INFO, &mut format_info)?;
     let expected_planes = format.num_planes();
     if format_info.PlaneCount != expected_planes {
-        return Err(ral::Error::Format(onca_format!("Invalid number of planes for format {format}: found {}, expected {expected_planes}", format_info.PlaneCount)));
+        return Err(ral::Error::Format(format!("Invalid number of planes for format {format}: found {}, expected {expected_planes}", format_info.PlaneCount)));
     }
 
     Ok(())
@@ -722,7 +722,7 @@ fn check_vertex_format_support(device: &ID3D12Device) -> ral::Result<()> {
 
         if !format_support.Support1.contains(D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER) {
             if res.is_ok() {
-                res = Err(ral::Error::Format(onca_format!("Vertex format '{format}' requires vertex buffer support")));
+                res = Err(ral::Error::Format(format!("Vertex format '{format}' requires vertex buffer support")));
             }
         }
     });

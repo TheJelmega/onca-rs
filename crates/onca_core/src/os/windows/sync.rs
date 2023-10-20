@@ -1,26 +1,7 @@
-mod parking_lot;
-
-
-use windows::{
-    core::PCWSTR, 
-    Win32::{
-        Foundation::*, 
-        System::Threading::*}
-    };
-use core::{
-    cell::UnsafeCell,
-    ptr::null_mut,
-    sync::atomic::{AtomicUsize, AtomicPtr, Ordering}
-};
-use crate::{
-    sync::*,
-    mem::HeapPtr,
-    time::Instant,
-};
-
-pub use parking_lot::{ThreadParker, UnparkHandle};
 
 //-----------------------------------------------------------------------------------------------------------------------------
+
+use windows::Win32::System::Threading::Sleep;
 
 /// Yeild the rest of the current timeslice to the OS
 #[inline]

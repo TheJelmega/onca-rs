@@ -108,3 +108,13 @@ macro_rules! count_exprs {
         0usize
     };
 }
+
+/// Macro to help improve errors, specifically improve diagnostics in pattern positions
+/// 
+/// see liballoc `__rust_force_expr`
+#[macro_export]
+macro_rules! __rust_force_expr {
+    ($e:expr) => {
+        $e
+    };
+}

@@ -3,11 +3,11 @@ use core::{
     hash::Hash,
     fmt,
 };
+use std::collections::HashMap;
 
 use onca_core::{
     sync::{RwLock, RwLockUpgradableReadGuard},
-    prelude::*,
-    onca_format, collections::HashMap
+    prelude::*
 };
 use onca_core_macros::{flags, EnumDisplay};
 
@@ -428,7 +428,7 @@ pub type TextureInterfaceHandle = InterfaceHandle<dyn TextureInterface>;
 
 #[derive(Debug)]
 pub(crate) struct TextureDynamic {
-    pub rtvs: HashMap<RenderTargetViewDesc, WeakHandle<RenderTargetView>>,
+    pub rtvs:          HashMap<RenderTargetViewDesc, WeakHandle<RenderTargetView>>,
     pub sampled_views: HashMap<SampledTextureViewDesc, WeakHandle<SampledTextureView>>,
     pub storage_views: HashMap<StorageTextureViewDesc, WeakHandle<StorageTextureView>>,
 }
@@ -663,60 +663,60 @@ impl RenderTargetViewDesc {
             match self.view_type {
                 RenderTargetViewType::View1D { mip_slice } => {
                     if mip_slice >= texture.mip_levels() {
-                        return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                        return Err(Error::InvalidParameter(format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
                     }
                 },
                 RenderTargetViewType::View2D { mip_slice, aspect } => {
                     if mip_slice >= texture.mip_levels() {
-                        return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                        return Err(Error::InvalidParameter(format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
                     }
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
                 },
                 RenderTargetViewType::View2DMS => (),
                 RenderTargetViewType::View3D { mip_slice, first_w_slice, w_size } => {
                     if mip_slice >= texture.mip_levels() {
-                        return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                        return Err(Error::InvalidParameter(format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
                     }
                     if first_w_slice >= texture.size().depth() {
-                        return Err(Error::InvalidParameter(onca_format!("first_w_slice ({first_w_slice}) needs to be smaller than the texture depth ({})", texture.size().depth())));
+                        return Err(Error::InvalidParameter(format!("first_w_slice ({first_w_slice}) needs to be smaller than the texture depth ({})", texture.size().depth())));
                     }
                     if first_w_slice + w_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_w_slice + w_size ({first_w_slice} + {w_size} = {}) cannot exceed the texture depth ({})", first_w_slice + w_size, texture.size().depth())));
+                        return Err(Error::InvalidParameter(format!("first_w_slice + w_size ({first_w_slice} + {w_size} = {}) cannot exceed the texture depth ({})", first_w_slice + w_size, texture.size().depth())));
                     }
                 },
                 RenderTargetViewType::View1DArray { mip_slice, first_slice, array_size } => {
                     if mip_slice >= texture.mip_levels() {
-                        return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                        return Err(Error::InvalidParameter(format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
                     }
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
                 },
                 RenderTargetViewType::View2DArray { mip_slice, first_slice, array_size, aspect } => {
                     if mip_slice >= texture.mip_levels() {
-                        return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                        return Err(Error::InvalidParameter(format!("the view's mip level ({mip_slice}) cannot exceed that of the texture ({})", texture.mip_levels())));
                     }
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
                 },
                 RenderTargetViewType::View2DMSArray { first_slice, array_size } => {
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
                 },
             }
@@ -977,7 +977,7 @@ impl SampledTextureViewDesc {
                     },
                 SampledTextureViewType::View2D { min_lod, mip_levels, aspect } => {
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
 
                     if let Some(mip_levels) = mip_levels {
@@ -999,10 +999,10 @@ impl SampledTextureViewDesc {
                 },
                 SampledTextureViewType::View1DArray { min_lod, mip_levels, first_slice, array_size } => {
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
 
                     if let Some(mip_levels) = mip_levels {
@@ -1013,14 +1013,14 @@ impl SampledTextureViewDesc {
                 },
                 SampledTextureViewType::View2DArray { min_lod, mip_levels, first_slice, array_size, aspect } => {
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
 
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
 
                     if let Some(mip_levels) = mip_levels {
@@ -1031,20 +1031,20 @@ impl SampledTextureViewDesc {
                 },
                 SampledTextureViewType::View2DMSArray { first_slice, array_size } => {
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
 
                     None
                 },
                 SampledTextureViewType::ViewCubeArray { min_lod, mip_levels, first_face, num_cubes } => {
                     if first_face >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_face}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_face}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_face + num_cubes * 6 > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_face + num_cubes * 6 size ({first_face} + {num_cubes} * 6 = {}) cannot exceed the texture layer count ({})", first_face + num_cubes * 6, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_face + num_cubes * 6 size ({first_face} + {num_cubes} * 6 = {}) cannot exceed the texture layer count ({})", first_face + num_cubes * 6, texture.size().layers())));
                     }
 
                     if let Some(mip_levels) = mip_levels {
@@ -1057,10 +1057,10 @@ impl SampledTextureViewDesc {
 
             if let Some((min_lod, mip_levels)) = mip_info {
                 if mip_levels > texture.mip_levels() {
-                    return Err(Error::InvalidParameter(onca_format!("the view's mip level ({mip_levels}) cannot exceed that of the texture ({})", texture.mip_levels())));
+                    return Err(Error::InvalidParameter(format!("the view's mip level ({mip_levels}) cannot exceed that of the texture ({})", texture.mip_levels())));
                 }
                 if min_lod > mip_levels as f32 {
-                    return Err(Error::InvalidParameter(onca_format!("min_lod ({min_lod}) cannot be larger than mip_levels ({mip_levels})")));
+                    return Err(Error::InvalidParameter(format!("min_lod ({min_lod}) cannot be larger than mip_levels ({mip_levels})")));
                 }
             }
         }
@@ -1141,40 +1141,40 @@ impl StorageTextureViewDesc {
         #[cfg(feature = "validation")]
         {
             if self.mip_slice >= texture.mip_levels() {
-                return Err(Error::InvalidParameter(onca_format!("the view's mip ({}) cannot exceed that of the texture ({})", self.mip_slice, texture.mip_levels())))
+                return Err(Error::InvalidParameter(format!("the view's mip ({}) cannot exceed that of the texture ({})", self.mip_slice, texture.mip_levels())))
             }
             match self.view_type {
                 StorageTextureViewType::View1D => (),
                 StorageTextureViewType::View2D { aspect } => {
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
                 },
                 StorageTextureViewType::View3D { first_w_slice, w_size } => {
                     if first_w_slice >= texture.size().depth() {
-                        return Err(Error::InvalidParameter(onca_format!("first_w_slice ({first_w_slice}) needs to be smaller than the texture depth ({})", texture.size().depth())));
+                        return Err(Error::InvalidParameter(format!("first_w_slice ({first_w_slice}) needs to be smaller than the texture depth ({})", texture.size().depth())));
                     }
                     if first_w_slice + w_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_w_slice + w_size ({first_w_slice} + {w_size} = {}) cannot exceed the texture depth ({})", first_w_slice + w_size, texture.size().depth())));
+                        return Err(Error::InvalidParameter(format!("first_w_slice + w_size ({first_w_slice} + {w_size} = {}) cannot exceed the texture depth ({})", first_w_slice + w_size, texture.size().depth())));
                     }
                 },
                 StorageTextureViewType::View1DArray { first_slice, array_size } => {
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array_size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array_size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
                 },
                 StorageTextureViewType::View2DArray { first_slice, array_size, aspect } => {
                     if !aspect.bits().is_power_of_two() {
-                        return Err(Error::InvalidParameter(onca_format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
+                        return Err(Error::InvalidParameter(format!("Only 1 aspect flag can be set for a texture view: {aspect}")))
                     }
                     if first_slice >= texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice ({first_slice}) needs to be smaller than the texture layer count ({})", texture.size().layers())));
                     }
                     if first_slice + array_size > texture.size().layers() {
-                        return Err(Error::InvalidParameter(onca_format!("first_slice + array_size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
+                        return Err(Error::InvalidParameter(format!("first_slice + array_size ({first_slice} + {array_size} = {}) cannot exceed the texture layer count ({})", first_slice + array_size, texture.size().layers())));
                     }
                 },
             }

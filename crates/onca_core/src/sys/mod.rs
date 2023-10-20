@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicU8, Ordering, AtomicBool};
 
-use crate::{os, sync::thread_parker::SpinWait};
+use crate::os;
 
 pub mod thread_id;
 pub use thread_id::*;

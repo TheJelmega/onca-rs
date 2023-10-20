@@ -1,11 +1,5 @@
-use core::{
-    future::Future,
-    task::Poll,
-};
-
-use crate::collections::DynArray;
-
-use super::Result;
+use std::{future::Future, task::Poll};
+pub use std::io::*;
 
 
 /// An asynchronous read result
@@ -13,7 +7,7 @@ pub trait AsyncReadResult : Future {
     /// Wait until the asynchronous read has been completed or the timeout was reached
     /// 
     /// If the timeout was reached, the function will return `Poll::Pending`
-    fn wait(&mut self, timeout: u32) -> Poll<Result<DynArray<u8>>>;
+    fn wait(&mut self, timeout: u32) -> Poll<Result<Vec<u8>>>;
 
     /// Cancel the current asynchronous read
     fn cancel(&mut self) -> Result<()>;
@@ -83,5 +77,5 @@ pub trait AsyncWrite {
     /// An error of the [`ErrorKind::Interrupted`] kind is non-fatal and the write opeartion should be retired if there is nothing else to do.
     /// 
     /// If the function is unable to create a future, an error is returned.
-    fn write_async(&mut self, buf: DynArray<u8>) -> Result<Self::AsyncResult>;
+    fn write_async(&mut self, buf: Vec<u8>) -> Result<Self::AsyncResult>;
 }

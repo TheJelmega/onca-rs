@@ -1,7 +1,6 @@
 use core::ffi::c_void;
 use onca_core::{
     prelude::*,
-    mem::HeapPtr,
     alloc::{Allocation, ScopedAlloc},
 };
 use onca_logging::{log_warning, log_error, log_debug};
@@ -22,7 +21,7 @@ use crate::{Window, WindowEvent, LOG_CAT};
 #[repr(C)]
 pub(crate) struct DropHandlerData {
     vtable     : &'static IDropTarget_Vtbl,
-    allocation : Allocation<DropHandlerData>,
+    self_ptr   : *mut DropHandlerData,
     ref_count  : win_utils::com::ComRefCount,
     window     : *mut Window,
     valid      : bool,
@@ -45,9 +44,9 @@ pub(crate) struct DropHandler {
 
 impl DropHandler {
     pub(crate) fn new(window: &mut Window) -> DropHandler {
-        let heap_ptr = HeapPtr::new(DropHandlerData {
+        let mut handler_data = Box::new(DropHandlerData {
             vtable: &DROP_HANDLER_VTBL,
-            allocation: unsafe { Allocation::const_null() },
+            self_ptr: std::ptr::null_mut(),
             ref_count: win_utils::com::ComRefCount::new(),
             window: window as *mut _,
             valid: false,
@@ -55,8 +54,8 @@ impl DropHandler {
 
         });
 
-        let data = heap_ptr.ptr_mut();
-        unsafe { (*data).allocation = HeapPtr::leak(heap_ptr) };
+        let data = &mut *handler_data as *mut DropHandlerData;
+        unsafe { (*data).self_ptr = Box::into_raw(handler_data) };
         //let drop_target = unsafe { core::mem::transmute::<_, IDropTarget>(&mut data) };
         let drop_target = unsafe { core::mem::transmute::<_, IDropTarget>(data) };
 
@@ -79,7 +78,7 @@ impl DropHandler {
     unsafe extern "system" fn Release(this: &mut DropHandlerData) -> u32 {
         let this = Self::from_interface(this);
         this.ref_count.release(|| {
-            drop(HeapPtr::from_raw(core::mem::replace(&mut this.allocation, Allocation::const_null())));
+            drop(Box::from_raw(this.self_ptr));
         })
     }
 

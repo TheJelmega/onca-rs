@@ -3,11 +3,11 @@ use core::{
     hash::{Hash, Hasher},
     fmt,
 };
+use std::collections::HashMap;
 
 use cfg_if::cfg_if;
 use crate::{
-    hashing, 
-    collections::HashMap,
+    hashing,
     sync::Mutex,
 };
 use super::string::*;
@@ -113,7 +113,7 @@ impl InternedStringManager {
 
         let data = strings.as_mut().unwrap();
         if !data.contains_key(&id) {
-            let s = s.to_onca_string();
+            let s = s.to_string();
             let ptr = s.as_ptr();
             data.insert(id, s);
             ptr
@@ -125,7 +125,7 @@ impl InternedStringManager {
 
     fn get_string(&self, id: StringId) -> Option<String> {
         let strings = self.strings.lock();
-        strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_onca_string()))
+        strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_string()))
     }
 
     fn get_cached(&self, id: StringId) -> *const u8 {

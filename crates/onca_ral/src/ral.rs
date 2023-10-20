@@ -14,8 +14,8 @@ use crate::{PhysicalDevice, Result, Error, Device, DeviceInterfaceHandle, Comman
 
 const LOG_CAT : LogCategory = LogCategory::new("Graphics RAL");
 
-pub type FnRalCreate = extern "C" fn(&MemoryManager, &Logger, UseAlloc, Settings) -> Result<HeapPtr<dyn Interface>>;
-pub type FnRalDestroy = extern "C" fn(HeapPtr<dyn Interface>);
+pub type FnRalCreate = extern "C" fn(&MemoryManager, &Logger, UseAlloc, Settings) -> Result<Box<dyn Interface>>;
+pub type FnRalDestroy = extern "C" fn(Box<dyn Interface>);
 
 /// Render Abstraction Layer type
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -96,7 +96,7 @@ impl Settings {
                     "dx12"     => RalApi::DX12,
                     "vulkan"   => RalApi::Vulkan,
                     "software" => RalApi::Software,
-                    ral_lib    => RalApi::Other(String::from_str(ral_lib))
+                    ral_lib    => RalApi::Other(String::from(ral_lib))
                 };
             } else {
                 log_error!(LOG_CAT, Self::load, "No api specified");
@@ -182,7 +182,7 @@ pub trait Interface {
 pub struct Ral {
     dynlib: DynLib,
     /// Option so we can `take` it on drop, but if `Ral` exists, the option will always be `Some(_)`
-    ral:    Option<HeapPtr<dyn Interface>>,
+    ral:    Option<Box<dyn Interface>>,
     alloc:  UseAlloc,
 }
 
@@ -208,7 +208,7 @@ impl Ral {
         ral.map(|ral| Self { dynlib, ral: Some(ral), alloc })
     }
 
-    fn get(&self) -> &HeapPtr<dyn Interface> {
+    fn get(&self) -> &Box<dyn Interface> {
         unsafe { self.ral.as_ref().unwrap_unchecked() }
     }
 

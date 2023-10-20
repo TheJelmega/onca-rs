@@ -120,7 +120,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 macro_rules! check_invalid_parameter {
     ($expected:expr, $($args:tt)*) => {
         if !$expected {
-            return Err(Error::InvalidParameter(onca_format!($($args)*)));
+            return Err(Error::InvalidParameter(format!($($args)*)));
         }
     };
 }

@@ -495,7 +495,7 @@ type CommandListHandle = Handle<CommandList>;
 macro_rules! validate_parameter_recording {
     ($validation:expr, $true_condition:expr, $($args:tt)*) => {
         if !$true_condition {
-            $validation.set_error(Error::InvalidParameter(onca_format!($($args)*)));
+            $validation.set_error(Error::InvalidParameter(format!($($args)*)));
             return;
         }
     };
@@ -627,7 +627,7 @@ impl CommandListHandle {
     /// Copy a region between 2 buffers
     pub fn copy_buffer_region(&self, src: &BufferHandle, dst: &BufferHandle, region: BufferCopyRegion) {
         scoped_alloc!(UseAlloc::TlsTemp);
-        let regions = dynarr![region];
+        let regions = vec![region];
         self.copy_buffer_regions(src, dst, &regions);
     }
 
@@ -683,7 +683,7 @@ impl CommandListHandle {
     /// The source texture needs to be in the `CopySrc` layout and the desination texture needs to be in the `CopyDst` layout
     pub fn copy_texture_region(&self, src: &TextureHandle, dst: &TextureHandle, region: TextureCopyRegion) {
         scoped_alloc!(UseAlloc::TlsTemp);
-        let regions = dynarr![region];
+        let regions = vec![region];
         self.copy_texture_regions(src, dst, &regions);
     }
     
@@ -849,7 +849,7 @@ impl CommandListHandle {
                     validate_parameter_recording!(validation, Handle::ptr_eq(pipeline_layout, pipeline.layout()),"Cannot bind pipeline, as the layout does not match the bound pipeline layout");        
                 },
                 None => {
-                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_onca_string()));
+                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_string()));
                     return;
                 },
             }
@@ -891,7 +891,7 @@ impl CommandListHandle {
                     if let Some(cur_heap) = &dynamic.resource_descriptor_heap {
                         validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
                     } else {
-                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_string()));
                         return;
                     }
                 },
@@ -899,7 +899,7 @@ impl CommandListHandle {
                     if let Some(cur_heap) = &dynamic.sampler_descriptor_heap {
                         validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
                     } else {
-                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_string()));
                         return;
                     }
                 },
@@ -953,7 +953,7 @@ impl CommandListHandle {
                     validate_parameter_recording!(validation, Handle::ptr_eq(pipeline_layout, pipeline.layout()), "Cannot bind pipeline, as the layout does not match the bound pipeline layout");
                 },
                 None => {
-                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_onca_string()));
+                    validation.set_error(Error::InvalidParameter("Cannot bind pipeline when no pipeline layout has been bound".to_string()));
                     return;
                 },
             }
@@ -993,7 +993,7 @@ impl CommandListHandle {
                     if let Some(cur_heap) = &dynamic.resource_descriptor_heap {
                         validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
                     } else {
-                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_string()));
                         return;
                     }
                 },
@@ -1001,7 +1001,7 @@ impl CommandListHandle {
                     if let Some(cur_heap) = &dynamic.sampler_descriptor_heap {
                         validate_parameter_recording!(validation, Handle::ptr_eq(cur_heap, &heap), "Cannot set a descriptor table with a descriptor that's not in the currently bound descriptor heap");
                     } else {
-                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_onca_string()));
+                        validation.set_error(Error::InvalidParameter("Trying to set a descriptor table with no descriptor heap assigned".to_string()));
                         return;
                     }
                 },

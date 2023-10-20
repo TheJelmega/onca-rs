@@ -44,7 +44,7 @@ use core::{
     ops::{Deref},
 };
 use std::collections::TryReserveError;
-use onca_core::prelude::*;
+use onca_core::{prelude::*, alloc::GetAllocatorId};
 
 //--------------------------------------------------------------
 
@@ -773,8 +773,8 @@ pub struct PathBuf {
 
 impl PathBuf {
     #[inline]
-    fn as_mut_dynarr(&mut self) -> &mut DynArray<u8> {
-        unsafe { self.inner.as_mut_dynarr() }
+    fn as_mut_vec(&mut self) -> &mut DynArray<u8> {
+        unsafe { self.inner.as_mut_vec() }
     }
 
     /// Creates an empty `PathBuf` with the given allocator.
@@ -798,14 +798,14 @@ impl PathBuf {
     #[must_use]
     #[inline]
     pub fn from_str(s: &str) -> Self {
-        Self { inner: String::from_str(s) }
+        Self { inner: String::from(s) }
     }
 
     /// Create a `PathBuf` from a [`u8`] slice, including invalid characters.
     #[must_use]
     #[inline]
     pub fn from_utf8_lossy(s: &[u8]) -> Self {
-        Self { inner: String::from_utf8_lossy(s) }
+        Self { inner: String::from_utf8_lossy(s).into() }
     }
 
     /// Coerces to a [`Path`] slice.
@@ -837,7 +837,7 @@ impl PathBuf {
 
     fn _push(&mut self, path: &Path) {
         // in general, a separator is needed if the rightmost byte is not a separator
-        let mut need_sep = self.as_mut_dynarr().last().map(|c| !is_sep_byte(*c)).unwrap_or(false);
+        let mut need_sep = self.as_mut_vec().last().map(|c| !is_sep_byte(*c)).unwrap_or(false);
 
         // in the special case of `C:` on Windows, od *not* ass a separator
         let comps = self.components();
@@ -851,7 +851,7 @@ impl PathBuf {
 
         // absolute `path` replaces `self`
         if path.is_absolute() || path.prefix().is_some() {
-            self.as_mut_dynarr().truncate(0);
+            self.as_mut_vec().truncate(0);
 
         // verbatim paths need . and .. removed
         } else if comps.prefix_verbatim() && !path.inner.is_empty() {
@@ -896,7 +896,7 @@ impl PathBuf {
         // `path` has a root but no prefix, e.g. `\windows` (Windows only)
         } else if path.has_root() {
             let prefix_len = self.components().prefix_remaining();
-            self.as_mut_dynarr().truncate(prefix_len);
+            self.as_mut_vec().truncate(prefix_len);
 
         // `path` is a pure relative path
         } else if need_sep {
@@ -919,7 +919,7 @@ impl PathBuf {
     pub fn pop(&mut self) -> bool {
         match self.parent().map(|p| p.as_str().len()) {
             Some(len) => {
-                self.as_mut_dynarr().truncate(len);
+                self.as_mut_vec().truncate(len);
                 true
             },
             None => false
@@ -965,7 +965,7 @@ impl PathBuf {
         // truncate until right after the file stem
         let end_file_stem = file_stem[file_stem.len()..].as_ptr();
         let start = self.inner.as_bytes().as_ptr();
-        let arr = self.as_mut_dynarr();
+        let arr = self.as_mut_vec();
         arr.truncate(unsafe { end_file_stem.offset_from(start) as usize });
 
         // add the new extension, if any

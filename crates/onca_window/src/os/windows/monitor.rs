@@ -1,7 +1,7 @@
 use core::mem::size_of;
+use std::collections::BTreeSet;
 use onca_core::{
     prelude::*,
-    collections::BTreeSet,
     utils
 };
 use onca_logging::log_error;

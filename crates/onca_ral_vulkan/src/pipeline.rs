@@ -1,3 +1,5 @@
+use std::sync::{Weak, Arc};
+
 use onca_core::prelude::*;
 use onca_ral as ral;
 
@@ -9,7 +11,7 @@ use crate::{device::Device, utils::{ToRalError, ToVulkan}, vulkan::AllocationCal
 
 pub struct PipelineLayout {
     pub layout:          vk::PipelineLayout,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -115,7 +117,7 @@ impl ral::PipelineLayoutInterface for PipelineLayout {
 
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { device.destroy_pipeline_layout(self.layout, self.alloc_callbacks.get_some_vk_callbacks()) };
     }
 }
@@ -124,7 +126,7 @@ impl Drop for PipelineLayout {
 
 pub struct Pipeline {
     pub pipeline:        vk::Pipeline,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -334,7 +336,7 @@ impl ral::PipelineInterface for Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { device.destroy_pipeline(self.pipeline, self.alloc_callbacks.get_some_vk_callbacks()) };
     }
 }

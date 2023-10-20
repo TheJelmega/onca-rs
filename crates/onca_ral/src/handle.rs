@@ -4,6 +4,7 @@ use core::{
     ops::Deref,
     fmt,
 };
+use std::{sync::Arc, sync::Weak};
 
 use onca_core::{
     prelude::*
@@ -15,7 +16,7 @@ use onca_core::{
 /// 
 /// User should not access any functions on the handle directly and only call it via its wrappers
 pub struct InterfaceHandle<T: ?Sized> {
-    ptr : HeapPtr<T>
+    ptr : Box<T>
 }
 
 impl<T: ?Sized> InterfaceHandle<T> {
@@ -23,7 +24,7 @@ impl<T: ?Sized> InterfaceHandle<T> {
     where
         U : Unsize<T>
     {
-        InterfaceHandle { ptr: HeapPtr::<U>::new(val) }
+        InterfaceHandle { ptr: Box::<U>::new(val) }
     }
 
     /// Get the underlying type held by the handle
@@ -58,7 +59,7 @@ impl<T: ?Sized> Deref for InterfaceHandle<T> {
 
 impl<T: ?Sized> fmt::Debug for InterfaceHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("InterfaceHandle").field("ptr", &self.ptr.ptr()).finish()
+        f.debug_struct("InterfaceHandle").field("ptr", &(&*self.ptr as *const _)).finish()
     }
 }
 
@@ -97,7 +98,7 @@ impl<T: HandleImpl> Handle<T> {
 
     /// Create a new `Arc` using the value produced by the given closure, which itself has access to a weak pointer to the data
     pub fn new_cyclic<F: FnOnce(WeakHandle<T>) -> T>(fun: F) -> Self {
-        Handle { arc: Arc::new_cyclic(|weak| fun(WeakHandle::from_weak(weak))) }
+        Handle { arc: Arc::new_cyclic(|weak| fun(WeakHandle::from_weak(weak.clone()))) }
     }
 
     pub(crate) fn from_arc(handle: Arc<T>) -> Self {
@@ -116,7 +117,7 @@ impl<T: HandleImpl> Handle<T> {
 
     /// Check if an `Handle` and a `WeakHandle` contain the same pointer
     pub fn weak_ptr_eq(this: &Self, weak: &WeakHandle<T>) -> bool {
-        Arc::weak_ptr_eq(&this.arc, &weak.weak)
+        Weak::ptr_eq(&Arc::downgrade(&this.arc), &weak.weak)
     }
 }
 
@@ -162,26 +163,26 @@ impl<T: HandleImpl + fmt::Display> fmt::Display for Handle<T> {
 
 /// RAL weak handle
 pub struct WeakHandle<T: HandleImpl> {
-    weak : AWeak<T>
+    weak : Weak<T>
 }
 
 impl<T: HandleImpl> WeakHandle<T> {
-    pub(crate) fn from_weak(handle: AWeak<T>) -> Self {
+    pub(crate) fn from_weak(handle: Weak<T>) -> Self {
         Self { weak: handle }
     }
 
     pub fn upgrade(this: &WeakHandle<T>) -> Option<Handle<T>> {
-        Some(Handle::from_arc(AWeak::upgrade(&this.weak)?))
+        Some(Handle::from_arc(Weak::upgrade(&this.weak)?))
     }
 
     pub fn strong_count(this: &WeakHandle<T>) -> usize {
-        AWeak::strong_count(&this.weak)
+        Weak::strong_count(&this.weak)
     }
 
     /// Check if 2 `WeakHandle`s contain the same pointer
     #[inline]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
-        AWeak::ptr_eq(&this.weak, &other.weak)
+        Weak::ptr_eq(&this.weak, &other.weak)
     }
 
 }
@@ -196,14 +197,14 @@ impl<T: HandleImpl> Clone for WeakHandle<T> {
 // Derive does not seem to work correctly for Default
 impl<T: HandleImpl> Default for WeakHandle<T> {
     fn default() -> Self {
-        Self { weak: AWeak::default() }
+        Self { weak: Weak::default() }
     }
 }
 
 
 impl<T: HandleImpl + fmt::Debug> fmt::Debug for WeakHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match AWeak::upgrade(&self.weak) {
+        match Weak::upgrade(&self.weak) {
             Some(arc) => f.debug_struct("WeakHandle").field("value", arc.as_ref()).finish(),
             None => f.debug_struct("WeakHandle").field("value", &"<null>").finish(),
         }

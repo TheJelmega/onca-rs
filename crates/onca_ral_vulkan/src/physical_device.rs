@@ -1,4 +1,5 @@
 use core::num::NonZeroU8;
+use std::sync::{Weak, Arc};
 
 use onca_core::{prelude::*, utils::is_flag_set};
 use onca_logging::{log_warning, log_verbose};
@@ -29,7 +30,7 @@ macro_rules! check_required_feature {
 macro_rules! check_require_at_least {
     ($src:expr, $iden:ident, $requirement:expr) => {
         if $src.$iden < $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -37,7 +38,7 @@ macro_rules! check_require_at_least {
 macro_rules! check_require_at_least_index {
     ($src:expr, $iden:ident, $idx:literal, $requirement:expr) => {
         if $src.$iden[$idx] < $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}[{}]` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $idx, $src.$iden[$idx], stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}[{}]` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $idx, $src.$iden[$idx], stringify!($requirement), $requirement)));
         }
     };
 }
@@ -45,7 +46,7 @@ macro_rules! check_require_at_least_index {
 macro_rules! check_require_at_most {
     ($src:expr, $iden:ident, $requirement:expr) => {
         if $src.$iden > $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -53,7 +54,7 @@ macro_rules! check_require_at_most {
 macro_rules! check_require_at_most_index {
     ($src:expr, $iden:ident, $idx:literal, $requirement:expr) => {
         if $src.$iden[$idx] > $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}[{}]` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $idx, $src.$iden[$idx], stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}[{}]` (value: {}) does not meet the minimum required value of {} ({})", stringify!($iden), $idx, $src.$iden[$idx], stringify!($requirement), $requirement)));
         }
     };
 }
@@ -61,7 +62,7 @@ macro_rules! check_require_at_most_index {
 macro_rules! check_required_flags {
     ($src:expr, $iden:ident, $required_flag:expr) => {
         if !is_flag_set($src.$iden, $required_flag) {
-            return Err(ral::Error::UnmetRequirement(onca_format!("{} (value{:?}) does not have required flags {} ({:?})", stringify!($iden), $src.$iden, stringify!($required_flag), $required_flag)));
+            return Err(ral::Error::UnmetRequirement(format!("{} (value{:?}) does not have required flags {} ({:?})", stringify!($iden), $src.$iden, stringify!($required_flag), $required_flag)));
         }
     };
 }
@@ -69,7 +70,7 @@ macro_rules! check_required_flags {
 macro_rules! check_require_exact {
     ($src:expr, $iden:ident, $requirement:expr) => {
         if $src.$iden != $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) is not the same value as {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) is not the same value as {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
         }
     };
 }
@@ -77,13 +78,13 @@ macro_rules! check_require_exact {
 macro_rules! check_require_alignment {
     ($src:expr, $iden:ident, $requirement:expr) => {
         if MemAlign::new($src.$iden as u64) > $requirement {
-            return Err(ral::Error::UnmetRequirement(onca_format!("`{}` (value: {}) does not meet the minimum alignment of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
+            return Err(ral::Error::UnmetRequirement(format!("`{}` (value: {}) does not meet the minimum alignment of {} ({})", stringify!($iden), $src.$iden, stringify!($requirement), $requirement)));
         }
     };
 }
 
 pub struct PhysicalDevice {
-    pub instance: AWeak<Instance>,
+    pub instance: Weak<Instance>,
     pub phys_dev: vk::PhysicalDevice,
     pub options:  VulkanOptions,
 }
@@ -95,7 +96,7 @@ impl ral::PhysicalDeviceInterface for PhysicalDevice {
             .push_next(&mut mem_budget_props);
 
         let instance = match self.instance.upgrade() {
-            None => return Err(ral::Error::Other("Vulkan instance was dropped".to_onca_string())),
+            None => return Err(ral::Error::Other("Vulkan instance was dropped".to_string())),
             Some(instance) => instance
         };
 
@@ -188,7 +189,7 @@ fn get_device(instance: &Arc<Instance>, phys_dev: vk::PhysicalDevice) -> ral::Re
         } else {
             "              "
         };
-        let heap_flags = onca_format!("{dev_local_heap} {multi_instance_heap}");
+        let heap_flags = format!("{dev_local_heap} {multi_instance_heap}");
 
 
         log_verbose!(LOG_CAT, "|- Memory Heap {} - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+- - - - - - - - - - - - - - -|", heap_idx);
@@ -508,20 +509,20 @@ fn check_format_properties_for_single(instance: &Instance, phys_dev: vk::Physica
     // General
     if matches!(format, ral::Format::R32SFloat | ral::Format::R32UInt | ral::Format::R32SInt) {
         if !buffer_features.contains(vk::FormatFeatureFlags::STORAGE_TEXEL_BUFFER_ATOMIC) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texel buffer atomics support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texel buffer atomics support")));
         }
         if !image_features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires texture atomics support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires texture atomics support")));
         }
     }
 
     // Buffer
     let required_buffer_flags = format.get_support();
     if required_buffer_flags.contains(ral::FormatSupport::ConstantTexelBuffer) && !buffer_features.contains(vk::FormatFeatureFlags::UNIFORM_TEXEL_BUFFER) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires constant texel buffer support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires constant texel buffer support")));
     }
     if required_buffer_flags.contains(ral::FormatSupport::StorageTexelBuffer) && !buffer_features.contains(vk::FormatFeatureFlags::STORAGE_TEXEL_BUFFER) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texel buffer support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires storage texel buffer support")));
     }
 
     // We don't care about linear tiling
@@ -530,40 +531,40 @@ fn check_format_properties_for_single(instance: &Instance, phys_dev: vk::Physica
     let required_texture_flags = format.get_support();
     if required_texture_flags.contains(ral::FormatSupport::Sampled) {
         if !image_features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support")));
         }
         if format.aspect().contains(ral::TextureAspect::Depth) {
             if !image_features2.contains(vk::FormatFeatureFlags2::SAMPLED_IMAGE_DEPTH_COMPARISON) {
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_DEPTH_COMPARISON)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_DEPTH_COMPARISON)")));
             }
             if !image_features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX) {  
-                return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_FILTER_MINMAX)")));
+                return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_FILTER_MINMAX)")));
             }
         }
         if data_type.is_non_integer() && !image_features.contains( vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_FILTER_LINEAR)")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires sampled texture support (SAMPLED_IMAGE_FILTER_LINEAR)")));
         }
     }
     if required_texture_flags.contains(ral::FormatSupport::Storage) && !image_features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires storage texture support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires storage texture support")));
     }
     if required_texture_flags.contains(ral::FormatSupport::RenderTarget) {
         if !image_features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires render target texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires render target texture support")));
         }
         if data_type.is_non_integer() && !image_features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND) {
-            return Err(ral::Error::Format(onca_format!("Format '{format}' requires blendable render target texture support")));
+            return Err(ral::Error::Format(format!("Format '{format}' requires blendable render target texture support")));
         }
     }
     if required_texture_flags.contains(ral::FormatSupport::DepthStencil) && !image_features.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires depth/stencil texture support")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires depth/stencil texture support")));
     }
 
     if !image_features.contains(vk::FormatFeatureFlags::TRANSFER_SRC) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires copy support (TRANSFER_SRC)")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires copy support (TRANSFER_SRC)")));
     }
     if !image_features.contains(vk::FormatFeatureFlags::TRANSFER_DST) {
-        return Err(ral::Error::Format(onca_format!("Format '{format}' requires copy support (TRANSFER_DST)")));
+        return Err(ral::Error::Format(format!("Format '{format}' requires copy support (TRANSFER_DST)")));
     }
 
     Ok(())
@@ -577,11 +578,11 @@ fn check_vertex_format_support(instance: &Instance, phys_dev: vk::PhysicalDevice
         unsafe { instance.instance.get_physical_device_format_properties2(phys_dev, vk_format, &mut format_props) };
 
         if !format_props.format_properties.buffer_features.contains(vk::FormatFeatureFlags::VERTEX_BUFFER) && res.is_ok() {
-            res = Err(ral::Error::Format(onca_format!("Vertex format '{format}' requires vertex buffer support")));
+            res = Err(ral::Error::Format(format!("Vertex format '{format}' requires vertex buffer support")));
             return;
         }
         if format.supoorts_acceleration_structure() && !format_props.format_properties.buffer_features.contains(vk::FormatFeatureFlags::ACCELERATION_STRUCTURE_VERTEX_BUFFER_KHR) && res.is_ok() {
-            res = Err(ral::Error::Format(onca_format!("Vertex format '{format}' requires acceleration structure vertex buffer support")));
+            res = Err(ral::Error::Format(format!("Vertex format '{format}' requires acceleration structure vertex buffer support")));
             return;
         }
     });
@@ -793,7 +794,7 @@ fn get_queue_infos(instance: &Instance, phys_dev: vk::PhysicalDevice) -> ral::Re
 
     let main_queue = match main_queue {
         Some(info) => info,
-        None => return Err(ral::Error::UnmetRequirement("Expected at least 1 queue that supports present, graphics, compute and copy".to_onca_string())),
+        None => return Err(ral::Error::UnmetRequirement("Expected at least 1 queue that supports present, graphics, compute and copy".to_string())),
     };
 
     Ok(queue_infos.map(|opt| match opt {
@@ -1421,7 +1422,7 @@ impl VulkanOptions {
         log_verbose!(LOG_CAT, "| Device:             {:89} |", props.description);
         log_verbose!(LOG_CAT, "| Vulkan verion:      {:89} |", props.api_version);
         let conformance = self.props12.conformance_version;
-        log_verbose!(LOG_CAT, "| Conformance verion: {:89} |", &onca_format!("{}.{}.{}.{}", conformance.major, conformance.minor, conformance.subminor, conformance.patch));
+        log_verbose!(LOG_CAT, "| Conformance verion: {:89} |", &format!("{}.{}.{}.{}", conformance.major, conformance.minor, conformance.subminor, conformance.patch));
         log_verbose!(LOG_CAT, "| Driver version:     {:89} |", props.driver_version);
         log_verbose!(LOG_CAT, "| Driver ID:          {:89} |", get_driver_id(self.props12.driver_id));
         log_verbose!(LOG_CAT, "| Driver name:        {:89} |", unsafe { String::from_null_terminated_utf8_unchecked_i8(&self.props12.driver_name) });
@@ -1497,15 +1498,15 @@ impl VulkanOptions {
         }
         fn get_range_2d_f32(range: [f32; 2]) -> String {
             scoped_alloc!(UseAlloc::TlsTemp);
-            onca_format!("[{}-{}]", range[0], range[1])
+            format!("[{}-{}]", range[0], range[1])
         }
         fn get_2d_u32(arr: [u32; 2]) -> String {
             scoped_alloc!(UseAlloc::TlsTemp);
-            onca_format!("[{}, {}]", arr[0], arr[1])
+            format!("[{}, {}]", arr[0], arr[1])
         }
         fn get_3d_u32(arr: [u32; 3]) -> String {
             scoped_alloc!(UseAlloc::TlsTemp);
-            onca_format!("[{}, {}, {}]", arr[0], arr[1], arr[2])
+            format!("[{}, {}, {}]", arr[0], arr[1], arr[2])
         }
         fn get_point_clipping_behavior(value: vk::PointClippingBehavior) -> &'static str {
             match value {
@@ -1588,7 +1589,7 @@ impl VulkanOptions {
         }
         fn get_extent_2d(extent: vk::Extent2D) -> String {
             scoped_alloc!(UseAlloc::TlsTemp);
-            onca_format!("[{}, {}]", extent.width, extent.height)
+            format!("[{}, {}]", extent.width, extent.height)
         }
         fn get_raytracing_invocation_reorder_mode(mode: vk::RayTracingInvocationReorderModeNV) -> &'static str {
             match mode {

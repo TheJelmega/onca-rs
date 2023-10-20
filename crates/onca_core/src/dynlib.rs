@@ -16,7 +16,7 @@ impl DynLib {
     pub fn load(path: &str) -> Result<DynLib, i32> {
         let _scope_alloc = ScopedAlloc::new(crate::prelude::UseAlloc::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
-        os::load(&path.to_onca_string()).map(|handle| DynLib { handle })
+        os::load(&path.to_string()).map(|handle| DynLib { handle })
     }
 
     /// Close a dynamic library, this has the same result as dropping the dynamic library, except that it has a return value
@@ -38,7 +38,7 @@ impl DynLib {
 
         let _scope_alloc = ScopedAlloc::new(crate::prelude::UseAlloc::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
-        let addr = os::get_proc_address(self.handle, &proc_name.to_onca_string());
+        let addr = os::get_proc_address(self.handle, &proc_name.to_string());
         addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })
     }
 }

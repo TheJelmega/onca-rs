@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use core::ffi::CStr;
+use std::sync::Arc;
 
 use onca_core::prelude::*;
 use onca_logging::{log_info, log_error};
@@ -31,7 +32,7 @@ impl Instance {
     pub fn new(entry: ash::Entry, settings: &ral::Settings, alloc_callbacks: AllocationCallbacks) -> VkResult<Arc<Instance>> {
         // APP INFO
         // -------------------------------------------------------------
-        let mut app_name = String::from_str("Onca App");
+        let mut app_name = String::from("Onca App");
         let mut app_version = ral::Version::new(1, 0, 0);
 
         if let Some(toml::Item::String(name)) = settings.api_specific.get("app-name") {
@@ -63,8 +64,8 @@ impl Instance {
         let mut extensions = DynArray::<String>::new();
 
         if settings.debug_enabled {
-            layers.push(String::from_str("VK_LAYER_KHRONOS_validation"));
-            extensions.push(String::from_str("VK_EXT_debug_utils"));
+            layers.push(String::from("VK_LAYER_KHRONOS_validation"));
+            extensions.push(String::from("VK_EXT_debug_utils"));
         }
 
         // Filter out unavailable optional layers an extensions
@@ -77,10 +78,10 @@ impl Instance {
         });
 
         // Required extensions        
-        extensions.push(String::from_str("VK_KHR_surface"));
+        extensions.push(String::from("VK_KHR_surface"));
 
         if cfg!(windows) {
-            extensions.push(String::from_str("VK_KHR_win32_surface"));
+            extensions.push(String::from("VK_KHR_win32_surface"));
         } else {
             log_error!(LOG_CAT, Self::new, "No platfrom specific surface extension is found");
             return Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT);

@@ -66,16 +66,16 @@ impl SwapChainDesc {
         #[cfg(feature = "validation")]
         {
             if self.width == 0 {
-                return Err(Error::InvalidParameter(onca_format!("Swapchain width needs to be larger than 0")));
+                return Err(Error::InvalidParameter(format!("Swapchain width needs to be larger than 0")));
             }
             if self.height == 0 {
-                return Err(Error::InvalidParameter(onca_format!("Swapchain height needs to be larger than 0")));
+                return Err(Error::InvalidParameter(format!("Swapchain height needs to be larger than 0")));
             }
             if self.num_backbuffers < 2 {
-                return Err(Error::InvalidParameter(onca_format!("Swapchain needs at least 2 backbuffers")));
+                return Err(Error::InvalidParameter(format!("Swapchain needs at least 2 backbuffers")));
             }
             if self.formats.is_empty() {
-                return Err(Error::InvalidParameter(onca_format!("Swapchain needs to have at least 1 possible format")));
+                return Err(Error::InvalidParameter(format!("Swapchain needs to have at least 1 possible format")));
             }
         }
         Ok(())
@@ -179,7 +179,7 @@ impl SwapChain {
         {
             if let Some(rects) = present_info.update_rects {
                 if rects.is_empty() {
-                    return Err(Error::InvalidParameter("SwapChain::Present(): `present_info.update_rects` is `Some`, but contains a slice of length 0".to_onca_string()));
+                    return Err(Error::InvalidParameter("SwapChain::Present(): `present_info.update_rects` is `Some`, but contains a slice of length 0".to_string()));
                 }
             }
         }

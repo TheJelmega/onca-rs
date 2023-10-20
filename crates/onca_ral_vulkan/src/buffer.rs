@@ -1,3 +1,5 @@
+use std::sync::{Arc, Weak};
+
 use onca_core::prelude::*;
 use onca_ral as ral;
 use ash::vk::{self, Handle};
@@ -6,8 +8,8 @@ use ral::{HandleImpl, GpuAddress};
 use crate::{vulkan::AllocationCallbacks, device::Device, utils::ToRalError, memory::{create_api_memory_request, MemoryHeap}};
 
 pub struct Buffer {
-    pub buffer:         vk::Buffer,
-    pub device:         AWeak<ash::Device>,
+    pub buffer:          vk::Buffer,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks
 }
 
@@ -64,7 +66,7 @@ impl Buffer {
 
 impl ral::BufferInterface for Buffer {
     unsafe fn map(&self, allocation: &ral::GpuAllocation, offset: u64, size: u64) -> ral::Result<*mut u8> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         let heap = allocation.heap().interface().as_concrete_type::<MemoryHeap>();
 
         let ptr = device.map_memory(heap.memory(), allocation.offset() + offset, size, vk::MemoryMapFlags::empty()).map_err(|err| err.to_ral_error())?;
@@ -72,7 +74,7 @@ impl ral::BufferInterface for Buffer {
     }
 
     unsafe fn unmap(&self, allocation: &ral::GpuAllocation, _memory: ral::MappedMemory) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         let heap = allocation.heap().interface().as_concrete_type::<MemoryHeap>();
         device.unmap_memory(heap.memory());
     }
@@ -80,7 +82,7 @@ impl ral::BufferInterface for Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { 
             device.destroy_buffer(self.buffer, self.alloc_callbacks.get_some_vk_callbacks());
         }

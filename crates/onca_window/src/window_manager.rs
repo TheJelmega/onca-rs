@@ -1,6 +1,5 @@
 use onca_core::{
     prelude::*,
-    mem::HeapPtr,
     alloc::{get_active_alloc},
     sys::is_on_main_thread, sync::Mutex, event_listener::{EventListenerArray, EventListenerRef, EventListener},
 };
@@ -23,7 +22,7 @@ pub enum RawInputEvent {
 /// Window manager
 pub struct WindowManager {
     os_data             : os::WindowManagerData,
-    windows             : DynArray<(WindowId, HeapPtr<Window>)>,
+    windows             : DynArray<(WindowId, Box<Window>)>,
     alloc               : UseAlloc,
     cur_id              : u32,
     created_callbacks   : Mutex<EventListenerArray<dyn EventListener<Window>>>,
@@ -36,12 +35,12 @@ impl WindowManager {
     /// Create a new window manager.
     /// 
     /// DPI awareness is set at creation and cannot be changed later
-    pub fn new() -> HeapPtr<Self> {
+    pub fn new() -> Box<Self> {
         assert!(is_on_main_thread(), "The window manager should be only be created on the main thread");
 
         let os_data = os::WindowManagerData::new();
 
-        HeapPtr::new(Self {
+        Box::new(Self {
             os_data,
             windows: DynArray::new(),
             alloc: get_active_alloc(),

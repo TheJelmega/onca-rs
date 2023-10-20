@@ -1,3 +1,5 @@
+use std::sync::{Weak, Arc};
+
 use onca_core::{prelude::*, collections::StaticDynArray};
 use onca_ral as ral;
 use ash::{vk, extensions::ext};
@@ -11,7 +13,7 @@ use crate::{
 
 pub struct CommandPool {
     pub pool:   vk::CommandPool,
-    pub device: AWeak<ash::Device>,
+    pub device: Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 
     pub descriptor_buffer: ext::DescriptorBuffer,
@@ -52,13 +54,13 @@ impl CommandPool {
 
 impl ral::CommandPoolInterface for CommandPool {
     unsafe fn reset(&self) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         device.reset_command_pool(self.pool, vk::CommandPoolResetFlags::empty()).map_err(|err| err.to_ral_error())?;
         Ok(())
     }
 
     unsafe fn allocate(&self, list_type: CommandListType) -> ral::Result<ral::CommandListInterfaceHandle> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let create_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(self.pool)
@@ -74,7 +76,7 @@ impl ral::CommandPoolInterface for CommandPool {
     }
 
     unsafe fn free(&self, list: &ral::CommandListInterfaceHandle) {
-        if let Some(device) = AWeak::upgrade(&self.device) {
+        if let Some(device) = Weak::upgrade(&self.device) {
             let list = list.as_concrete_type::<CommandList>();
             device.free_command_buffers(self.pool, &[list.buffer]);
         }
@@ -86,7 +88,7 @@ impl ral::CommandPoolInterface for CommandPool {
 impl Drop for CommandPool {
     fn drop(&mut self) {
         unsafe {
-            let vk_device = AWeak::upgrade(&self.device).unwrap();
+            let vk_device = Weak::upgrade(&self.device).unwrap();
             vk_device.destroy_command_pool(self.pool, self.alloc_callbacks.get_some_vk_callbacks());
         };
     }
@@ -94,19 +96,19 @@ impl Drop for CommandPool {
 
 pub struct CommandList {
     pub buffer: vk::CommandBuffer,
-    pub device: AWeak<ash::Device>,
+    pub device: Weak<ash::Device>,
 
     pub descriptor_buffer: ext::DescriptorBuffer,
 }
 
 impl ral::CommandListInterface for CommandList {
     unsafe fn reset(&self) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         device.reset_command_buffer(self.buffer, vk::CommandBufferResetFlags::default()).map_err(|err| err.to_ral_error())
     }
     
     unsafe fn begin(&self, flags: CommandListBeginFlags) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         // TODO: inheritence info
         let begin_info = vk::CommandBufferBeginInfo::builder()
@@ -123,7 +125,7 @@ impl ral::CommandListInterface for CommandList {
     //==============================================================================================================================
 
     unsafe fn close(&self) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         device.end_command_buffer(self.buffer).map_err(|err| err.to_ral_error())
     }
 
@@ -187,7 +189,7 @@ impl ral::CommandListInterface for CommandList {
             .buffer_memory_barriers(&buffer_barriers)
             .image_memory_barriers(&image_barriers);
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_pipeline_barrier2(self.buffer, &dependency_info);
     }
 
@@ -208,7 +210,7 @@ impl ral::CommandListInterface for CommandList {
             .dst_buffer(dst.interface().as_concrete_type::<Buffer>().buffer)
             .regions(&vk_regions);
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_buffer2(self.buffer, &copy_info);
     }
 
@@ -227,7 +229,7 @@ impl ral::CommandListInterface for CommandList {
             .dst_buffer(dst.interface().as_concrete_type::<Buffer>().buffer)
             .regions(&vk_regions);
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_buffer2(self.buffer, &copy_info);
     }
 
@@ -278,7 +280,7 @@ impl ral::CommandListInterface for CommandList {
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(&vk_regions);
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_image2(self.buffer, &copy_info);
     }
 
@@ -316,7 +318,7 @@ impl ral::CommandListInterface for CommandList {
             .regions(&regions)
             .build();
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_image2(self.buffer, &copy_info);
     }
 
@@ -362,7 +364,7 @@ impl ral::CommandListInterface for CommandList {
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(&vk_regions);
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_buffer_to_image2(self.buffer, &copy_info)
     }
 
@@ -409,7 +411,7 @@ impl ral::CommandListInterface for CommandList {
             .regions(&vk_regions)
             .build();
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_copy_image_to_buffer2(self.buffer, &copy_info)
     }
 
@@ -451,7 +453,7 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn bind_compute_pipeline(&self, pipeline: &ral::PipelineHandle) {
         let pipeline = pipeline.interface().as_concrete_type::<Pipeline>().pipeline;
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_bind_pipeline(self.buffer, vk::PipelineBindPoint::COMPUTE, pipeline);
     }
 
@@ -468,7 +470,7 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn bind_graphics_pipeline(&self, pipeline: &ral::PipelineHandle) {
         let pipeline = pipeline.interface().as_concrete_type::<Pipeline>().pipeline;
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_bind_pipeline(self.buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
     }
 
@@ -497,7 +499,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn bind_vertex_buffer(&self, view: ral::VertexBufferView) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
 
         let buffers = [view.buffer.interface().as_concrete_type::<Buffer>().buffer];
         let offsets = [view.offset];
@@ -508,7 +510,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn bind_index_buffer(&self, view: ral::IndexBufferView) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
 
         let buffer = view.buffer.interface().as_concrete_type::<Buffer>().buffer;
 
@@ -623,12 +625,12 @@ impl ral::CommandListInterface for CommandList {
 
 
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_begin_rendering(self.buffer, &info);
     }
 
     unsafe fn end_rendering(&self) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_end_rendering(self.buffer);
     }
 
@@ -639,7 +641,7 @@ impl ral::CommandListInterface for CommandList {
             vk_viewports.push(viewport.to_vulkan());
         }
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_set_viewport_with_count(self.buffer, &vk_viewports);
     }
 
@@ -650,22 +652,22 @@ impl ral::CommandListInterface for CommandList {
             vk_scissors.push(scissor.to_vulkan());
         }
 
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_set_scissor_with_count(self.buffer, &vk_scissors);
     }
 
     unsafe fn set_primitive_topology(&self, topology: ral::PrimitiveTopology) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_set_primitive_topology(self.buffer, topology.to_vulkan());
     }
 
     unsafe fn draw_instanced(&self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_draw(self.buffer, vertex_count, instance_count, start_vertex, start_instance);
     }
 
     unsafe fn draw_indexed_instanced(&self, index_count: u32, instance_count: u32, start_index: u32, vertex_offset: i32, start_instance: u32) {
-        let device = AWeak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
+        let device = Weak::upgrade(&self.device).expect("Device was deleted while recoding a command list");
         device.cmd_draw_indexed(self.buffer, index_count, instance_count, start_index, vertex_offset, start_instance)
     }
 

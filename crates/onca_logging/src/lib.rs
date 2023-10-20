@@ -6,11 +6,11 @@ use core::{
     sync::atomic::{AtomicU8, self},
     cell::RefCell
 };
+use std::fmt::Write;
 use onca_core::{
     prelude::*,
     io::{self, prelude::*},
     sync::{RwLock, Mutex},
-    mem::HeapPtr,
     time::TimeStamp, collections::StaticDynArray,
 };
 use onca_terminal::Terminal;
@@ -165,7 +165,7 @@ macro_rules! log_location {
 }
 
 pub struct LoggerState {
-    writers:        StaticDynArray<(HeapPtr<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
+    writers:        StaticDynArray<(Box<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
     cache:          Option<String>,
     writer_idx:     usize,
     always_flush:   bool,
@@ -275,7 +275,7 @@ impl Logger {
     /// Returns `Ok(index)` if space was available. This index can be used to remove the writer later on.
     /// 
     /// Otherwise returns an `Err` with the provided writer
-    pub fn add_writer(&self, writer: HeapPtr<dyn io::Write>) -> Result<usize, HeapPtr<dyn io::Write>> {
+    pub fn add_writer(&self, writer: Box<dyn io::Write>) -> Result<usize, Box<dyn io::Write>> {
         let mut state = self.state.lock();
 
         if state.writers.len() == LoggerState::MAX_WRITERS {
@@ -289,7 +289,7 @@ impl Logger {
     }
 
     /// Remove a writer from the logger
-    pub fn remove_writer(&self, index: usize) -> Option<HeapPtr<dyn io::Write>> {
+    pub fn remove_writer(&self, index: usize) -> Option<Box<dyn io::Write>> {
         self.state.lock().writers.remove_first_if(|(_, idx)| *idx == index).map(|(writer, _)| writer)
     }
 

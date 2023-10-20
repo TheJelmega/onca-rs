@@ -7,7 +7,6 @@ use core::{
 use onca_core::{
     prelude::*,
     io::{SeekFrom, self},
-    mem::HeapPtr,
 };
 use windows::Win32::{
     Storage::FileSystem::{ReadFileEx, WriteFileEx},
@@ -58,8 +57,8 @@ impl AsyncIOCompletionData {
 pub(crate) struct AsyncReadResult {
     file_handle     : HANDLE, 
     buffer          : DynArray<u8>,
-    overlapped      : HeapPtr<OVERLAPPED>,
-    completion_data : HeapPtr<AsyncIOCompletionData>,
+    overlapped      : Box<OVERLAPPED>,
+    completion_data : Box<AsyncIOCompletionData>,
 }
 
 impl AsyncReadResult {
@@ -71,7 +70,7 @@ impl AsyncReadResult {
             } 
             AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
             AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::const_io_error!(io::ErrorKind::Other, "Data was already taken from this result")))
+            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
         }
     }
 
@@ -83,7 +82,7 @@ impl AsyncReadResult {
                     AsyncIOCompletionState::InFlight => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
                     AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::const_io_error!(io::ErrorKind::Other, "Data was already taken from this result")))
+                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
                 }
             } else {
                 Poll::Ready(Err(io::Error::from_raw_os_error(res.0 as i32)))
@@ -93,7 +92,7 @@ impl AsyncReadResult {
 
     pub fn cancel(&mut self) -> io::Result<()> {
         unsafe {
-            let res = CancelIoEx(self.file_handle, Some(self.overlapped.ptr()));
+            let res = CancelIoEx(self.file_handle, Some(&*self.overlapped));
             if res.as_bool() {
                 Ok(())
             } else {
@@ -114,8 +113,8 @@ pub(crate) struct AsyncWriteResult {
     file_handle : HANDLE,
     #[allow(dead_code)] // we need to keep the buffer alive until this operation is finished, but the compiler complains that it's not read
     buffer      : DynArray<u8>,
-    overlapped  : HeapPtr<OVERLAPPED>,
-    completion_data : HeapPtr<AsyncIOCompletionData>,
+    overlapped  : Box<OVERLAPPED>,
+    completion_data : Box<AsyncIOCompletionData>,
 }
 
 impl AsyncWriteResult {
@@ -127,7 +126,7 @@ impl AsyncWriteResult {
             } 
             AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(bytes_read)),
             AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::const_io_error!(io::ErrorKind::Other, "Data was already taken from this result")))
+            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
         }
     }
 
@@ -139,7 +138,7 @@ impl AsyncWriteResult {
                     AsyncIOCompletionState::InFlight => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(bytes_read)),
                     AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::const_io_error!(io::ErrorKind::Other, "Data was already taken from this result")))
+                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
                 }
             } else {
                 Poll::Ready(Err(io::Error::from_raw_os_error(res.0 as i32)))
@@ -149,7 +148,7 @@ impl AsyncWriteResult {
 
     pub fn cancel(&mut self) -> io::Result<()> {
         unsafe {
-            let res = CancelIoEx(self.file_handle, Some(self.overlapped.ptr()));
+            let res = CancelIoEx(self.file_handle, Some(&*self.overlapped));
             if res.as_bool() {
                 Ok(())
             } else {
@@ -164,12 +163,12 @@ impl FileHandle {
         unsafe {
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
-            let mut overlapped = HeapPtr::new(OVERLAPPED::default());
+            let mut overlapped = Box::new(OVERLAPPED::default());
             overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
             overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
 
-            let completion_data = HeapPtr::new(AsyncIOCompletionData::new());
-            overlapped.hEvent = core::mem::transmute(completion_data.ptr());
+            let completion_data = Box::new(AsyncIOCompletionData::new());
+            overlapped.hEvent = core::mem::transmute(&*completion_data);
 
             let mut buffer = DynArray::with_capacity(bytes_to_read as usize);
             buffer.set_len(bytes_to_read as usize);
@@ -177,7 +176,7 @@ impl FileHandle {
                 self.0,
                 Some(buffer.as_mut_ptr() as *mut c_void),
                 bytes_to_read as u32,
-                overlapped.ptr_mut(),
+                &mut *overlapped,
                 Some(io_completion_callback)
             );
             if !res.as_bool() {
@@ -197,17 +196,17 @@ impl FileHandle {
         unsafe {
             let cursor_pos = self.seek(SeekFrom::Current(0))?;
 
-            let mut overlapped = HeapPtr::new(OVERLAPPED::default());
+            let mut overlapped = Box::new(OVERLAPPED::default());
             overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
             overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
 
-            let completion_data = HeapPtr::new(AsyncIOCompletionData::new());
-            overlapped.hEvent = core::mem::transmute(completion_data.ptr());
+            let completion_data = Box::new(AsyncIOCompletionData::new());
+            overlapped.hEvent = core::mem::transmute(&*completion_data);
 
             let res = WriteFileEx(
                 self.0,
                 Some(&buffer),
-                overlapped.ptr_mut(),
+                &mut *overlapped,
                 Some(io_completion_callback)
             );
             if !res.as_bool() {

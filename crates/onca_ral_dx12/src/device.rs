@@ -1,4 +1,5 @@
 use core::{mem::MaybeUninit, sync::atomic::AtomicU64};
+use std::sync::Arc;
 
 use onca_core::{utils::EnumCount, prelude::*};
 use onca_ral as ral;

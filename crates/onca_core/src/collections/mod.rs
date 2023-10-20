@@ -1,16 +1,8 @@
-mod collections_alloc;
 mod imp;
 
 mod static_dyn_array;
 mod dyn_array;
 mod small_dyn_array;
-
-mod btree_map;
-mod btree_set;
-mod linked_list;
-mod vec_deque;
-mod hash_map;
-mod hash_set;
 
 mod bitset;
 
@@ -18,21 +10,24 @@ mod byte_buffer;
 
 
 pub use static_dyn_array::StaticDynArray;
-pub use dyn_array::DynArray;
+//pub use dyn_array::DynArray;
 pub use small_dyn_array::SmallDynArray;
-
-pub use btree_map::BTreeMap;
-pub use btree_set::BTreeSet;
-pub use linked_list::LinkedList;
-pub use vec_deque::VecDeque;
-pub use hash_map::HashMap;
-pub use hash_set::HashSet;
 
 pub use bitset::BitSet;
 
 pub use byte_buffer::ByteBuffer;
 
 use core::ops::Range;
+
+
+impl<T> GetAllocatorId for Vec<T> {
+    fn allocator_id(&self) -> u16 {
+        todo!()
+    }
+}
+
+
+pub type DynArray<T> = Vec<T>;
 
 //--------------------------------------------------------------
 
@@ -64,6 +59,8 @@ macro_rules! impl_slice_partial_eq {
     };
 }
 use impl_slice_partial_eq;
+
+use crate::alloc::GetAllocatorId;
 
 //--------------------------------------------------------------
 

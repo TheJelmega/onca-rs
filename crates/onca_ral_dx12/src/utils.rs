@@ -1,5 +1,6 @@
 use core::num::NonZeroU16;
 
+use onca_core::strings::StringExtensions;
 use windows::{
     core::{Error as WinError, HRESULT, PCSTR},
     Win32::{Graphics::{

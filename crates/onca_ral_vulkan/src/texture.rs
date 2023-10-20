@@ -1,3 +1,5 @@
+use std::sync::{Weak, Arc};
+
 use onca_core::prelude::*;
 use onca_ral as ral;
 use ash::vk;
@@ -13,7 +15,7 @@ use crate::{vulkan::AllocationCallbacks, utils::{ToRalError, ToVulkan}};
 
 pub struct Texture {
     pub image:               vk::Image,
-    pub device:              AWeak<ash::Device>,
+    pub device:              Weak<ash::Device>,
     pub alloc_callbacks:     AllocationCallbacks,
     /// Is the image owned by a swapchain, if so, don't destroy it manually
     pub is_swap_chain_image: bool
@@ -21,17 +23,17 @@ pub struct Texture {
 
 impl ral::TextureInterface for Texture {
     unsafe fn create_sampled_texture_view(&self, texture: &ral::TextureHandle, desc: &ral::SampledTextureViewDesc) -> ral::Result<ral::SampledTextureViewInterfaceHandle> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         SampledTextureView::new(device, self.alloc_callbacks.clone(), desc, texture)
     }
 
     unsafe fn create_storage_texture_view(&self, texture: &ral::TextureHandle, desc: &ral::StorageTextureViewDesc) -> ral::Result<ral::StorageTextureViewInterfaceHandle> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         StorageTextureView::new(device, self.alloc_callbacks.clone(), desc, texture)
     }
 
     unsafe fn create_render_texture_view(&self, _: &ral::DeviceHandle, texture: &ral::TextureHandle, desc: &ral::RenderTargetViewDesc) -> ral::Result<ral::RenderTargetViewInterfaceHandle> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         RenderTargetView::new(device, self.alloc_callbacks.clone(), desc, texture)
     }
 }
@@ -40,7 +42,7 @@ impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
             if !self.is_swap_chain_image {
-                let device = AWeak::upgrade(&self.device).unwrap();
+                let device = Weak::upgrade(&self.device).unwrap();
                 device.destroy_image(self.image, self.alloc_callbacks.get_some_vk_callbacks());
             }
         }
@@ -54,7 +56,7 @@ impl Drop for Texture {
 
 pub struct RenderTargetView {
     pub view:            vk::ImageView,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -164,7 +166,7 @@ impl ral::RenderTargetViewInterface for RenderTargetView {
 impl Drop for RenderTargetView {
     fn drop(&mut self) {
         unsafe {
-            let device = AWeak::upgrade(&self.device).unwrap();
+            let device = Weak::upgrade(&self.device).unwrap();
             device.destroy_image_view(self.view, self.alloc_callbacks.get_some_vk_callbacks());
         }
     }
@@ -174,7 +176,7 @@ impl Drop for RenderTargetView {
 
 pub struct SampledTextureView {
     pub view:            vk::ImageView,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -306,7 +308,7 @@ impl ral::SampledTextureViewInterface for SampledTextureView {
 impl Drop for SampledTextureView {
     fn drop(&mut self) {
         unsafe {
-            let device = AWeak::upgrade(&self.device).unwrap();
+            let device = Weak::upgrade(&self.device).unwrap();
             device.destroy_image_view(self.view, self.alloc_callbacks.get_some_vk_callbacks());
         }
     }
@@ -317,7 +319,7 @@ impl Drop for SampledTextureView {
 
 pub struct StorageTextureView {
     pub view:            vk::ImageView,
-    pub device:          AWeak<ash::Device>,
+    pub device:          Weak<ash::Device>,
     pub alloc_callbacks: AllocationCallbacks,
 }
 
@@ -408,7 +410,7 @@ impl ral::StorageTextureViewInterface for StorageTextureView {
 impl Drop for StorageTextureView {
     fn drop(&mut self) {
         unsafe {
-            let device = AWeak::upgrade(&self.device).unwrap();
+            let device = Weak::upgrade(&self.device).unwrap();
             device.destroy_image_view(self.view, self.alloc_callbacks.get_some_vk_callbacks());
         }
     }

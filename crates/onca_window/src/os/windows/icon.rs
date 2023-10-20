@@ -22,7 +22,7 @@ impl OSIcon {
             let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
             let (width, height) = size.map(|size | (size.width as i32, size.height as i32)).unwrap_or((0, 0));
-            let path = String::from_str(path);
+            let path = String::from(path);
             let hicon = LoadImageA(
                 HMODULE(0),
                 PCSTR(path.as_ptr()),

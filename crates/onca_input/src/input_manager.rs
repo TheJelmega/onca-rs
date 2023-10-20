@@ -2,10 +2,10 @@ use core::{
     ptr::null_mut,
     num::NonZeroU8,
 };
+use std::{collections::HashMap, sync::Arc};
 
 use onca_core::{
     prelude::*,
-    collections::HashMap,
     sync::{Mutex, RwLock},
     event_listener::EventListener,
     time::DeltaTime,
@@ -19,7 +19,7 @@ use crate::{os::{self, OSInput}, input_devices::{Keyboard, InputDevice}, LOG_INP
 
 // TODO: Register device with custom API, so would ignore `InputDevice::handleInput` and manage it in `InputDevice::tick`
 struct DeviceStorage {
-    devices        : DynArray<Option<(HeapPtr<hid::Device>, HeapPtr<dyn InputDevice>)>>,
+    devices        : DynArray<Option<(Box<hid::Device>, Box<dyn InputDevice>)>>,
     device_mapping : HashMap<hid::DeviceHandle, usize>,
 }
 
@@ -41,7 +41,7 @@ impl DeviceStorage {
     }
 
     fn get_device_type(&self, handle: hid::DeviceHandle) -> DeviceType {
-        self.get_device(handle).map_or(DeviceType::Other("<unknown>".to_onca_string()), |(_, dev)| dev.get_device_type())
+        self.get_device(handle).map_or(DeviceType::Other("<unknown>".to_string()), |(_, dev)| dev.get_device_type())
     }
 
     fn get_axis_value(&self, handle: hid::DeviceHandle, path: &InputAxisId) -> Option<AxisValue> {
@@ -53,7 +53,7 @@ impl DeviceStorage {
         self.device_mapping.contains_key(&handle)
     }
 
-    fn add_device(&mut self, hid_dev: HeapPtr<hid::Device>, dev: HeapPtr<dyn InputDevice>) {
+    fn add_device(&mut self, hid_dev: Box<hid::Device>, dev: Box<dyn InputDevice>) {
         let handle = hid_dev.handle();
         let idx = match self.devices.iter().position(|opt| opt.is_none()) {
             Some(idx) => {
@@ -106,10 +106,10 @@ pub enum RebindResult {
 struct RebindContext {
     binding_name    : String,
     context_name    : Option<String>,
-    rebind_callback : HeapPtr<dyn Fn(InputAxisId) -> RebindResult>,
+    rebind_callback : Box<dyn Fn(InputAxisId) -> RebindResult>,
 }
 
-type CreateDevicePtr = HeapPtr<dyn Fn() -> Option<HeapPtr<dyn InputDevice>>>;
+type CreateDevicePtr = Box<dyn Fn() -> Option<Box<dyn InputDevice>>>;
 
 /// Manager for all input: devices, bindings, events, etc
 /// 
@@ -122,7 +122,7 @@ pub struct InputManager {
     raw_input_listener      : Arc<Mutex<RawInputListener>>,
 
     device_product_creators : Mutex<HashMap<hid::VendorProduct, CreateDevicePtr>>,
-    device_custom_creators  : Mutex<DynArray<(HeapPtr<dyn Fn(&hid::Identifier) -> bool>, CreateDevicePtr)>>,
+    device_custom_creators  : Mutex<DynArray<(Box<dyn Fn(&hid::Identifier) -> bool>, CreateDevicePtr)>>,
     device_usage_creators   : Mutex<HashMap<hid::Usage, CreateDevicePtr>>,
 
     mapping_contexts        : Mutex<DynArray<MappingContext>>,
@@ -136,10 +136,10 @@ pub struct InputManager {
 }
 
 impl InputManager {
-    pub fn new(window_manager: &HeapPtr<WindowManager>) -> HeapPtr<Self> {
+    pub fn new(window_manager: &Box<WindowManager>) -> Box<Self> {
         assert!(sys::is_on_main_thread(), "The input manager should only be created on the main thread");
 
-        let mut ptr = HeapPtr::new(Self {
+        let mut ptr = Box::new(Self {
             os_input: os::OSInput::new(),
             mouse: None,
             keyboard: None,
@@ -170,12 +170,12 @@ impl InputManager {
     /// Register an input device creator for a specific device, including the hid usages it needs to have registered
     pub fn register_product_create_device<F>(&self, vendor_product: hid::VendorProduct, usages: &[hid::Usage], create_dev: F)
     where
-        F : Fn() -> Option<HeapPtr<dyn InputDevice>> + 'static
+        F : Fn() -> Option<Box<dyn InputDevice>> + 'static
     {
         {
             let mut dev_prod_creators = self.device_product_creators.lock();
             if !dev_prod_creators.contains_key(&vendor_product) {
-                dev_prod_creators.insert(vendor_product, HeapPtr::new(create_dev));
+                dev_prod_creators.insert(vendor_product, Box::new(create_dev));
             } else {
                 log_warning!(LOG_INPUT_CAT, "Device creation has already been registered for vendor and product: {vendor_product}");
             }
@@ -189,11 +189,11 @@ impl InputManager {
     pub fn register_custom_create_device<P, F>(&self, pred: P, usages: &[hid::Usage], create_dev: F)
     where
         P : Fn(&hid::Identifier) -> bool + 'static,
-        F : Fn() -> Option<HeapPtr<dyn InputDevice>> + 'static
+        F : Fn() -> Option<Box<dyn InputDevice>> + 'static
     {
         {
             let mut dev_custom_creators = self.device_custom_creators.lock();
-            dev_custom_creators.push((HeapPtr::new(pred), HeapPtr::new(create_dev)));
+            dev_custom_creators.push((Box::new(pred), Box::new(create_dev)));
         }
         for usage in usages {
             self.os_input.register_device_usage(*usage);
@@ -203,12 +203,12 @@ impl InputManager {
     /// Register a generic input device creator for a specific usage
     pub fn register_usage_creator_device<F>(&self, usage: hid::Usage, create_dev: F)
     where
-    F : Fn() -> Option<HeapPtr<dyn InputDevice>> + 'static
+    F : Fn() -> Option<Box<dyn InputDevice>> + 'static
     {
         {
             let mut usage_creators = self.device_usage_creators.lock();
             if !usage_creators.contains_key(&usage) {
-                usage_creators.insert(usage, HeapPtr::new(create_dev));
+                usage_creators.insert(usage, Box::new(create_dev));
             } else {
                 log_warning!(LOG_INPUT_CAT, "Device creation has already been registered for usage: {usage}");
             }
@@ -286,9 +286,9 @@ impl InputManager {
         }
 
         self.rebind_context = Some(RebindContext {
-            binding_name: binding_name.to_onca_string(),
-            context_name: mapping_context_identifier.map(|s| s.to_onca_string()),
-            rebind_callback: HeapPtr::new(rebind_callback)
+            binding_name: binding_name.to_string(),
+            context_name: mapping_context_identifier.map(|s| s.to_string()),
+            rebind_callback: Box::new(rebind_callback)
         })
     }
   
@@ -380,7 +380,7 @@ impl InputManager {
     }
 
     pub(crate) fn add_device(&mut self, device: hid::Device) {
-        let device = HeapPtr::new(device);
+        let device = Box::new(device);
         let handle = DeviceHandle::Hid(device.handle());
         if let Some(input_dev) = self.create_input_device_for(*device.identifier()) {
             let usage = device.identifier().usage;
@@ -455,14 +455,14 @@ impl InputManager {
         // Register built-in device creators
         let gamepad_usage = hid::Usage::from_u16(1, 5);
         self.register_usage_creator_device(gamepad_usage, || Gamepad::new().map(|x| {
-            // We need to get around rust not realizing that `HeapPtr` could `CoerseUnsized` directly in a return statement
+            // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
             // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
-            let res : HeapPtr<dyn InputDevice> = HeapPtr::new(x);
+            let res : Box<dyn InputDevice> = Box::new(x);
             res
         }));
     }
 
-    fn create_input_device_for(&self, ident: hid::Identifier) -> Option<HeapPtr<dyn InputDevice>> {
+    fn create_input_device_for(&self, ident: hid::Identifier) -> Option<Box<dyn InputDevice>> {
         // Find the best fitting, registered device
         //
         // 1) any device that matches the specific vendor and product
@@ -545,7 +545,7 @@ impl InputManager {
 
     fn get_device_type(&self, handle: DeviceHandle) -> DeviceType {
         match handle {
-            DeviceHandle::Invalid => DeviceType::Other("<unknown>".to_onca_string()),
+            DeviceHandle::Invalid => DeviceType::Other("<unknown>".to_string()),
             DeviceHandle::Mouse => DeviceType::Mouse,
             DeviceHandle::Keyboard => DeviceType::Keyboard,
             DeviceHandle::Hid(hid_handle) => self.device_store.read().get_device_type(hid_handle),
@@ -569,8 +569,8 @@ impl RawInputListener {
         Self { manager: null_mut() }
     }
 
-    pub(crate) fn init(&mut self, manager: &HeapPtr<InputManager>) {
-        self.manager = manager.ptr_mut();
+    pub(crate) fn init(&mut self, manager: &Box<InputManager>) {
+        self.manager = &**manager as *const _ as *mut _;
     }
 
     pub(crate) fn shutdown(&mut self) {

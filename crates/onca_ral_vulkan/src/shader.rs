@@ -1,6 +1,6 @@
 use core::ffi::CStr;
+use std::sync::{Arc, Weak};
 
-use onca_core::prelude::{AWeak, Arc};
 use onca_ral as ral;
 use ash::vk;
 
@@ -11,7 +11,7 @@ use crate::{device::Device, utils::{ToRalError, ToVulkan}, vulkan::AllocationCal
 pub struct Shader {
     pub shader: vk::ShaderModule,
     pub alloc_callbacks: AllocationCallbacks,
-    pub device: AWeak<ash::Device>,
+    pub device: Weak<ash::Device>,
 }
 
 impl Shader {
@@ -53,7 +53,7 @@ impl ral::ShaderInterface for Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        let device = AWeak::upgrade(&self.device).unwrap();
+        let device = Weak::upgrade(&self.device).unwrap();
         unsafe { device.destroy_shader_module(self.shader, self.alloc_callbacks.get_some_vk_callbacks()) };
     }
 }

@@ -38,19 +38,19 @@ mod sampler;
 
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-extern "C" fn create_ral(memory_manager: &MemoryManager, logger: &Logger, alloc: UseAlloc, settings: ral::Settings) -> ral::Result<HeapPtr<dyn ral::Interface>> {
+extern "C" fn create_ral(memory_manager: &MemoryManager, logger: &Logger, alloc: UseAlloc, settings: ral::Settings) -> ral::Result<Box<dyn ral::Interface>> {
 	set_memory_manager(memory_manager);
 	set_logger(logger);
 
 	// .map() doesn't seem to work here, as it has trouble converting from HeapPtr<Dx12Ral> to HeapPtr<dyn RalInterface>
 	match VulkanRal::new(alloc, settings) {
-		Ok(ral) => Ok(HeapPtr::new(ral)),
+		Ok(ral) => Ok(Box::new(ral)),
     	Err(err) => Err(err.to_ral_error()),
 	}
 }
 
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-extern "C" fn destroy_ral(_ral: HeapPtr<dyn ral::Interface>) {
+extern "C" fn destroy_ral(_ral: Box<dyn ral::Interface>) {
 	// Just drop `ral` here
 }

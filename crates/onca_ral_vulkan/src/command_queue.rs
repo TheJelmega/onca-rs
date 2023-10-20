@@ -1,3 +1,5 @@
+use std::sync::Weak;
+
 use onca_core::prelude::*;
 use ash::vk;
 use onca_ral as ral;
@@ -7,12 +9,12 @@ use crate::{utils::{ToRalError, ToVulkan}, command_list::CommandList, fence::Fen
 
 pub struct CommandQueue {
     pub queue: vk::Queue,
-    pub device: AWeak<ash::Device>,
+    pub device: Weak<ash::Device>,
 }
 
 impl ral::CommandQueueInterface for CommandQueue {
     unsafe fn flush(&self) -> ral::Result<()> {
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         device.queue_wait_idle(self.queue).map_err(|err| err.to_ral_error())
     }
 
@@ -65,7 +67,7 @@ impl ral::CommandQueueInterface for CommandQueue {
             vk_batches.push(submit_info)
         }
 
-        let device = AWeak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
+        let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         // Currently we don't use the fence, but check if it could be used for something via the RAL
         device.queue_submit2(self.queue, &vk_batches, vk::Fence::default()).map_err(|err| err.to_ral_error())

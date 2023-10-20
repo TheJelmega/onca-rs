@@ -1,6 +1,6 @@
 use core::mem::ManuallyDrop;
+use std::sync::Arc;
 
-use onca_core::prelude::Arc;
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};

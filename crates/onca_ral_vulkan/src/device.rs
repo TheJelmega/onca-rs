@@ -1,4 +1,5 @@
 use core::mem::MaybeUninit;
+use std::sync::{Arc, Weak};
 
 use onca_core::{prelude::*, strings::ToString};
 use onca_core_macros::flags;
@@ -25,7 +26,7 @@ pub enum SupportedExtensions {
 
 pub struct Device {
     pub device:                   Arc<ash::Device>,
-    pub instance:                 AWeak<Instance>,
+    pub instance:                 Weak<Instance>,
     pub extensions:               DynArray<&'static str>,
     pub alloc_callbacks:          AllocationCallbacks,
     pub queue_indices:            [u8; ral::QueueType::COUNT],
@@ -63,7 +64,7 @@ impl Device {
     pub fn get_instance(&self) -> ral::Result<Arc<Instance>> {
         match self.instance.upgrade() {
             Some(instance) => Ok(instance),
-            None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_onca_string())),
+            None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_string())),
         }
     }
 
@@ -205,7 +206,7 @@ impl Device {
 
         let instance = match vk_phys_dev.instance.upgrade() {
             Some(instance) => instance,
-            None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_onca_string())),
+            None => return Err(ral::Error::Other("Vulkan instance has been destroyed before the device could be created".to_string())),
         };
 
         let device = unsafe { instance.instance.create_device(vk_phys_dev.phys_dev, &create_info, instance.alloc_callbacks.get_some_vk_callbacks()) }.map_err(|err| err.to_ral_error())?;

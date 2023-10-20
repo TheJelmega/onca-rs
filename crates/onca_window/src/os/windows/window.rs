@@ -3,7 +3,6 @@ use core::{ffi::c_void, mem, ptr::null_mut};
 use std::cell::Cell;
 use onca_core::{
     prelude::*,
-    mem::HeapPtr, 
     sync::Mutex,
     sys::get_app_handle,
     utils::is_flag_set,
@@ -964,7 +963,7 @@ unsafe extern "system" fn wnd_proc(
 pub(crate) fn create(
     manager: &mut WindowManager,
     mut settings: WindowSettings
-) -> Option<HeapPtr<Window>> {
+) -> Option<Box<Window>> {
     unsafe {
         let atom = match manager
             .get_os_data()
@@ -1002,7 +1001,7 @@ pub(crate) fn create(
             is_closing: false,
             is_destroyed: false,
         };
-        let mut window_ptr = HeapPtr::new(window);
+        let mut window_ptr = Box::new(window);
 
         let hwnd = CreateWindowExA(
             ex_style,
@@ -1016,7 +1015,7 @@ pub(crate) fn create(
             HWND(0),
             HMENU(0),
             get_app_handle().hmodule(),
-            Some(window_ptr.ptr() as *const c_void),
+            Some(&*window_ptr as *const _ as *const c_void),
         );
 
         if hwnd == HWND(0) {

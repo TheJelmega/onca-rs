@@ -1,4 +1,5 @@
 use core::{num::NonZeroU32, ops::BitOr};
+use std::sync::{Weak, Arc};
 
 use onca_core::{
     prelude::*,
@@ -54,7 +55,7 @@ pub trait CustomModifier {
     fn apply(&mut self, value: AxisValue) -> AxisValue;
 
     /// Clone the modifier
-    fn clone_modifier(&self) -> HeapPtr<dyn CustomModifier>;
+    fn clone_modifier(&self) -> Box<dyn CustomModifier>;
 }
 
 /// Input modifier
@@ -70,7 +71,7 @@ pub enum Modifier {
     /// Swizzle the axes
     Swizzle(AxisSwizzle),
     /// Custom modifier
-    Custom(HeapPtr<dyn CustomModifier>)
+    Custom(Box<dyn CustomModifier>)
 }
 
 impl Modifier {
@@ -189,7 +190,7 @@ pub trait CustomTrigger {
     fn trigger_type(&self) -> TriggerType;
 
     /// Clone the trigger
-    fn clone_trigger(&self) -> HeapPtr<dyn CustomTrigger>;
+    fn clone_trigger(&self) -> Box<dyn CustomTrigger>;
 }
 
 /// Trigger type
@@ -243,9 +244,9 @@ pub enum Trigger {
         threshold              : f32
     },
     /// Chorded trigger (other action needs to be triggered)
-    Chord(AWeak<Mutex<Action>>),
+    Chord(Weak<Mutex<Action>>),
     /// Custom trigger
-    Custom(HeapPtr<dyn CustomTrigger>)
+    Custom(Box<dyn CustomTrigger>)
 }
 
 impl Clone for Trigger {
@@ -429,7 +430,7 @@ impl TriggerData {
             Trigger::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => 
                 Self::check_pulse(&mut self.context, value, dt, *trigger_on_start, *interval, *trigger_limit, *time_dilation, *threshold),
             Trigger::Tap { release_time_threshold, time_dilation, threshold } => Self::check_tap(&mut self.context, value, dt, *release_time_threshold, *time_dilation, *threshold),
-            Trigger::Chord(chorded_action) => if context.triggered_actions.iter().find(|action| Arc::weak_ptr_eq(&action, chorded_action)).is_some() { TriggerResult::Triggered } else { TriggerResult::Idle },
+            Trigger::Chord(chorded_action) => if context.triggered_actions.iter().find(|action| Weak::ptr_eq(&Arc::downgrade(action), chorded_action)).is_some() { TriggerResult::Triggered } else { TriggerResult::Idle },
             Trigger::Custom(custom) => custom.check(value, &mut self.context),
         };
         self.context.prev_value = value;

@@ -55,7 +55,7 @@ impl RTVAndDSVDescriptorHeap {
 
     pub unsafe fn allocate(&self) -> ral::Result<D3D12_CPU_DESCRIPTOR_HANDLE> {
         if self.head.load(Ordering::Relaxed) == self.max_count {
-            return Err(ral::Error::Other(onca_format!("Ran out of DX12 RTV/DSV descriptors, max amount: {}", self.max_count)))
+            return Err(ral::Error::Other(format!("Ran out of DX12 RTV/DSV descriptors, max amount: {}", self.max_count)))
         }
 
         let mut idx = self.head.load(Ordering::Relaxed) as usize;
