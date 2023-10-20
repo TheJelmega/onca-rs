@@ -1,6 +1,13 @@
 use super::{Allocation, Layout};
 use core::cell::Cell;
 
+
+pub trait GetAllocatorId {
+    fn allocator_id(&self) -> u16;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
+
 /// Allocator/Arena that can provide access to heap memory for the program
 pub trait Allocator {
     /// Allocate memory from an allocator/arena
