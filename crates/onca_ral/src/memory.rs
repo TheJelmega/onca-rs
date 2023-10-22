@@ -1,4 +1,4 @@
-use onca_core::{prelude::*, collections::StaticDynArray};
+use onca_core::prelude::*;
 use onca_core_macros::flags;
 
 use crate::{Result, handle::InterfaceHandle, HandleImpl, Handle, MemoryType, WeakHandle, Device, MemoryInfo, Error, api, DeviceHandle, MemAlign};
@@ -30,7 +30,7 @@ pub struct ApiMemoryRequest {
     /// Minimum required memory alignment
     pub alignment:         u64,
     /// Allowed memory types
-    pub memory_types:      StaticDynArray<MemoryType, {MemoryType::COUNT}>,
+    pub memory_types:      Vec<MemoryType>,
 }
 
 //==============================================================================================================================

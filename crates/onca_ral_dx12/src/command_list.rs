@@ -1,8 +1,8 @@
 use core::mem::{ManuallyDrop, MaybeUninit};
 
-use onca_core::{prelude::*, sync::RwLock, collections::StaticDynArray};
+use onca_core::{prelude::*, sync::RwLock};
 use onca_ral as ral;
-use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl, TextureSubresourceRange};
+use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl};
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};
 use crate::{utils::*, device::Device, texture::{texture_layout_to_dx, Texture, RenderTargetView}, pipeline::{PipelineLayout, Pipeline}, buffer::Buffer, descriptors::DescriptorHeap};
 
@@ -568,7 +568,9 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
         const MAX_VIEWPORTS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
-        let mut dx_viewports = StaticDynArray::<_, MAX_VIEWPORTS>::new();
+
+        scoped_alloc!(UseAlloc::TlsTemp);
+        let mut dx_viewports = Vec::with_capacity(MAX_VIEWPORTS);
 
         for viewport in viewports {
             dx_viewports.push(viewport.to_dx());
@@ -579,7 +581,9 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn set_scissors(&self, scissors: &[ral::ScissorRect]) {
         const MAX_SCISSORS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
-        let mut dx_scissors = StaticDynArray::<_, MAX_SCISSORS>::new();
+
+        scoped_alloc!(UseAlloc::TlsTemp);
+        let mut dx_scissors = Vec::with_capacity(MAX_SCISSORS);
         for scissor in scissors {
             dx_scissors.push(scissor.to_dx());
         }

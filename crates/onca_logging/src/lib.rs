@@ -11,7 +11,7 @@ use onca_core::{
     prelude::*,
     io::{self, prelude::*},
     sync::{RwLock, Mutex},
-    time::TimeStamp, collections::StaticDynArray,
+    time::TimeStamp,
 };
 use onca_terminal::Terminal;
 
@@ -165,7 +165,7 @@ macro_rules! log_location {
 }
 
 pub struct LoggerState {
-    writers:        StaticDynArray<(Box<dyn io::Write>, usize), {Self::MAX_WRITERS}>,
+    writers:        [Option<Box<dyn io::Write>>; Self::MAX_WRITERS],
     cache:          Option<String>,
     writer_idx:     usize,
     always_flush:   bool,
@@ -177,8 +177,22 @@ impl LoggerState {
     const CACHE_FLUSH_LIMIT: usize = KiB(4);
 
     pub const fn new() -> Self {
+        const NONE: Option<Box<dyn io::Write>> = None;
+
+        // Cause the `Option` contians a `Box<T>`, the option is not Clone, so we need to manually build the array
+        let writers = [
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ];
+
         Self {
-            writers: StaticDynArray::new(),
+            writers,
             cache: None,
             writer_idx: 0,
             always_flush: false,
@@ -223,8 +237,10 @@ impl LoggerState {
                 _ = Terminal::write(&cache);
             }
 
-            for (writer, _) in &mut self.writers {
-                _ = writer.write(cache.as_bytes());
+            for writer in &mut self.writers {
+                if let Some(writer) = writer {
+                    _ = writer.write(cache.as_bytes());
+                }
             }
             cache.clear();
         }
@@ -278,19 +294,20 @@ impl Logger {
     pub fn add_writer(&self, writer: Box<dyn io::Write>) -> Result<usize, Box<dyn io::Write>> {
         let mut state = self.state.lock();
 
-        if state.writers.len() == LoggerState::MAX_WRITERS {
-            Err(writer)
-        } else {
-            let id = state.writer_idx;
-            state.writer_idx += 1;
-            state.writers.push((writer, id));
-            Ok(id)
+        let empty = state.writers.iter_mut().enumerate().find(|val| val.1.is_none());
+        match empty {
+            Some((id, slot)) => {
+                *slot = Some(writer);
+                Ok(id)
+            },
+            None => Err(writer),
         }
     }
 
     /// Remove a writer from the logger
     pub fn remove_writer(&self, index: usize) -> Option<Box<dyn io::Write>> {
-        self.state.lock().writers.remove_first_if(|(_, idx)| *idx == index).map(|(writer, _)| writer)
+        let mut state = self.state.lock();
+        std::mem::replace(&mut state.writers[index], None)
     }
 
     /// Log a message to the console

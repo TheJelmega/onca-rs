@@ -1,17 +1,8 @@
 mod imp;
 
-mod static_dyn_array;
-mod dyn_array;
-mod small_dyn_array;
-
 mod bitset;
 
 mod byte_buffer;
-
-
-pub use static_dyn_array::StaticDynArray;
-//pub use dyn_array::DynArray;
-pub use small_dyn_array::SmallDynArray;
 
 pub use bitset::BitSet;
 

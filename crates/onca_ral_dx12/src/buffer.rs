@@ -1,11 +1,10 @@
 use core::{ffi::c_void, mem::ManuallyDrop, num::NonZeroU64};
 
-use onca_core::{collections::StaticDynArray, static_dynarr};
 use onca_ral as ral;
 use ral::{ApiMemoryRequest, HandleImpl};
 use windows::{Win32::Graphics::{Direct3D12::*, Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC}}, core::ComInterface};
 
-use crate::{device::Device, memory::{GpuAllocator, MemoryHeap}, utils::{ToRalError, ToDx}};
+use crate::{device::Device, memory::MemoryHeap, utils::{ToRalError, ToDx}};
 
 pub struct Buffer {
     pub resource: ID3D12Resource2,
@@ -41,7 +40,7 @@ impl Buffer {
             prefer_dedicated: false,
             require_dedicated: false,
             alignment: alloc_info.Alignment,
-            memory_types: static_dynarr![ral::MemoryType::Gpu, ral::MemoryType::Upload, ral::MemoryType::Readback],
+            memory_types: vec![ral::MemoryType::Gpu, ral::MemoryType::Upload, ral::MemoryType::Readback],
         };
 
         let allocation = alloc.alloc(desc.size, desc.alloc_desc, api_req)?;

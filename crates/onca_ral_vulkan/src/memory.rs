@@ -1,4 +1,3 @@
-use onca_core::{collections::StaticDynArray, utils::EnumCount};
 use onca_ral as ral;
 use ash::vk;
 use ral::{MemoryHeapInterfaceHandle, ApiMemoryRequest};
@@ -49,8 +48,8 @@ pub fn create_api_memory_request(mem_info: &ral::MemoryInfo, mem_reqs: &vk::Memo
     }
 }
 
-fn mem_bits_to_mem_types(mem_info: &ral::MemoryInfo, mem_type_bits: u32) -> StaticDynArray<ral::MemoryType, {ral::MemoryType::COUNT}> {
-    let mut types = StaticDynArray::new();
+fn mem_bits_to_mem_types(mem_info: &ral::MemoryInfo, mem_type_bits: u32) -> Vec<ral::MemoryType> {
+    let mut types = Vec::new();
     for info in &mem_info.mem_types {
         let idx = info.mem_type as usize;
         let bit = 1 << idx;

@@ -1,6 +1,5 @@
 use onca_core::{
     prelude::*,
-    collections::SmallDynArray,
     io,
 };
 use windows::{
@@ -25,7 +24,7 @@ pub(crate) fn create_recursive(path: &Path) -> io::Result<()> {
     unsafe {
         let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
 
-        let mut parent_paths = SmallDynArray::<_, 8>::new();
+        let mut parent_paths = Vec::new();
         for component in path.ancestors() {
             parent_paths.push(component);
         }

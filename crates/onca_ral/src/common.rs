@@ -1,6 +1,6 @@
-use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU16, NonZeroU64}, hash::Hash};
+use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU64}, hash::Hash};
 use std::collections::HashSet;
-use onca_core::{prelude::*, collections::StaticDynArray};
+use onca_core::prelude::*;
 use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
 use onca_logging::{log_verbose, LogCategory};
 use crate::*;
@@ -390,7 +390,7 @@ pub struct MemoryHeapInfo {
     /// Size of the heap
     pub size:           u64,
     /// Indices to memory types supported by this heap
-    pub memory_types:   StaticDynArray<MemoryType, {MemoryType::COUNT}>,
+    pub memory_types:   Vec<MemoryType>,
 }
 
 impl Clone for MemoryHeapInfo {
@@ -408,7 +408,7 @@ impl MemoryHeapInfo {
     pub const MAX_MEMORY_TYPES: usize = 4;
 
     pub fn empty_with_type(heap_type: MemoryHeapType) -> Self {
-        Self { heap_type, multi_instance: false, size: 0, memory_types: StaticDynArray::new() }
+        Self { heap_type, multi_instance: false, size: 0, memory_types: Vec::new() }
     }
 
     pub fn create_empty_heap_arr() -> [Self; MemoryHeapType::COUNT] {

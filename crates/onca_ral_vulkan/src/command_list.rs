@@ -1,6 +1,6 @@
 use std::sync::{Weak, Arc};
 
-use onca_core::{prelude::*, collections::StaticDynArray};
+use onca_core::prelude::*;
 use onca_ral as ral;
 use ash::{vk, extensions::ext};
 use ral::{CommandListType, CommandListBeginFlags, HandleImpl};
@@ -636,7 +636,7 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
         const MAX_VIEWPORTS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
-        let mut vk_viewports = StaticDynArray::<_, MAX_VIEWPORTS>::new();
+        let mut vk_viewports = Vec::with_capacity(MAX_VIEWPORTS);
         for viewport in viewports {
             vk_viewports.push(viewport.to_vulkan());
         }
@@ -647,7 +647,7 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn set_scissors(&self, scissors: &[ral::ScissorRect]) {
         const MAX_SCISSORS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
-        let mut vk_scissors = StaticDynArray::<_, MAX_SCISSORS>::new();
+        let mut vk_scissors = Vec::with_capacity(MAX_SCISSORS);
         for scissor in scissors {
             vk_scissors.push(scissor.to_vulkan());
         }
