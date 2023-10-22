@@ -185,8 +185,8 @@ impl WindowManager {
     }
 
     /// Get the window manager's allocator id
-    pub fn allocator_id(&self) -> u16 {
-        self.alloc.get_id()
+    pub fn allocator_id(&self) -> AllocId {
+        self.alloc
     }
 
     pub(crate) fn get_os_data(&mut self) -> &mut os::WindowManagerData {

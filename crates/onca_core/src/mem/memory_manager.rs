@@ -3,7 +3,7 @@ use std::{
     ptr::{copy_nonoverlapping, write_bytes, null},
     borrow::BorrowMut,
     sync::atomic::AtomicUsize,
-    alloc::GlobalAlloc,
+    alloc::GlobalAlloc, num::NonZeroU16,
 };
 
 use std::{alloc::Layout, ptr::NonNull};
@@ -53,7 +53,8 @@ struct State
 {
     malloc          : Mallocator,
     allocs          : [Option<*mut dyn Allocator>; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize + 1],
-    default         : u16,
+    // Cannot be 0, as 0 is the untracked allocator and is a special case
+    default         : NonZeroU16,
 }
 
 impl State {
@@ -61,7 +62,7 @@ impl State {
         Self{ 
             malloc: Mallocator,
             allocs: [None; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize + 1],
-            default: 0,
+            default: unsafe { NonZeroU16::new_unchecked(1) },
         }
     }
 }
@@ -108,8 +109,14 @@ impl MemoryManager {
     }
 
     pub fn set_default_allocator(&self, alloc: AllocId) {
+        let default = match NonZeroU16::new(alloc.get_id()) {
+            Some(id) => id,
+            // Cannot set the default allocator to untracked
+            None => return,
+        };
+
         assert!(alloc.get_id() != Self::MAX_ALLOC_ID);
-        self.state.write().default = alloc.get_id();
+        self.state.write().default = default;
     }
 
     /// Get an allocator
@@ -117,7 +124,7 @@ impl MemoryManager {
         /// Handle any default id
         if alloc.get_id() == Self::MAX_ALLOC_ID {
             let default_id = self.state.read().default;
-            alloc = AllocId::Id(default_id);
+            alloc = AllocId::Id(default_id.get());
         }
 
         let mut state = self.state.read();
@@ -139,23 +146,18 @@ impl MemoryManager {
     }
 
     /// Allocate a raw allocation with the given layout, using the active allocator and memory tag.
-    pub unsafe fn alloc_raw(&self, init_state: AllocInitState, layout: Layout) -> Option<NonNull<u8>> {
-        Self::handle_alloc(layout, init_state, true, |alloc_id, layout| {
+    pub unsafe fn alloc_raw(&self, init_state: AllocInitState, layout: Layout, alloc_id_override: Option<AllocId>) -> Option<NonNull<u8>> {
+        Self::handle_alloc(layout, init_state, true, alloc_id_override, |alloc_id, layout| {
             if alloc_id == AllocId::Untracked {
                 (NonNull::new(UNTRACKED_ALLOC.alloc(layout)), true)
             } else {
-                match self.get_allocator(alloc_id) {
-                    Some(alloc) => (alloc.alloc(layout), alloc.supports_free()),
-                    None => (None, false),
-                }
+               match self.get_allocator(alloc_id) {
+                   Some(alloc) => (alloc.alloc(layout), alloc.supports_free()),
+                   None => (None, false),
+               }
             }
 
         })
-    }
-
-    /// Allocate memory with the given layout, using the active allocator and memory tag.
-    pub unsafe fn alloc<T>(&self, init_state: AllocInitState) -> Option<NonNull<T>> {
-        self.alloc_raw(init_state, Layout::new::<T>()).map(|ptr| ptr.cast())
     }
 
     /// Deallocate memory
@@ -164,19 +166,20 @@ impl MemoryManager {
             if alloc_id == AllocId::Untracked {
                 UNTRACKED_ALLOC.dealloc(ptr.as_ptr(), layout);
             } else {
-                if let Some(alloc) = self.get_allocator(alloc_id) {
-                    alloc.dealloc(ptr.cast(), layout)
-                } else {
-                    panic!("Failed to retrieve allocator to deallocate memory");
-                }
+               if let Some(alloc) = self.get_allocator(alloc_id) {
+                   alloc.dealloc(ptr.cast(), layout)
+               } else {
+                   panic!("Failed to retrieve allocator to deallocate memory");
+               }
             }
+            
         })
     }
 
     pub unsafe fn alloc_untracked(init_state: AllocInitState, layout: Layout) -> NonNull<u8> {
         // Ensure the correct alloc id is used
         scoped_alloc!(AllocId::Untracked);
-        Self::handle_alloc(layout, init_state, false, |_, layout| {
+        Self::handle_alloc(layout, init_state, false, Some(AllocId::Untracked), |_, layout| {
             (NonNull::new(UNTRACKED_ALLOC.alloc(layout)), true)
         }).unwrap()
     }
@@ -188,17 +191,11 @@ impl MemoryManager {
         })
     }
 
-    unsafe fn handle_alloc<F>(layout: Layout, init_state: AllocInitState, tracked: bool, f: F) -> Option<NonNull<u8>> where
+    unsafe fn handle_alloc<F>(layout: Layout, init_state: AllocInitState, tracked: bool, alloc_id_override: Option<AllocId>, f: F) -> Option<NonNull<u8>> where
         F: Fn(AllocId, Layout) -> (Option<NonNull<u8>>, bool)
     {
-        let alloc_id = get_active_alloc();
-
-        let header_layout = Layout::new::<AllocHeader>();
-        let (layout, offset) = match header_layout.extend(layout) {
-            Ok(tuple) => tuple,
-            Err(_) => return None,
-        };
-
+        let alloc_id = alloc_id_override.unwrap_or_else(|| get_active_alloc());
+        let (layout, offset) = Self::calc_layout_and_offset(layout)?;
 
         let (ptr, freeable) = f(alloc_id, layout);
         let ptr = ptr?;
@@ -222,22 +219,29 @@ impl MemoryManager {
             return;
         }
 
-        let header_layout = Layout::new::<AllocHeader>();
-
-        let (layout, offset) = header_layout.extend(layout).expect("Failed to recreate layout which allocated memory");
+        let (layout, offset) = Self::calc_layout_and_offset(layout).expect("Failed to recreate layout which allocated memory");
         let alloc_id = AllocId::Id(alloc_header.alloc_id());
 
         let dealloc_ptr = NonNull::new_unchecked(ptr.as_ptr().sub(offset));
         f(alloc_id, dealloc_ptr, layout);
     }
 
+    fn calc_layout_and_offset(layout: Layout) -> Option<(Layout, usize)> {
+        const HEADER_LAYOUT: Layout = Layout::new::<AllocHeader>();
+        match HEADER_LAYOUT.extend(layout) {
+            Ok(tuple) => Some(tuple),
+            Err(_) => None,
+        }
+    }
+
     fn get_tls_alloc() -> Option<&'static dyn Allocator> {
+        // .with() could allocate memory and if we keep the tls stack for that, we'll get into infinite recursion
+        scoped_alloc!(AllocId::Malloc);
+
         Some(TLS_ALLOC.with(|tls| {
             let alloc = tls.get_or_init(|| unsafe {
-                scoped_alloc!(AllocId::Malloc);
-    
                 let layout = Layout::from_size_align(MiB(1), 8).unwrap();
-                let buffer = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout).expect("Failed to allocate TLS allocator memory buffer");
+                let buffer = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, Some(AllocId::Malloc)).expect("Failed to allocate TLS allocator memory buffer");
                 FreelistAllocator::new(buffer, layout)
             });
 

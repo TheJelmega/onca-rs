@@ -5,8 +5,6 @@ use core::{
 };
 use std::{vec, io};
 
-use crate::alloc::GetAllocatorId;
-
 use super::{
     bitset::IntoIter,
     impl_slice_partial_eq,
@@ -202,13 +200,6 @@ impl ByteBuffer {
         I : IntoIterator<Item = u8>
     {
         self.0.splice(range, replace_with)
-    }
-
-    /// Get the id of the allocator used by the [`ByteBuffer`]
-    #[inline]
-    #[must_use]
-    pub fn allocator_id(&self) -> u16 {
-        self.0.allocator_id()
     }
 
     /// Convert the [`ByteBuffer`] into a `HeapPtr` with a slice

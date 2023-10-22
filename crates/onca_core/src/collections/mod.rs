@@ -10,13 +10,6 @@ pub use byte_buffer::ByteBuffer;
 
 use core::ops::Range;
 
-
-impl<T> GetAllocatorId for Vec<T> {
-    fn allocator_id(&self) -> u16 {
-        todo!()
-    }
-}
-
 //--------------------------------------------------------------
 
 macro_rules! impl_slice_partial_eq_generic {
@@ -47,8 +40,6 @@ macro_rules! impl_slice_partial_eq {
     };
 }
 use impl_slice_partial_eq;
-
-use crate::alloc::GetAllocatorId;
 
 //--------------------------------------------------------------
 

@@ -175,6 +175,7 @@ pub struct LoggerState {
 impl LoggerState {
     const MAX_WRITERS: usize = 8;
     const CACHE_FLUSH_LIMIT: usize = KiB(4);
+    const CACHE_SIZE: usize = Self::CACHE_FLUSH_LIMIT + KiB(1);
 
     pub const fn new() -> Self {
         const NONE: Option<Box<dyn io::Write>> = None;
@@ -204,7 +205,7 @@ impl LoggerState {
         scoped_alloc!(AllocId::Malloc);
         
         if self.cache.is_none() {
-            self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));
+            self.cache = Some(String::with_capacity(Self::CACHE_SIZE));
         }
         
         let cache = self.cache.as_mut().unwrap();
@@ -216,7 +217,7 @@ impl LoggerState {
         scoped_alloc!(AllocId::Malloc);
         
         if self.cache.is_none() {
-            self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));
+            self.cache = Some(String::with_capacity(Self::CACHE_SIZE));
         }
         
         let cache = self.cache.as_mut().unwrap();

@@ -61,7 +61,7 @@ impl AllocationCallbacks {
         let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
         let _scope_alloc = ScopedAlloc::new(this.alloc);
 
-        let alloc = match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) } {
+        let alloc = match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, None) } {
             Some(alloc) => alloc,
             None => return null_mut()
         };
@@ -78,7 +78,7 @@ impl AllocationCallbacks {
 
         scoped_alloc!(this.alloc);
         if size == 0 {
-            return match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) } {
+            return match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, None) } {
                 Some(ptr) => {
                     this.layout_mapping.insert(ptr, layout);
                     ptr.as_ptr().cast()
@@ -92,7 +92,7 @@ impl AllocationCallbacks {
         let old_layout = this.layout_mapping.remove(&unsafe { NonNull::new_unchecked(old_ptr) }).expect("Trying to get the layout for an allocation that was never allocated");
 
         let ptr = unsafe {
-            let ptr = match get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) {
+            let ptr = match get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, None) {
                 Some(new) => new,
                 None => {
                     // According to vulkan spec, we must not free the old allocation

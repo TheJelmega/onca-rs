@@ -179,7 +179,7 @@ impl Allocator for FreelistAllocator {
 impl ComposableAllocator<usize> for FreelistAllocator {
     fn new_composable(args: usize) -> Self {
         let buffer_layout = Layout::from_size_align(args, 8).expect("Invalid `FreelistAllocator::new_composable` parameters");
-        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout, None).expect("Failed to allocate memory for composable allocator") };
         FreelistAllocator::new(buffer, buffer_layout)
     }
 }

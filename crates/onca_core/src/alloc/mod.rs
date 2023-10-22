@@ -9,7 +9,6 @@ pub use alloc::*;
 
 use crate::mem::{get_memory_manager, AllocInitState, MemoryManager};
 
-
 pub struct OncaGlobalAlloc;
 
 unsafe impl GlobalAlloc for OncaGlobalAlloc {
@@ -17,7 +16,7 @@ unsafe impl GlobalAlloc for OncaGlobalAlloc {
         if get_active_alloc() == AllocId::Untracked {
             MemoryManager::alloc_untracked(AllocInitState::Uninitialized, layout).as_ptr()
         } else {
-            get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout).expect("Failed to allocate").as_ptr()
+           get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, None).expect("Failed to allocate").as_ptr()
         }
 
     }
@@ -27,7 +26,7 @@ unsafe impl GlobalAlloc for OncaGlobalAlloc {
         if header.alloc_id() == AllocId::Untracked.get_id() {
             MemoryManager::dealloc_untracked(NonNull::new_unchecked(ptr), layout);
         } else {
-            get_memory_manager().dealloc(NonNull::new_unchecked(ptr), layout)
+           get_memory_manager().dealloc(NonNull::new_unchecked(ptr), layout)
         }
     }
 }

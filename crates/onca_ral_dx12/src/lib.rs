@@ -2,10 +2,13 @@
 
 use onca_core::{
 	prelude::*,
-	mem::{MemoryManager, set_memory_manager},
+	mem::{MemoryManager, set_memory_manager}, alloc::OncaGlobalAlloc,
 };
 use onca_logging::{LogCategory, Logger, set_logger};
 use onca_ral as ral;
+
+#[global_allocator]
+static ONCA_GLOBAL_ALLOC: OncaGlobalAlloc = OncaGlobalAlloc;
 
 // NOTES:
 //

@@ -3,10 +3,7 @@ use core::{
     slice
 };
 use std::sync::Arc;
-use crate::{
-    sync::Mutex,
-    alloc::GetAllocatorId
-};
+use crate::sync::Mutex;
 
 pub type DynEventListenerRef<Event> = EventListenerRef<dyn EventListener<Event>>;
 pub type DynEventListenerArray<Event> = EventListenerArray<dyn EventListener<Event>>;
@@ -105,12 +102,6 @@ impl<Listener: ?Sized> EventListenerArray<Listener> {
         self.listeners.is_empty()
     }
     
-    #[inline]
-    #[must_use]
-    pub fn allocator_id(&self) -> u16 {
-        self.listeners.allocator_id()
-    }
-
     pub fn notify<Event>(&mut self, event: &Event)
     where
         Listener : EventListener<Event>

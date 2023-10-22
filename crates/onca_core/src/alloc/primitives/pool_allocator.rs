@@ -110,7 +110,7 @@ impl Allocator for PoolAllocator {
 impl ComposableAllocator<(usize, usize)> for PoolAllocator {
     fn new_composable(args: (usize, usize)) -> Self {
         let buffer_layout = Layout::from_size_align(args.0, 8).expect("Invalid `PoolAllocator::new_composable` parameters");
-        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout, None).expect("Failed to allocate memory for composable allocator") };
         PoolAllocator::new(buffer, buffer_layout, args.1)
     }
 }

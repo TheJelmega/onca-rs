@@ -44,7 +44,7 @@ use core::{
     ops::Deref,
 };
 use std::collections::TryReserveError;
-use onca_core::{prelude::*, alloc::GetAllocatorId};
+use onca_core::prelude::*;
 
 //--------------------------------------------------------------
 
@@ -1055,11 +1055,6 @@ impl PathBuf {
     #[inline]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.inner.shrink_to(min_capacity)
-    }
-
-    /// Get the allocator id associated with this path
-    pub fn allocator_id(&self) -> u16 {
-        self.inner.allocator_id()
     }
 
     /// Null terminate the path

@@ -15,7 +15,7 @@ use core::{
 use std::collections::TryReserveError;
 
 use crate::{
-    alloc::{AllocId, ScopedAlloc, GetAllocatorId},
+    alloc::{AllocId, ScopedAlloc},
     mem,
 };
 
@@ -67,13 +67,6 @@ impl StringExtensions for String {
     }
 
     
-}
-
-
-impl GetAllocatorId for String {
-    fn allocator_id(&self) -> u16 {
-        todo!()
-    }
 }
 
 /*

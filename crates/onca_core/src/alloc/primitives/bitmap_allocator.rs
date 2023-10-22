@@ -160,7 +160,7 @@ impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
     fn new_composable(args: (usize, usize)) -> Self {
         let buffer_size = BitmapAllocator::calc_needed_memory_size(args.0, args.1);
         let buffer_layout = Layout::from_size_align(buffer_size, 8).expect("Invalid `BitmapAllocator::new_composable` parameters");
-        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout).expect("Failed to allocate memory for composable allocator") };
+        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout, None).expect("Failed to allocate memory for composable allocator") };
         BitmapAllocator::new(buffer, buffer_layout, args.0, args.1)
     }
 }
