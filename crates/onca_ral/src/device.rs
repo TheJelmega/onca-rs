@@ -43,13 +43,13 @@ pub struct Device {
     /// GpuAllocator
     gpu_allocator:  GpuAllocator,
 
-    cpu_alloc:      UseAlloc
+    cpu_alloc:      AllocId
 }
 create_ral_handle!(DeviceHandle, Device, DeviceInterfaceHandle);
 
 impl DeviceHandle {
     /// Create a new device
-    pub(crate) fn create(handle: DeviceInterfaceHandle, phys_dev: PhysicalDevice, command_queues: [[CommandQueueHandle; QueuePriority::COUNT]; QueueType::COUNT], alloc_impl: GpuAllocatorImpl, cpu_alloc: UseAlloc) -> Self {
+    pub(crate) fn create(handle: DeviceInterfaceHandle, phys_dev: PhysicalDevice, command_queues: [[CommandQueueHandle; QueuePriority::COUNT]; QueueType::COUNT], alloc_impl: GpuAllocatorImpl, cpu_alloc: AllocId) -> Self {
         let mem_info = phys_dev.memory_info.clone();
         Handle::new_cyclic(|weak| Device {
             handle,
@@ -199,7 +199,7 @@ impl DeviceHandle {
     }
 
     /// Get the allocator the device uses for internal memory allocations
-    pub fn allocator(&self) -> UseAlloc {
+    pub fn allocator(&self) -> AllocId {
         self.cpu_alloc
     }
 

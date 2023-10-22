@@ -5,7 +5,7 @@ use core::{
 };
 use std::{vec, io};
 
-use crate::alloc::{Layout, GetAllocatorId};
+use crate::alloc::GetAllocatorId;
 
 use super::{
     bitset::IntoIter,

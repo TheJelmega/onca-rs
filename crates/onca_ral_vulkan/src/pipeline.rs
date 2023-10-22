@@ -134,7 +134,7 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub unsafe fn new_graphics(device: &Device, desc: &ral::GraphicsPipelineDesc) -> ral::Result<ral::PipelineInterfaceHandle> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let vertex_shader = desc.vertex_shader.interface().as_concrete_type::<Shader>();
         let pixel_shader = desc.pixel_shader.interface().as_concrete_type::<Shader>();

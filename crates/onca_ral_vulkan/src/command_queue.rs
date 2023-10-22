@@ -19,7 +19,7 @@ impl ral::CommandQueueInterface for CommandQueue {
     }
 
     unsafe fn submit(&self, batches: &[ral::api::SubmitBatch]) -> ral::Result<()> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         // Create data for batches
         let mut vk_data = Vec::with_capacity(batches.len());

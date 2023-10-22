@@ -1417,7 +1417,7 @@ impl VulkanOptions {
             }
         }
 
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         log_verbose!(LOG_CAT, "| Device:             {:89} |", props.description);
         log_verbose!(LOG_CAT, "| Vulkan verion:      {:89} |", props.api_version);
@@ -1467,7 +1467,7 @@ impl VulkanOptions {
             }
         };
         fn get_sample_flags(flags: vk::SampleCountFlags) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             let mut string = String::new();
             if flags.contains(vk::SampleCountFlags::TYPE_1) {
                 string.push_str("1");
@@ -1497,15 +1497,15 @@ impl VulkanOptions {
             string
         }
         fn get_range_2d_f32(range: [f32; 2]) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             format!("[{}-{}]", range[0], range[1])
         }
         fn get_2d_u32(arr: [u32; 2]) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             format!("[{}, {}]", arr[0], arr[1])
         }
         fn get_3d_u32(arr: [u32; 3]) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             format!("[{}, {}, {}]", arr[0], arr[1], arr[2])
         }
         fn get_point_clipping_behavior(value: vk::PointClippingBehavior) -> &'static str {
@@ -1563,7 +1563,7 @@ impl VulkanOptions {
             }
         }
         fn get_resolve_mode_flags(value: vk::ResolveModeFlags) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             let mut string = String::new();
             if value.contains(vk::ResolveModeFlags::SAMPLE_ZERO) {
                 string.push_str("zero ");
@@ -1588,7 +1588,7 @@ impl VulkanOptions {
             string
         }
         fn get_extent_2d(extent: vk::Extent2D) -> String {
-            scoped_alloc!(UseAlloc::TlsTemp);
+            scoped_alloc!(AllocId::TlsTemp);
             format!("[{}, {}]", extent.width, extent.height)
         }
         fn get_raytracing_invocation_reorder_mode(mode: vk::RayTracingInvocationReorderModeNV) -> &'static str {
@@ -2174,7 +2174,7 @@ impl VulkanOptions {
         log_verbose!(LOG_CAT, "| - rayTracingInvocationReorderReorderingHint                                     | {:>VALUE_COLUMN_WIDTH$} |", get_raytracing_invocation_reorder_mode(self.rt_reorder_props.ray_tracing_invocation_reorder_reordering_hint));
         log_verbose!(LOG_CAT, "|-[All supported extensions]------------------------------------------------------------------------------------|");
 
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         for extension in &self.extensions {
             log_verbose!(LOG_CAT, "| {:79} | {:>VALUE_COLUMN_WIDTH$} |", extension.name, extension.spec_version);
         }

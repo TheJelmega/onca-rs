@@ -41,7 +41,7 @@ impl ral::FenceInterface for Fence {
     }
 
     unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: onca_core::time::Duration) -> ral::Result<()> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let mut events = Vec::with_capacity(fences.len());
         for (fence, value) in fences {

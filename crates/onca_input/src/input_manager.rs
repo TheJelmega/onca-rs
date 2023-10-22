@@ -295,7 +295,7 @@ impl InputManager {
     pub fn tick(&mut self, dt: DeltaTime) {
         assert!(sys::is_on_main_thread(), "The input manager should only be ticked on the main thread");
 
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
         
         // Update devices
         let mut rebind_axes = Vec::new();

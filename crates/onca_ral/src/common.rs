@@ -33,7 +33,7 @@ impl Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         // TODO: format to a stack string ??
         f.pad(&format!("{}.{}.{}", self.major, self.minor, self.patch))

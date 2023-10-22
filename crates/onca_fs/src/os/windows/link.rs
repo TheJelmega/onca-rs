@@ -11,7 +11,7 @@ use crate::Path;
 
 pub fn hard_link(source: &Path, dest: &Path) -> io::Result<()> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let source = source.to_null_terminated_path_buf();
         let dest = dest.to_null_terminated_path_buf();

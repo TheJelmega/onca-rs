@@ -2,8 +2,9 @@ use core::{
     mem::size_of,
     ptr::{null, null_mut},
 };
+use std::{ptr::NonNull, alloc::Layout};
 use crate::{
-    alloc::{Allocation, Allocator, Layout},
+    alloc::{Allocator},
     mem::get_memory_manager
 };
 
@@ -12,87 +13,72 @@ use crate::{
 /// An allocator that can freely allocate when there is enough space left in it, but it cannot deallocate,
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct StackAllocator {
-    max_align : u16,
-    buffer    : Allocation<u8>,
-    head      : *mut u8,
-    end       : *mut u8,
-    id        : u16
+    max_align:     u16,
+    buffer:        NonNull<u8>,
+    buffer_layout: Layout,
+    head:          *mut u8,
+    end:           *mut u8,
+    id:            u16
 }
 
 impl StackAllocator {
-    /// Create a uninitialized stack allocator
-    pub const fn new_uninit(max_align: u16) -> Self {
-        Self { max_align, buffer: unsafe { Allocation::const_null() }, head: null_mut(), end: null_mut(), id: 0 }
-    }
-
     /// Create a new stack allocator from a buffer and a maximum alignment for allocations
-    pub fn new(mut buffer: Allocation<u8>, max_align: u16) -> Self
-    {
-        let head = buffer.ptr_mut();
+    pub fn new(mut buffer: NonNull<u8>, buffer_layout: Layout, max_align: u16) -> Self {
+        debug_assert!(max_align.is_power_of_two());
+
+        let head = buffer.as_ptr();
         let end = unsafe {
-            buffer.ptr_mut().add(Allocation::<u8>::layout(&buffer).size())
+            buffer.as_ptr().add(buffer_layout.size())
         };
 
-        Self { max_align, buffer, head, end, id: 0 }
-    }
-
-    /// Initialized an unitialized stack allocator
-    pub fn init(&mut self, buffer: Allocation<u8>) {
-        self.buffer = buffer;
-        self.head = self.buffer.ptr_mut();
-        self.end = unsafe {
-            self.buffer.ptr_mut().add(Allocation::<u8>::layout(&self.buffer).size())
-        };
+        Self { max_align, buffer, buffer_layout, head, end, id: 0 }
     }
 
     /// Reset the linear allocator to its empty state
     pub fn reset(&mut self) {
-        self.head = Allocation::<u8>::ptr_mut(&mut self.buffer);
-    }
-
-    /// Check if the allocator is initialized
-    pub fn is_initialized(&self) -> bool {
-        self.buffer.ptr() != null()
+        self.head = self.buffer.as_ptr();
     }
 }
 
 impl Allocator for StackAllocator {
-    unsafe fn alloc(&mut self, mut layout: Layout) -> Option<Allocation<u8>> {
-        assert!(self.is_initialized(), "Trying to allocate memory using an uninitialized stack allocator");
-
+    unsafe fn alloc(&mut self, mut layout: Layout) -> Option<NonNull<u8>> {
         if layout.align() > self.max_align as usize {
             // Layout exceeds allocator's maximum alignment
             return None;
         }
 
-        let layout = layout.with_size_multiple_of(self.max_align as u64);
         let ptr = self.head;
-        let new_head = ptr.add(layout.size());
+        let back_padding = layout.padding_needed_for(self.max_align as usize);
+        let new_head = ptr.add(layout.size() + back_padding);
 
         if new_head.offset_from(self.end) >= 0 {
             None
         } else {
             self.head = new_head;
-            Some(Allocation::<_>::from_raw(ptr, layout.with_alloc_id(self.id)))
+            NonNull::new(ptr)
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
+    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, mut layout: Layout) {
+        assert!(self.owns(ptr, layout), "Cannot deallocate an allocation that isn't owned by the allocator");
 
-        let ptr_mut = ptr.ptr_mut();
-        let expected_head = ptr_mut.add(ptr.layout().size());
+        let ptr_mut = ptr.as_ptr();
+        let back_padding = layout.padding_needed_for(self.max_align as usize);
+        let expected_head = ptr_mut.add(layout.size() + back_padding);
 
         assert!(expected_head == self.head, "Invalid deallocation order");
 
         if expected_head != self.head {
-            // TODO(jel): Warning
+            // TODO: Warning
             return;
         }
 
         self.head = ptr_mut;
     }
 
+    fn owns(&self, ptr: NonNull<u8>, _layout: Layout) -> bool {
+        ptr >= self.buffer && ptr.as_ptr() <= self.end
+    }
 
     fn set_alloc_id(&mut self, id: u16) {
         self.id = id;
@@ -105,34 +91,41 @@ impl Allocator for StackAllocator {
 
 impl Drop for StackAllocator {
     fn drop(&mut self) {
-        get_memory_manager().dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
+        unsafe { get_memory_manager().dealloc(self.buffer, self.buffer_layout) };
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::alloc::Layout;
+
     use crate::alloc::{*, primitives::*};
 
     #[test]
     fn alloc_dealloc() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = StackAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
-            alloc.dealloc(ptr);
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(256, 8);
+
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = StackAllocator::new(buffer, buffer_layout, 8);
+
+            let layout = Layout::new::<u64>();
+            let ptr = alloc.alloc(layout).unwrap();
+            alloc.dealloc(ptr, layout);
         }
     }
 
     #[test]
     fn align_too_large() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = StackAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr = alloc.alloc(Layout::new_size_align(8, 16));
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(256, 8);
+
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = StackAllocator::new(buffer, buffer_layout, 8);
+
+            let ptr = alloc.alloc(Layout::from_size_align_unchecked(8, 16));
             match ptr {
                 None => {},
                 Some(_) => panic!()
@@ -142,36 +135,48 @@ mod tests {
 
     #[test]
     fn multi_allocs() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = StackAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(256, 8);
 
-            alloc.dealloc(ptr2);
-            alloc.dealloc(ptr1);
-            alloc.dealloc(ptr0);
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = StackAllocator::new(buffer, buffer_layout, 8);
+
+            let layout0 = Layout::new::<u16>();
+            let layout1 = Layout::new::<u64>();
+            let layout2 = Layout::new::<u32>();
+
+            let ptr0 = alloc.alloc(layout0).unwrap();
+            let ptr1 = alloc.alloc(layout1).unwrap();
+            let ptr2 = alloc.alloc(layout2).unwrap();
+
+            alloc.dealloc(ptr2, layout2);
+            alloc.dealloc(ptr1, layout1);
+            alloc.dealloc(ptr0, layout0);
         }
     }
 
     #[test]
     #[should_panic]
     fn invalid_dealloc_order() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = StackAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(256, 8);
 
-            alloc.dealloc(ptr1);
-            alloc.dealloc(ptr0);
-            alloc.dealloc(ptr2);
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = StackAllocator::new(buffer, buffer_layout, 8);
+
+            let layout0 = Layout::new::<u16>();
+            let layout1 = Layout::new::<u64>();
+            let layout2 = Layout::new::<u32>();
+
+            let ptr0 = alloc.alloc(layout0).unwrap();
+            let ptr1 = alloc.alloc(layout1).unwrap();
+            let ptr2 = alloc.alloc(layout2).unwrap();
+
+            alloc.dealloc(ptr1, layout1);
+            alloc.dealloc(ptr0, layout0);
+            alloc.dealloc(ptr2, layout2);
         }
     }
 }

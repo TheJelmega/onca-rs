@@ -47,7 +47,7 @@ impl CommandQueueHandle {
     }
 
     pub fn submit<T: AsRef<Handle<CommandList>>>(&self, submit_info: &CommandListSubmitInfo<'_, T>) -> Result<()> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let batch = submit_info_to_batch_and_validate(submit_info, self.index)?;
         unsafe { self.handle.submit(&[batch]) }
@@ -58,7 +58,7 @@ impl CommandQueueHandle {
     /// No ordering guarantees are given regarding command list submission, 
     /// except that all signal fences of batch 0 will be signalled before any in batch 1, which will have all its signal fences signalled before any in batch 2, etc
     pub fn submit_batches<T: AsRef<Handle<CommandList>>>(&self, submit_infos: &[CommandListSubmitInfo<'_, T>]) -> Result<()> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let mut submit_batches = Vec::with_capacity(submit_infos.len());
         for submit_info in submit_infos {

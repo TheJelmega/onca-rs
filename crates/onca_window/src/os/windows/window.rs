@@ -890,7 +890,7 @@ unsafe extern "system" fn wnd_proc(
                 window.id
             );
 
-            let _scope_alloc: ScopedAlloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_alloc: ScopedAlloc = ScopedAlloc::new(AllocId::TlsTemp);
             for i in 0..num_files {
                 let path_len = DragQueryFileA(hdrop, i, None);
                 let mut buf = Vec::<u8>::new();
@@ -983,7 +983,7 @@ pub(crate) fn create(
         let title = match &settings.title {
             Some(title) => title.clone(),
             None => {
-                let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+                let _scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
                 String::new()
             },
         };

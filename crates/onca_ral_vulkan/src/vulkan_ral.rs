@@ -23,7 +23,7 @@ pub struct VulkanRal {
 }
 
 impl VulkanRal {
-    pub fn new(alloc: UseAlloc, settings: ral::Settings) -> VkResult<Self> {
+    pub fn new(alloc: AllocId, settings: ral::Settings) -> VkResult<Self> {
         let entry = unsafe { ash::Entry::load() }.map_err(|err| {
             log_error!(LOG_CAT, VulkanRal::new, "Failed to load vulkan library: {err}");
             vk::Result::ERROR_INITIALIZATION_FAILED

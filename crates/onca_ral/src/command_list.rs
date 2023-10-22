@@ -626,7 +626,7 @@ impl CommandListHandle {
 
     /// Copy a region between 2 buffers
     pub fn copy_buffer_region(&self, src: &BufferHandle, dst: &BufferHandle, region: BufferCopyRegion) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let regions = vec![region];
         self.copy_buffer_regions(src, dst, &regions);
     }
@@ -682,7 +682,7 @@ impl CommandListHandle {
     /// 
     /// The source texture needs to be in the `CopySrc` layout and the desination texture needs to be in the `CopyDst` layout
     pub fn copy_texture_region(&self, src: &TextureHandle, dst: &TextureHandle, region: TextureCopyRegion) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let regions = vec![region];
         self.copy_texture_regions(src, dst, &regions);
     }

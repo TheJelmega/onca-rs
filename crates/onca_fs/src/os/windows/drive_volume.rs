@@ -33,7 +33,7 @@ pub fn get_drive_type(mut path: PathBuf) -> DriveType {
 pub fn get_all_drive_info() -> Vec<DriveInfo> {
     unsafe {
         let names = {
-            let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+            let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
             let needed = GetLogicalDriveStringsA(None) as usize;
             let mut names = Vec::with_capacity(needed);
@@ -192,7 +192,7 @@ fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
 
 unsafe fn get_drive_names_for_volume(guid: &[u8]) -> Vec<PathBuf> {
     let utf8_paths = {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let pcstr = PCSTR(guid.as_ptr());
         let mut needed = 0;

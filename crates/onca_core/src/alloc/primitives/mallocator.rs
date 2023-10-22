@@ -1,4 +1,9 @@
-use crate::alloc::{Allocator, Layout, Allocation};
+use std::{
+    alloc::{Layout, GlobalAlloc},
+    ptr::NonNull,
+};
+
+use crate::{alloc::{Allocator, AllocHeader}, prelude::AllocId};
 
 extern crate alloc;
 
@@ -9,22 +14,20 @@ extern crate alloc;
 /// This allocator has a special allocator id, which will always refer to the Mallocator: 0xFFFF
 pub struct Mallocator;
 
+static MI_MALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 impl Allocator for Mallocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
-        let rs_layout = core::alloc::Layout::from_size_align_unchecked(layout.size(), layout.align());
-        let ptr = unsafe { alloc::alloc::alloc(rs_layout) };
-        if ptr == core::ptr::null_mut() {
-            None
-        } else {
-            Some(Allocation::<u8>::from_raw(ptr, layout.with_alloc_id(0)))
-        }
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
+        NonNull::new(MI_MALLOC.alloc(layout))
     }
 
-    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), 0);
+    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        MI_MALLOC.dealloc(ptr.as_ptr(), layout);
+    }
 
-        let rs_layout = core::alloc::Layout::from_size_align_unchecked(ptr.layout().size(), ptr.layout().align());
-        unsafe { alloc::alloc::dealloc(ptr.ptr_mut(), rs_layout) }
+    fn owns(&self, _ptr: std::ptr::NonNull<u8>, _layout: Layout) -> bool {
+        // We have no real way of knowing that we allocated this, so we'll just assume that we allocated it
+        true
     }
 
     fn set_alloc_id(&mut self, _id: u16) {
@@ -32,22 +35,25 @@ impl Allocator for Mallocator {
     }
 
     fn alloc_id(&self) -> u16 {
-        0
+        AllocId::Malloc.get_id()
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::alloc::Layout;
+
     use crate::alloc::*;
     use super::Mallocator;
 
     #[test]
     fn alloc_dealloc() {
         let mut alloc = Mallocator;
+        let layout = Layout::new::<u64>();
 
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
-            alloc.dealloc(ptr);
+            let ptr = alloc.alloc(layout).unwrap();
+            alloc.dealloc(ptr, layout);
         }
     }
 }

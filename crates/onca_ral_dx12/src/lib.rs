@@ -36,7 +36,7 @@ use dx12_ral::Dx12Ral;
 
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-pub extern "C" fn create_ral(memory_manager: &MemoryManager, logger: &Logger, alloc: UseAlloc, settings: ral::Settings) -> ral::Result<Box<dyn ral::Interface>> {
+pub extern "C" fn create_ral(memory_manager: &MemoryManager, logger: &Logger, alloc: AllocId, settings: ral::Settings) -> ral::Result<Box<dyn ral::Interface>> {
 	set_memory_manager(memory_manager);
 	set_logger(logger);
 	Ok(Box::new(Dx12Ral::new(alloc, settings)?))

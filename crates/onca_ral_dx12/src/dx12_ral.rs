@@ -15,13 +15,13 @@ use crate::{
 
 pub struct Dx12Ral {
     settings     : Settings,
-    _alloc       : UseAlloc,
+    _alloc       : AllocId,
     _debug       : Dx12Debug,
     dxgi_factory : IDXGIFactory7,
 }
 
 impl Dx12Ral {
-    pub fn new(alloc: UseAlloc, settings: Settings) -> Result<Self> {
+    pub fn new(alloc: AllocId, settings: Settings) -> Result<Self> {
         let debug = Dx12Debug::new(&settings)?;
 
         let flags = if settings.debug_enabled {

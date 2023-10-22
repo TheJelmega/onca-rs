@@ -190,7 +190,7 @@ pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
 
 fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         // Get the SID of the current user, we will use this later to get the correct file permissions for the user
 
@@ -324,7 +324,7 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> Permission {
 
 pub(crate) fn get_entry_file_type(path: &Path) -> FileType {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let path = path.to_null_terminated_path_buf();
 

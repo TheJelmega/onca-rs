@@ -1,3 +1,5 @@
+use std::{ptr::NonNull, alloc::Layout};
+
 use crate::alloc::*;
 
 /// Segregator arena
@@ -5,10 +7,10 @@ use crate::alloc::*;
 /// An allocator arena that decides which allocator to used based on boundary value, which is inclusive for the first allocator
 pub struct SegregatorArena<A: Allocator, B: Allocator>
 {
-    boundary : usize,
-    le_alloc : A,
-    gt_alloc : B,
-    id       : u16
+    boundary: usize,
+    le_alloc: A,
+    gt_alloc: B,
+    id:       u16
 }
 
 impl<A: Allocator, B: Allocator> SegregatorArena<A, B>
@@ -24,7 +26,7 @@ impl<A: Allocator, B: Allocator> SegregatorArena<A, B>
 
 impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
 {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         if layout.size() <= self.boundary {
             self.le_alloc.alloc(layout)
         } else {
@@ -32,19 +34,19 @@ impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
         }
     }
 
-    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        if ptr.layout().size() <= self.boundary {
-            self.le_alloc.dealloc(ptr);
+    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        if layout.size() <= self.boundary {
+            self.le_alloc.dealloc(ptr, layout);
         } else {
-            self.gt_alloc.dealloc(ptr);
+            self.gt_alloc.dealloc(ptr, layout);
         }
     }
 
-    fn owns(&self, ptr: &Allocation<u8>) -> bool {
-        if ptr.layout().size() <= self.boundary {
-            self.le_alloc.owns(ptr)
+    fn owns(&self, ptr: NonNull<u8>, layout: Layout) -> bool {
+        if layout.size() <= self.boundary {
+            self.le_alloc.owns(ptr, layout)
         } else {
-            self.gt_alloc.owns(ptr)
+            self.gt_alloc.owns(ptr, layout)
         }
     }
 

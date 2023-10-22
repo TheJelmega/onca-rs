@@ -141,7 +141,7 @@ pub struct PipelineLayout {
 create_ral_handle!(PipelineLayoutHandle, PipelineLayout, PipelineLayoutInterfaceHandle);
 
 impl PipelineLayoutHandle {
-    pub(crate) fn create(alloc: UseAlloc, handle: PipelineLayoutInterfaceHandle, desc: &PipelineLayoutDesc, static_samplers: Vec<StaticSamplerHandle>) -> PipelineLayoutHandle {
+    pub(crate) fn create(alloc: AllocId, handle: PipelineLayoutInterfaceHandle, desc: &PipelineLayoutDesc, static_samplers: Vec<StaticSamplerHandle>) -> PipelineLayoutHandle {
         scoped_alloc!(alloc);
 
         Self::new(PipelineLayout {

@@ -13,7 +13,7 @@ use crate::Path;
 
 pub(crate) fn create(path: &Path) -> io::Result<()> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let path = path.to_null_terminated_path_buf();
         create_dir(PCSTR(path.as_ptr()))
@@ -22,7 +22,7 @@ pub(crate) fn create(path: &Path) -> io::Result<()> {
 
 pub(crate) fn create_recursive(path: &Path) -> io::Result<()> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let mut parent_paths = Vec::new();
         for component in path.ancestors() {
@@ -53,7 +53,7 @@ unsafe fn create_dir(pcstr: PCSTR) -> io::Result<()> {
 
 pub(crate) fn remove(path: &Path) -> io::Result<()> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let path = path.to_null_terminated_path_buf();
         let res = RemoveDirectoryA(PCSTR(path.as_ptr())).as_bool();

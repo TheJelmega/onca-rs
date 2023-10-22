@@ -33,7 +33,7 @@ use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
 pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let path = path.to_null_terminated_path_buf();
 
@@ -54,7 +54,7 @@ pub(crate) fn get_compressed_size(path: &Path) -> io::Result<u64> {
 
 pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe {
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let path = path.to_null_terminated_path_buf();
         let res = DeleteFileA(PCSTR(path.as_ptr())).as_bool();
@@ -84,7 +84,7 @@ impl FileHandle {
 
                 let temp_end = file_name.iter().position(|&c| c == 0).unwrap_or_default();
                 if temp_end > 0 {
-                    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+                    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
                     path_buf.push(PathBuf::from_utf8_lossy(&file_name[..temp_end]))
                 }
             }

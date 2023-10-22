@@ -111,7 +111,7 @@ impl ral::SwapChainInterface for SwapChain {
             pScrollOffset: null_mut(),
         };
 
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let mut dirty_rects = Vec::new();
         if let Some(rects) = present_info.update_rects {
             dirty_rects.reserve(rects.len());

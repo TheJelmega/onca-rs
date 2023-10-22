@@ -14,7 +14,7 @@ impl DynLib {
     /// 
     /// If a dynamic library could not be loaded, an error with an OS error will be returned
     pub fn load(path: &str) -> Result<DynLib, i32> {
-        let _scope_alloc = ScopedAlloc::new(crate::prelude::UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(crate::prelude::AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
         os::load(&path.to_string()).map(|handle| DynLib { handle })
     }
@@ -36,7 +36,7 @@ impl DynLib {
             return None;
         }
 
-        let _scope_alloc = ScopedAlloc::new(crate::prelude::UseAlloc::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(crate::prelude::AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
         let addr = os::get_proc_address(self.handle, &proc_name.to_string());
         addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })

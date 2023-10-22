@@ -201,7 +201,7 @@ impl LoggerState {
     }
 
     fn write_message(&mut self, message: &str) {
-        scoped_alloc!(UseAlloc::Malloc);
+        scoped_alloc!(AllocId::Malloc);
         
         if self.cache.is_none() {
             self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));
@@ -213,7 +213,7 @@ impl LoggerState {
     }
 
     fn format_message(&mut self, fmt_args: Arguments) {
-        scoped_alloc!(UseAlloc::Malloc);
+        scoped_alloc!(AllocId::Malloc);
         
         if self.cache.is_none() {
             self.cache = Some(String::with_capacity(Self::CACHE_FLUSH_LIMIT));

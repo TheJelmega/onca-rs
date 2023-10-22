@@ -101,7 +101,7 @@ impl ral::CommandListInterface for CommandList {
     //==============================================================================================================================
 
     unsafe fn barrier(&self, barriers: &[ral::Barrier], _cur_queue_index: ral::QueueIndex) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let mut global_barriers = Vec::with_capacity(barriers.len());
         let mut buffer_barriers = Vec::with_capacity(barriers.len());
@@ -415,7 +415,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let dynamic = self.dynamic.write();
 
@@ -569,7 +569,7 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
         const MAX_VIEWPORTS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
 
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let mut dx_viewports = Vec::with_capacity(MAX_VIEWPORTS);
 
         for viewport in viewports {
@@ -582,7 +582,7 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn set_scissors(&self, scissors: &[ral::ScissorRect]) {
         const MAX_SCISSORS: usize = ral::constants::MAX_VIEWPORT_COUNT as usize;
 
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let mut dx_scissors = Vec::with_capacity(MAX_SCISSORS);
         for scissor in scissors {
             dx_scissors.push(scissor.to_dx());

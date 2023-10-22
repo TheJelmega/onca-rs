@@ -15,7 +15,7 @@ use core::{
 use std::collections::TryReserveError;
 
 use crate::{
-    alloc::{UseAlloc, Layout, ScopedAlloc, GetAllocatorId},
+    alloc::{AllocId, ScopedAlloc, GetAllocatorId},
     mem,
 };
 

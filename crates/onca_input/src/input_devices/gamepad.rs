@@ -455,7 +455,7 @@ impl InputDevice for Gamepad {
         let mut left_trigger = self.left_trigger.lock();
         let mut right_trigger = self.right_trigger.lock();
 
-        let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         // We generally only care about the last action of a button, as a press and release should not happen in a single frame.
         // While this is possible, especially at a lower framerate, it doesn't make much sense in term of the input system

@@ -1,3 +1,5 @@
+use std::{alloc::Layout, ptr::NonNull};
+
 use crate::{
     sync::Mutex,
     alloc::*,
@@ -5,21 +7,21 @@ use crate::{
 use super::*;
 
 /// Expandable allocator
-pub struct ExpandableArena<A, Args>
-    where A    : Allocator + ComposableAllocator<Args>,
-          Args : Copy
+pub struct ExpandableArena<A, Args> where
+    A:    Allocator + ComposableAllocator<Args>,
+    Args: Copy
 {
-    allocs         : Mutex<Vec<A>>,
-    args           : Args,
-    arena_alloc_id : u16,
-    id             : u16
+    allocs:         Mutex<Vec<A>>,
+    args:           Args,
+    arena_alloc_id: u16,
+    id:             u16
 }
 
-impl<A, Args> ExpandableArena<A, Args>
-where A    : Allocator + ComposableAllocator<Args>,
-      Args : Copy  
+impl<A, Args> ExpandableArena<A, Args>where
+    A:    Allocator + ComposableAllocator<Args>,
+    Args: Copy
 {
-    pub fn new(args: Args, arena_alloc: UseAlloc) -> Self {
+    pub fn new(args: Args, arena_alloc: AllocId) -> Self {
         let _scope_alloc = ScopedAlloc::new(arena_alloc);
         Self {
             allocs: Mutex::new(Vec::new()),
@@ -35,7 +37,7 @@ where
     A    : Allocator + ComposableAllocator<Args>,
     Args : Copy   
 {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         {
             let mut allocs = self.allocs.lock();
             for alloc in allocs.iter_mut() {
@@ -45,7 +47,7 @@ where
                 }
             }
         }
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(self.arena_alloc_id));
+        let _scope_alloc = ScopedAlloc::new(AllocId::Id(self.arena_alloc_id));
 
         let mut new_alloc = A::new_composable(self.args);
         new_alloc.set_alloc_id(self.id);
@@ -60,14 +62,18 @@ where
         allocation
     }
 
-    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
+    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
         let mut allocs = self.allocs.lock();
-        for alloc in allocs.iter_mut() {
-            if alloc.owns_composable(&ptr) {
-                alloc.dealloc(ptr);
-                return;
-            }
+        let alloc = allocs.iter_mut().find(|alloc| alloc.owns(ptr, layout));
+        if let Some(alloc) = alloc {
+            alloc.dealloc(ptr, layout)
+        } else {
+            panic!("Trying to free memory that is not owned by the allocator");
         }
+    }
+
+    fn owns(&self, ptr: NonNull<u8>, layout: Layout) -> bool {
+        self.allocs.lock().iter().any(|alloc| alloc.owns(ptr, layout))
     }
 
     fn set_alloc_id(&mut self, id: u16) {

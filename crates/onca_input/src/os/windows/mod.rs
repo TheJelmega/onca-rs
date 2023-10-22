@@ -209,7 +209,7 @@ impl OSInput {
 }
 
 unsafe fn get_raw_input_devices() -> Vec<RAWINPUTDEVICELIST> {
-    let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let _scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     let mut num_devices = 0;
     let res = GetRawInputDeviceList(None, &mut num_devices, mem::size_of::<RAWINPUTDEVICELIST>() as u32);

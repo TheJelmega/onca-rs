@@ -1,7 +1,7 @@
 use core::ffi::c_void;
 use onca_core::{
     prelude::*,
-    alloc::{Allocation, ScopedAlloc},
+    alloc::ScopedAlloc,
 };
 use onca_logging::{log_warning, log_error, log_debug};
 use win_utils::com::ComInterface;
@@ -157,7 +157,7 @@ impl DropHandler {
                 let num_files = DragQueryFileA(hdrop, 0xFFFF_FFFF, None);
 
                 for i in 0..num_files {
-                    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+                    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
                     let path_len = DragQueryFileA(hdrop, i, None);
                     let mut buf = Vec::<u8>::new();

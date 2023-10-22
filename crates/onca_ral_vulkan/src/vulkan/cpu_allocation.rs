@@ -1,18 +1,16 @@
 use core::{ptr::null_mut, ffi::c_void, mem::ManuallyDrop};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, alloc::Layout, ptr::NonNull};
 
 use onca_core::{
     prelude::*,
-    alloc::{Layout, Allocation},
     mem::{AllocInitState, get_memory_manager},
     sync::Mutex
 };
 use ash::vk;
 
 pub struct AllocationUserdata {
-    alloc          : UseAlloc,
-    // TODO: If layouts are stored differently, this could be removed
-    layout_mapping : HashMap<*const u8, Layout>
+    alloc          : AllocId,
+    layout_mapping : HashMap<NonNull<u8>, Layout>
 }
 
 #[derive(Clone)]
@@ -25,7 +23,7 @@ type UserDataType = Mutex<AllocationUserdata>;
 
 impl AllocationCallbacks {
 
-    pub fn new(alloc: UseAlloc) -> AllocationCallbacks {
+    pub fn new(alloc: AllocId) -> AllocationCallbacks {
         let mut this = Self {
             callbacks: vk::AllocationCallbacks::builder()
                 .pfn_allocation(Some(Self::alloc))
@@ -40,7 +38,7 @@ impl AllocationCallbacks {
             })),
         };
 
-        this.callbacks.p_user_data = unsafe { Arc::as_ptr(&this.user_data) as *mut c_void };
+        this.callbacks.p_user_data = Arc::as_ptr(&this.user_data) as *mut c_void;
         this
     }
 
@@ -60,48 +58,58 @@ impl AllocationCallbacks {
         // TODO: alloc_scope to mem tag when mem tags are reimplemented
         let this_mutex = unsafe { &mut *(userdata as *mut UserDataType) };
         let mut this = this_mutex.lock();
-        let layout = Layout::new_size_align(size, align);
+        let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
         let _scope_alloc = ScopedAlloc::new(this.alloc);
 
-        let alloc = match get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) {
+        let alloc = match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) } {
             Some(alloc) => alloc,
             None => return null_mut()
         };
-        let alloc = ManuallyDrop::new(alloc);
 
-        this.layout_mapping.insert(alloc.ptr(), alloc.layout());
-        alloc.ptr_mut() as *mut c_void
+        this.layout_mapping.insert(alloc, layout);
+        alloc.as_ptr().cast()
     }
 
     extern "system" fn realloc(userdata: *mut c_void, original: *mut c_void, size: usize, align: usize, _alloc_scope: vk::SystemAllocationScope) -> *mut c_void {
         // TODO: alloc_scope to mem tag when mem tags are reimplemented
         let this_mutex = unsafe { &mut *(userdata as *mut UserDataType) };
         let mut this = this_mutex.lock();
-        let layout = Layout::new_size_align(size, align);
-        let _scope_alloc = ScopedAlloc::new(this.alloc);
+        let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+
+        scoped_alloc!(this.alloc);
+        if size == 0 {
+            return match unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) } {
+                Some(ptr) => {
+                    this.layout_mapping.insert(ptr, layout);
+                    ptr.as_ptr().cast()
+                },
+                None => null_mut(),
+            };
+        }
 
         // Directly access, as vulkan should not be able to give a pointer that wasn't allocated via Self::alloc
-        let old_ptr = original as *const u8;
-        let old_layout = this.layout_mapping[&old_ptr];
-        let old = Allocation::from_raw(original, old_layout);
+        let old_ptr = original as *mut u8;
+        let old_layout = this.layout_mapping.remove(&unsafe { NonNull::new_unchecked(old_ptr) }).expect("Trying to get the layout for an allocation that was never allocated");
 
-        let new = match get_memory_manager().realloc(old, layout, AllocInitState::Uninitialized) {
-            Ok(new) => new,
-            Err(old) => {
-                // According to vulkan spec, we must not free the old allocation
-                _ = ManuallyDrop::new(old);
-                return null_mut();
-            }
+        let ptr = unsafe {
+            let ptr = match get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout) {
+                Some(new) => new,
+                None => {
+                    // According to vulkan spec, we must not free the old allocation
+                    return null_mut();
+                },
+            };
+
+            let copy_size = old_layout.size().min(layout.size());
+            std::ptr::copy_nonoverlapping(old_ptr, ptr.as_ptr(), copy_size);
+
+            get_memory_manager().dealloc(NonNull::new_unchecked(old_ptr), old_layout);
+
+            ptr
         };
 
-        let new_ptr = new.ptr() as *const u8;
-        if old_ptr != new_ptr {
-            this.layout_mapping.remove(&old_ptr);
-        }
-        this.layout_mapping.insert(new_ptr, layout);
-        
-        let new = ManuallyDrop::new(new);
-        new.ptr_mut()
+        this.layout_mapping.insert(ptr, layout);
+        ptr.as_ptr().cast()
     }
 
     extern "system" fn free(userdata: *mut c_void, memory: *mut c_void) {
@@ -113,11 +121,10 @@ impl AllocationCallbacks {
         let mut this = this_mutex.lock();
 
         // Directly access, as vulkan should not be able to give a pointer that wasn't allocated via Self::alloc
-        let ptr = memory as *const u8;
-        let layout = this.layout_mapping[&ptr];
-        this.layout_mapping.remove(&ptr);
+        let ptr = unsafe { NonNull::new_unchecked(memory) }.cast();
+        let layout = this.layout_mapping.remove(&ptr).expect("Trying to get the layout for an allocation that was never allocated");
 
-        get_memory_manager().dealloc(Allocation::new(memory, layout));
+        unsafe { get_memory_manager().dealloc(ptr, layout) };
     }
 
     extern "system" fn notify_alloc(_userdata: *mut c_void, _size: usize, _alloc_type: vk::InternalAllocationType, _scope: vk::SystemAllocationScope) {

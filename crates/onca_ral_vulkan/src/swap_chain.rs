@@ -284,7 +284,7 @@ impl SwapChain {
 
 impl ral::SwapChainInterface for SwapChain {
     unsafe fn present(&self, present_mode: ral::PresentMode, back_buffer_idx: u32, queue: &ral::CommandQueueHandle, present_info: &ral::PresentInfo<'_>) -> ral::Result<()> {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
 
         let queue = queue.handle.as_concrete_type::<CommandQueue>().queue;

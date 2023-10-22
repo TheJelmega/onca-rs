@@ -32,7 +32,7 @@ impl Terminal {
 
     /// Write a string to the terminal, with the given colors and formatting
     pub fn write_with(text: &str, fore: TerminalColor, back: TerminalColor, formatting: TextFormatting) -> io::Result<usize> {
-        scoped_alloc!(UseAlloc::Malloc);
+        scoped_alloc!(AllocId::Malloc);
         thread_local! {
             static CACHE_LINE: RefCell<Option<String>> = RefCell::new(None);
         }
@@ -151,7 +151,7 @@ impl Terminal {
     pub fn exec_terminal_sequence<F>(write_sequence: F)
         where F : FnOnce(&mut Vec<u8>)
     {
-        let _scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let _scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let mut buffer = Vec::with_capacity(32);
         write_sequence(&mut buffer);

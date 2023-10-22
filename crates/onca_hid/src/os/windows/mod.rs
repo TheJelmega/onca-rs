@@ -331,7 +331,7 @@ pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities
 }
 
 unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ButtonCaps>> {
-    let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     let mut win_caps = Vec::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
@@ -421,7 +421,7 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities)
 }
 
 unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ValueCaps>> {
-    let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     let mut win_caps = Vec::with_capacity(num_caps as usize);
     win_caps.set_len(num_caps as usize);
@@ -488,7 +488,7 @@ pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollectio
     unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
 
-        let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let num_collection_nodes = dev.capabilities.num_collection_nodes;
         let mut win_nodes = Vec::with_capacity(num_collection_nodes as usize);
@@ -854,7 +854,7 @@ pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<
         #[allow(cast_ref_to_mut)]
         let report_data = &mut *(report as *const _ as *mut [u8]);
 
-        let scoped_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+        let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
         let mut data_len = HidP_MaxDataListLength(win_report_type, preparse_data);
         let mut data = Vec::with_capacity(data_len as usize);

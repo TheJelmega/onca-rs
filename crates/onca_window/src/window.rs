@@ -398,7 +398,7 @@ impl Window {
             return;
         }
 
-        let _scope_alloc = ScopedAlloc::new(UseAlloc::Id(unsafe { (*self.manager).allocator_id() }));
+        let _scope_alloc = ScopedAlloc::new(AllocId::Id(unsafe { (*self.manager).allocator_id() }));
         os::OSWindowData::set_accept_files(self,)
     }
 

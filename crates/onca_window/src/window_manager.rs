@@ -23,7 +23,7 @@ pub enum RawInputEvent {
 pub struct WindowManager {
     os_data             : os::WindowManagerData,
     windows             : Vec<(WindowId, Box<Window>)>,
-    alloc               : UseAlloc,
+    alloc               : AllocId,
     cur_id              : u32,
     created_callbacks   : Mutex<EventListenerArray<dyn EventListener<Window>>>,
     // Newly added callbacks that need to run during the next window manage tick

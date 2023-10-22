@@ -5,7 +5,7 @@ use core::{
 use std::sync::Arc;
 use crate::{
     sync::Mutex,
-    alloc::{Layout, GetAllocatorId}
+    alloc::GetAllocatorId
 };
 
 pub type DynEventListenerRef<Event> = EventListenerRef<dyn EventListener<Event>>;

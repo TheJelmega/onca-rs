@@ -14,7 +14,7 @@ use crate::{PhysicalDevice, Result, Error, Device, DeviceInterfaceHandle, Comman
 
 const LOG_CAT : LogCategory = LogCategory::new("Graphics RAL");
 
-pub type FnRalCreate = extern "C" fn(&MemoryManager, &Logger, UseAlloc, Settings) -> Result<Box<dyn Interface>>;
+pub type FnRalCreate = extern "C" fn(&MemoryManager, &Logger, AllocId, Settings) -> Result<Box<dyn Interface>>;
 pub type FnRalDestroy = extern "C" fn(Box<dyn Interface>);
 
 /// Render Abstraction Layer type
@@ -183,12 +183,12 @@ pub struct Ral {
     dynlib: DynLib,
     /// Option so we can `take` it on drop, but if `Ral` exists, the option will always be `Some(_)`
     ral:    Option<Box<dyn Interface>>,
-    alloc:  UseAlloc,
+    alloc:  AllocId,
 }
 
 impl Ral {
     /// Create a new render abstraction layer
-    pub fn new(memory_manager: &MemoryManager, logger: &Logger, alloc: UseAlloc, settings: Settings) -> Result<Self> {
+    pub fn new(memory_manager: &MemoryManager, logger: &Logger, alloc: AllocId, settings: Settings) -> Result<Self> {
         let dynlib_name = match &settings.api {
             RalApi::DX12 => "deps/onca_ral_dx12",
             RalApi::Vulkan => "deps/onca_ral_vulkan",

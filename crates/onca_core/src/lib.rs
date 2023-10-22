@@ -31,6 +31,12 @@
 
 #![feature(local_key_cell_methods)]
 
+
+// NEW
+
+// Used an allocators
+#![feature(alloc_layout_extra)]
+
 // Used in containers
 #![feature(vec_split_at_spare)]
 #![feature(can_vector)]

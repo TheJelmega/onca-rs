@@ -3,9 +3,10 @@ use core::{
     ptr::null_mut, 
     sync::atomic::{AtomicPtr, Ordering}
 };
+use std::{ptr::NonNull, alloc::Layout};
 
 use crate::{
-    alloc::{Allocation, Allocator, Layout, ComposableAllocator, UseAlloc},
+    alloc::{Allocator, ComposableAllocator, AllocId},
     mem::{self, AllocInitState, get_memory_manager},
 };
 
@@ -18,10 +19,11 @@ struct Header {
 /// An allocator that can freely allocate when there is enough space left in it, but it cannot deallocate,
 /// deallocation only takes place for all allocations at once in `reset()`
 pub struct PoolAllocator {
-    buffer     : Allocation<u8>,
-    head       : AtomicPtr<Header>,
-    block_size : usize,
-    id         : u16
+    buffer:        NonNull<u8>,
+    buffer_layout: Layout,
+    head:          AtomicPtr<Header>,
+    block_size:    usize,
+    id:            u16
 }
 
 impl PoolAllocator {
@@ -30,14 +32,14 @@ impl PoolAllocator {
     /// The `block_size` needs to be a power of 2, and larger than the size of a known-size pointer
     /// 
     /// The size of the provided buffer needs to be a multiple of the `block_size`
-    pub fn new(mut buffer: Allocation<u8>, block_size: usize) -> Self {
+    pub fn new(mut buffer: NonNull<u8>, buffer_layout: Layout, block_size: usize) -> Self {
         assert!(block_size.is_power_of_two(), "Block size needs to be a power of 2");
         assert!(block_size >= size_of::<Header>(), "Block size needs to be larger than the size of a pointer");
-        assert!(buffer.layout().size() & block_size == 0, "The provided buffer needs to have a size that is a multiple of the block size");
+        assert!(buffer_layout.size() & block_size == 0, "The provided buffer needs to have a size that is a multiple of the block size");
 
-        let num_blocks = buffer.layout().size() / block_size;
+        let num_blocks = buffer_layout.size() / block_size;
 
-        let mut header = buffer.ptr_mut().cast::<Header>();
+        let mut header = buffer.as_ptr().cast::<Header>();
         let head_step = block_size / size_of::<Header>();
         for i in 0..num_blocks - 1 {
             unsafe {
@@ -47,13 +49,13 @@ impl PoolAllocator {
             }
         }
 
-        let head = buffer.ptr_mut().cast::<Header>();
-        Self { buffer, head: AtomicPtr::new(head), block_size, id: 0 }
+        let head = buffer.as_ptr().cast::<Header>();
+        Self { buffer, buffer_layout, head: AtomicPtr::new(head), block_size, id: 0 }
     }
 }
 
 impl Allocator for PoolAllocator {
-    unsafe fn alloc(&mut self, layout: Layout) -> Option<Allocation<u8>> {
+    unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
 
         if layout.align() > self.block_size {
             return None;
@@ -69,17 +71,17 @@ impl Allocator for PoolAllocator {
             let next = (*head).next;
 
             match self.head.compare_exchange_weak(head, next, Ordering::AcqRel, Ordering::Acquire) {
-                Ok(ptr) => return Some(Allocation::<_>::from_raw(ptr.cast::<u8>(), layout.with_alloc_id(self.id))),
+                Ok(ptr) => return NonNull::new(ptr.cast()),
                 Err(ptr) => head = ptr
             }
         }
         None
     }
 
-    unsafe fn dealloc(&mut self, ptr: Allocation<u8>) {
-        assert!(self.owns(&ptr), "Cannot deallocate an allocation ({}) that isn't owned by the allocator ({})", ptr.layout().alloc_id(), self.id);
+    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        assert!(self.owns(ptr, layout), "Cannot deallocate an allocation that isn't owned by the allocator");
 
-        let header = ptr.ptr_mut().cast::<Header>();
+        let header = ptr.as_ptr().cast::<Header>();
         loop {
             let mut cur_head = self.head.load(Ordering::Relaxed);
             (*header).next = cur_head;
@@ -89,6 +91,11 @@ impl Allocator for PoolAllocator {
                 Err(new_cur_head) => cur_head = new_cur_head,
             }
         }
+    }
+
+    fn owns(&self, ptr: NonNull<u8>, _ayout: Layout) -> bool {
+        let end = unsafe { self.buffer.as_ptr().add(self.buffer_layout.size()) };
+        ptr >= self.buffer && ptr.as_ptr() <= end
     }
 
     fn set_alloc_id(&mut self, id: u16) {
@@ -102,22 +109,15 @@ impl Allocator for PoolAllocator {
 
 impl ComposableAllocator<(usize, usize)> for PoolAllocator {
     fn new_composable(args: (usize, usize)) -> Self {
-        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, Layout::new_size_align(args.0, 8)).expect("Failed to allocate memory for composable allocator") };
-        PoolAllocator::new(buffer, args.1)
-    }
-
-    fn owns_composable(&self, allocation: &Allocation<u8>) -> bool {
-        let addr = allocation.ptr();
-        let start = self.buffer.ptr();
-        let end = unsafe { start.add(self.buffer.layout().size()) };
-
-        addr >= start && addr <= end
+        let buffer_layout = Layout::from_size_align(args.0, 8).expect("Invalid `PoolAllocator::new_composable` parameters");
+        let buffer = unsafe { get_memory_manager().alloc_raw(AllocInitState::Uninitialized, buffer_layout).expect("Failed to allocate memory for composable allocator") };
+        PoolAllocator::new(buffer, buffer_layout, args.1)
     }
 }
 
 impl Drop for PoolAllocator {
     fn drop(&mut self) {
-        get_memory_manager().dealloc(core::mem::replace(&mut self.buffer, unsafe { Allocation::const_null() }));
+        unsafe { get_memory_manager().dealloc(self.buffer, self.buffer_layout) };
     }
 }
 
@@ -125,67 +125,84 @@ unsafe impl Sync for PoolAllocator {}
 
 #[cfg(test)]
 mod tests {
+    use std::alloc::Layout;
+
     use crate::alloc::{*, primitives::*};
 
     #[test]
     fn alloc_dealloc() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = PoolAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr = alloc.alloc(Layout::new::<u64>()).unwrap();
-            alloc.dealloc(ptr);
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(258, 8);
+
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = PoolAllocator::new(buffer, buffer_layout, 8);
+
+            let layout = Layout::new::<u64>();
+            let ptr = alloc.alloc(layout).unwrap();
+            alloc.dealloc(ptr, layout);
         }
     }
 
     #[test]
     fn multi_allocs() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = PoolAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(258, 8);
 
-            alloc.dealloc(ptr0);
-            alloc.dealloc(ptr1);
-            alloc.dealloc(ptr2);
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = PoolAllocator::new(buffer, buffer_layout, 8);
+
+            let layout0 = Layout::new::<u16>();
+            let layout1 = Layout::new::<u64>();
+            let layout2 = Layout::new::<u32>();
+
+            let ptr0 = alloc.alloc(layout0).unwrap();
+            let ptr1 = alloc.alloc(layout1).unwrap();
+            let ptr2 = alloc.alloc(layout2).unwrap();
+
+            alloc.dealloc(ptr0, layout0);
+            alloc.dealloc(ptr1, layout1);
+            alloc.dealloc(ptr2, layout2);
         }
     }
 
     #[test]
     fn dealloc_then_realloc() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = PoolAllocator::new(buffer, 8);
-
         unsafe {
-            let ptr0 = alloc.alloc(Layout::new::<u16>()).unwrap();
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(258, 8);
 
-            let raw0 = ptr0.ptr();
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = PoolAllocator::new(buffer, buffer_layout, 8);
 
-            let ptr1 = alloc.alloc(Layout::new::<u64>()).unwrap();
-            let ptr2 = alloc.alloc(Layout::new::<u32>()).unwrap();
+            let layout0 = Layout::new::<u16>();
+            let layout1 = Layout::new::<u64>();
+            let layout2 = Layout::new::<u32>();
 
-            alloc.dealloc(ptr0);
+            let ptr0 = alloc.alloc(layout0).unwrap();
 
-            let new_ptr = alloc.alloc(Layout::new::<u16>()).unwrap();
-            assert_eq!(raw0, new_ptr.ptr());
+            let ptr1 = alloc.alloc(layout1).unwrap();
+            let ptr2 = alloc.alloc(layout2).unwrap();
+
+            alloc.dealloc(ptr0, layout0);
+
+            let new_ptr = alloc.alloc(layout0).unwrap();
+            assert_eq!(ptr0, new_ptr);
         }
     }
 
     #[test]
     fn alloc_too_large() {
-        let mut base_alloc = Mallocator;
-        let buffer = unsafe { base_alloc.alloc(Layout::new_size_align(256, 8)).unwrap() };
-        let mut alloc = PoolAllocator::new(buffer, 8);
-
         struct Large { a: u64, b: u64 }
 
         unsafe {
+            let mut base_alloc = Mallocator;
+            let buffer_layout = Layout::from_size_align_unchecked(258, 8);
+
+            let buffer = unsafe { base_alloc.alloc(buffer_layout).unwrap() };
+            let mut alloc = PoolAllocator::new(buffer, buffer_layout, 8);
+
             let ptr = alloc.alloc(Layout::new::<Large>());
             match ptr {
                 None => {},

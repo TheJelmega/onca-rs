@@ -54,7 +54,7 @@ pub extern "system" fn debug_utils_messenger_callback(
         _ => LOG_GENERAL_CAT
     };
 
-    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     let data = unsafe { &*callback_data };
     let message_id_name = char_pointer_to_str(data.p_message_id_name);

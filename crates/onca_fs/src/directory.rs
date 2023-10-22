@@ -7,7 +7,7 @@ use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
 
 /// Returns if the given path is valid and points to a directory
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
-    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     let entry = Entry::new(path.as_ref().to_path_buf());
     match entry {
@@ -38,7 +38,7 @@ pub fn remove<P: AsRef<Path>>(path: P) -> io::Result<()> {
 /// 
 /// Use carefully!
 pub fn remove_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    let _scope_alloc = ScopedAlloc::new(UseAlloc::TlsTemp);
+    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
     if let Some(iter) = read(path.as_ref()) {
         for entry in iter {

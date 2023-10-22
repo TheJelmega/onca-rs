@@ -130,7 +130,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn barrier(&self, barriers: &[ral::Barrier], cur_queue_idx: ral::QueueIndex) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         
         let mut global_barriers = Vec::new();
         let mut buffer_barriers = Vec::new();
@@ -194,7 +194,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn copy_buffer_regions(&self, src: &ral::BufferHandle, dst: &ral::BufferHandle, regions: &[ral::BufferCopyRegion]) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let mut vk_regions = Vec::with_capacity(regions.len());
         for region in regions {
             vk_regions.push(vk::BufferCopy2::builder()
@@ -215,7 +215,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn copy_buffer(&self, src: &ral::BufferHandle, dst: &ral::BufferHandle) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         let mut vk_regions = Vec::with_capacity(1);
         vk_regions.push(vk::BufferCopy2::builder()
             .src_offset(0)
@@ -234,7 +234,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn copy_texture_regions(&self, src: &ral::TextureHandle, dst: &ral::TextureHandle, regions: &[ral::TextureCopyRegion]) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let src_image = src.interface().as_concrete_type::<Texture>().image;
         let dst_image = dst.interface().as_concrete_type::<Texture>().image;
@@ -285,7 +285,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn copy_texture(&self, src: &ral::TextureHandle, dst: &ral::TextureHandle) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let src_image = src.interface().as_concrete_type::<Texture>().image;
         let dst_image = dst.interface().as_concrete_type::<Texture>().image;
@@ -475,7 +475,7 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn set_graphics_descriptor_table(&self, index: u32, descriptor: ral::GpuDescriptor, layout: &ral::PipelineLayoutHandle) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let pipeline_layout = layout.interface().as_concrete_type::<PipelineLayout>().layout;
 
@@ -520,7 +520,7 @@ impl ral::CommandListInterface for CommandList {
     // TODO: eventually remove attribute once full implementation is done
     #[allow(unused)]
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) {
-        scoped_alloc!(UseAlloc::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let mut vk_rts = Vec::with_capacity(rendering_info.render_targets.len());
         for rt in rendering_info.render_targets {
