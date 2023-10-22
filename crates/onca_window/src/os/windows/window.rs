@@ -980,13 +980,14 @@ pub(crate) fn create(
         let pos = settings.outer_position();
         let PhysicalSize { width, height } = settings.size_with_borders();
 
-        let title = match &settings.title {
+        let mut title = match &settings.title {
             Some(title) => title.clone(),
             None => {
                 let _scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
                 String::new()
             },
         };
+        title.null_terminate();
 
         let is_dpi_aware = settings.is_dpi_aware();
         let dpi = settings.dpi;

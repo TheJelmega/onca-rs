@@ -1,6 +1,6 @@
 use core::mem::{ManuallyDrop, size_of};
 
-use crate::{os::dynlib as os, prelude::ScopedAlloc, strings::ToString};
+use crate::{os::dynlib as os, prelude::{ScopedAlloc, AllocId}, strings::{ToString, StringExtensions}};
 
 /// Dynamic library
 pub struct DynLib {
@@ -14,9 +14,12 @@ impl DynLib {
     /// 
     /// If a dynamic library could not be loaded, an error with an OS error will be returned
     pub fn load(path: &str) -> Result<DynLib, i32> {
-        let _scope_alloc = ScopedAlloc::new(crate::prelude::AllocId::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
-        os::load(&path.to_string()).map(|handle| DynLib { handle })
+        // Go via a `String` to make sure it is null-terminated
+        let mut path = path.to_string();
+        path.null_terminate();
+        os::load(&path).map(|handle| DynLib { handle })
     }
 
     /// Close a dynamic library, this has the same result as dropping the dynamic library, except that it has a return value
@@ -36,9 +39,11 @@ impl DynLib {
             return None;
         }
 
-        let _scope_alloc = ScopedAlloc::new(crate::prelude::AllocId::TlsTemp);
+        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
-        let addr = os::get_proc_address(self.handle, &proc_name.to_string());
+        let mut proc_name = proc_name.to_string();
+        proc_name.null_terminate();
+        let addr = os::get_proc_address(self.handle, &proc_name);
         addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })
     }
 }

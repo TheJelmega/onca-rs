@@ -19,7 +19,7 @@ impl DynLibHandle {
     }
 }
 
-pub fn load(s: &String) -> Result<DynLibHandle, i32> {
+pub fn load(s: &str) -> Result<DynLibHandle, i32> {
     unsafe {
         let res = LoadLibraryA(PCSTR(s.as_ptr()));
         match res {
@@ -40,7 +40,7 @@ pub fn close(handle: DynLibHandle) -> Result<(), i32> {
     }
 }
 
-pub fn get_proc_address(handle: DynLibHandle, proc_name: &String) -> Option<fn()> {
+pub fn get_proc_address(handle: DynLibHandle, proc_name: &str) -> Option<fn()> {
     unsafe {
         let proc = GetProcAddress(handle.0, PCSTR(proc_name.as_ptr()));
         proc.map(|proc| core::mem::transmute(proc))

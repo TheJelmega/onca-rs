@@ -1784,7 +1784,9 @@ pub enum InputLayoutStepRate {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct InputLayoutElement {
     /// Semantic
-    pub semantic:       String,
+    /// 
+    /// Set as private to prevent accidentally having it not null-terminated, which could cause issues
+    semantic:       String,
     /// Semantic index
     pub semantic_index: u8,
     /// Vertex buffer input slot
@@ -1795,6 +1797,27 @@ pub struct InputLayoutElement {
     pub offset:         u16,
     /// Step rate
     pub step_rate:      InputLayoutStepRate,
+}
+
+impl InputLayoutElement {
+    /// Create a new input layout
+    pub fn new(mut semantic: String, semantic_index: u8, input_slot: u8, format: VertexFormat, offset: u16, step_rate: InputLayoutStepRate) -> Self {
+        // Make sure the semantic is a null terminated string
+        semantic.null_terminate();
+        Self {
+            semantic,
+            semantic_index,
+            input_slot,
+            format,
+            offset,
+            step_rate,
+        }
+    }
+
+    /// Get the input semantic (null-terminated string)
+    pub fn semantic(&self) -> &str {
+        &self.semantic
+    }
 }
 
 /// Input layout

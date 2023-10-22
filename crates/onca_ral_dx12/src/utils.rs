@@ -1,6 +1,5 @@
 use core::num::NonZeroU16;
 
-use onca_core::strings::StringExtensions;
 use windows::{
     core::{Error as WinError, HRESULT, PCSTR},
     Win32::{Graphics::{
@@ -492,7 +491,7 @@ impl ToDx for ral::InputLayoutElement {
         };
 
         D3D12_INPUT_ELEMENT_DESC {
-            SemanticName: PCSTR(self.semantic.as_null_terminated_bytes().as_ptr()),
+            SemanticName: PCSTR(self.semantic().as_ptr()),
             SemanticIndex: self.semantic_index as u32,
             Format: self.format.to_dx(),
             InputSlot: self.input_slot as u32,
