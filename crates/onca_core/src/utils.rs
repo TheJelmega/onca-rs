@@ -34,13 +34,13 @@ where
 }
 
 /// Trait to get the number of elements in an enum
-pub trait EnumCount {
+pub trait EnumCountT {
     /// Count or number of element in an enum
     const COUNT : usize;
 }
 
 /// Trait to get an enum from a given index
-pub trait EnumFromIndex : Sized {
+pub trait EnumFromIndexT : Sized {
     /// Try to convert an index to an enum
     fn from_idx(idx: usize) -> Option<Self>;
     /// Convert an index to an enum, without checking bounds

@@ -7,4 +7,4 @@ pub use crate::scoped_alloc;
 
 pub use crate::strings::*;
 
-pub use crate::utils::{EnumCount, EnumFromIndex};
+pub use crate::utils::{EnumCountT, EnumFromIndexT};

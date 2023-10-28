@@ -1,4 +1,4 @@
-use onca_core::utils::EnumCount;
+use onca_core::utils::EnumCountT;
 use onca_ral::{Format, VertexFormat};
 use ash::vk;
 
