@@ -1,14 +1,12 @@
 use windows::{
     core::PCSTR,
     Win32::{
-        Foundation::{HMODULE, GetLastError},
-        System::LibraryLoader::{LoadLibraryA, FreeLibrary, GetProcAddress},
+        Foundation::{HMODULE, GetLastError, FreeLibrary},
+        System::LibraryLoader::{LoadLibraryA, GetProcAddress},
     },
 };
 
 use crate::strings::String;
-
-
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct DynLibHandle(HMODULE);
@@ -19,7 +17,7 @@ impl DynLibHandle {
     }
 }
 
-pub fn load(s: &str) -> Result<DynLibHandle, i32> {
+pub(crate) fn load(s: &str) -> Result<DynLibHandle, i32> {
     unsafe {
         let res = LoadLibraryA(PCSTR(s.as_ptr()));
         match res {
@@ -29,21 +27,18 @@ pub fn load(s: &str) -> Result<DynLibHandle, i32> {
     }
 }
 
-pub fn close(handle: DynLibHandle) -> Result<(), i32> {
+pub(crate) fn close(handle: DynLibHandle) -> Result<(), i32> {
     unsafe {
-        let res = FreeLibrary(handle.0).as_bool();
-        if res {
-            Ok(())
-        } else {
-            Err(GetLastError().0 as i32)
+        match FreeLibrary(handle.0) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.code().0),
         }
     }
 }
 
-pub fn get_proc_address(handle: DynLibHandle, proc_name: &str) -> Option<fn()> {
+pub(crate) fn get_proc_address(handle: DynLibHandle, proc_name: &str) -> Option<fn()> {
     unsafe {
         let proc = GetProcAddress(handle.0, PCSTR(proc_name.as_ptr()));
         proc.map(|proc| core::mem::transmute(proc))
-
     }
 }

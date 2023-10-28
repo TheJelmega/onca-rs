@@ -1,15 +1,15 @@
 use core:: mem;
 use onca_core::utils::is_flag_set;
-use onca_logging::{log_error};
+use onca_logging::log_error;
 use windows::Win32::{
     UI::{
         Input::{
             KeyboardAndMouse::*,
             RAWINPUTDEVICE, RIDEV_NOHOTKEYS, RegisterRawInputDevices, RAWKEYBOARD,
         },
-        WindowsAndMessaging::{RI_KEY_BREAK}
+        WindowsAndMessaging::RI_KEY_BREAK
     },
-    Foundation::{HWND, GetLastError},
+    Foundation::HWND,
     Devices::HumanInterfaceDevice::{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD}
 };
 
@@ -19,22 +19,19 @@ pub struct OSKeyboard;
 
 impl OSKeyboard {
     pub(crate) fn new() -> Option<Self> {
-        unsafe {
-            let raw_input = RAWINPUTDEVICE {
-                usUsagePage: HID_USAGE_PAGE_GENERIC,
-                usUsage: HID_USAGE_GENERIC_KEYBOARD,
-                dwFlags: RIDEV_NOHOTKEYS,
-                hwndTarget: HWND::default(),
-            };
-            
-            let raw_input_devices = [raw_input];
-            let res = RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32).as_bool();
-            if !res {
-                log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the keyboard (err code: {}).", GetLastError().0);
-                return None;
-            }
-            Some(Self)
+        let raw_input = RAWINPUTDEVICE {
+            usUsagePage: HID_USAGE_PAGE_GENERIC,
+            usUsage: HID_USAGE_GENERIC_KEYBOARD,
+            dwFlags: RIDEV_NOHOTKEYS,
+            hwndTarget: HWND::default(),
+        };
+        
+        let raw_input_devices = [raw_input];
+        if let Err(err) = unsafe { RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32) } {
+            log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the keyboard (err code: {err}).");
+            return None;
         }
+        Some(Self)
     }
 
     pub(crate) unsafe fn process_window_event(keyboard: &mut Keyboard, data: &RAWKEYBOARD) {

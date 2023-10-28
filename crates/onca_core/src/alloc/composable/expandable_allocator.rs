@@ -2,7 +2,7 @@ use std::{alloc::Layout, ptr::NonNull};
 
 use crate::{
     sync::Mutex,
-    alloc::*,
+    alloc::*, scoped_alloc,
 };
 use super::*;
 
@@ -47,7 +47,7 @@ where
                 }
             }
         }
-        let _scope_alloc = ScopedAlloc::new(AllocId::Id(self.arena_alloc_id));
+        scoped_alloc!(AllocId::Id(self.arena_alloc_id));
 
         let mut new_alloc = A::new_composable(self.args);
         new_alloc.set_alloc_id(self.id);

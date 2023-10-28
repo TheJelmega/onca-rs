@@ -56,7 +56,6 @@ impl PoolAllocator {
 
 impl Allocator for PoolAllocator {
     unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
-
         if layout.align() > self.block_size {
             return None;
         }
@@ -67,7 +66,6 @@ impl Allocator for PoolAllocator {
 
         let mut head = self.head.load(Ordering::Relaxed);
         while head != null_mut() {
-            
             let next = (*head).next;
 
             match self.head.compare_exchange_weak(head, next, Ordering::AcqRel, Ordering::Acquire) {

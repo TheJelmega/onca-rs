@@ -6,6 +6,7 @@ pub fn null_terminate_slice(slice: &[u8]) -> &[u8] {
     &slice[..len]
 }
 
+// TODO: Should be unsafe, as this is currently unsound
 /// Convert a slice containing a null terminated string into an array
 pub fn null_terminated_arr_to_str_unchecked(arr: &[u8]) -> &str {
     unsafe { core::str::from_utf8_unchecked(null_terminate_slice(arr)) }

@@ -152,7 +152,7 @@ impl DropHandler {
         let res = data_obj.get().GetData(&mut format);
         match res {
             Ok(medium) => {
-                let hdrop = HDROP(medium.Anonymous.hGlobal.0);
+                let hdrop = HDROP(medium.u.hGlobal.0 as isize);
 
                 let num_files = DragQueryFileA(hdrop, 0xFFFF_FFFF, None);
 

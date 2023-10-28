@@ -24,7 +24,13 @@ impl ral::CommandQueueInterface for CommandQueue {
         let value = self.flush_value.fetch_add(1, Ordering::Relaxed) + 1;
         
         self.signal(&self.flush_fence, value)?;
-        self.flush_fence.wait(value, Duration::MAX)
+        self.flush_fence.wait(value, Duration::MAX).map_or_else(|err| Err(err), |res| {
+            if res {
+                Ok(())
+            } else {
+                Err(ral::Error::Timeout)
+            }
+        })
     }
 
     unsafe fn submit(&self, batches: &[ral::api::SubmitBatch]) -> ral::Result<()> {

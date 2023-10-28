@@ -29,7 +29,6 @@ use windows::{
 
 use crate::{
     utils::*,
-    dx12_types::{*, self},
     LOG_CAT,
 };
 
@@ -908,8 +907,7 @@ pub struct D3DOptions {
     options13 : D3D12_FEATURE_DATA_D3D12_OPTIONS13,
     options14 : D3D12_FEATURE_DATA_D3D12_OPTIONS14,
     options15 : D3D12_FEATURE_DATA_D3D12_OPTIONS15,
-    // window-rs 0.48.0 misses a varialbe: GPUUploadHeapSupported is Reserved
-    options16 : dx12_types::D3D12_FEATURE_DATA_D3D12_OPTIONS16,
+    options16 : D3D12_FEATURE_DATA_D3D12_OPTIONS16,
     options17 : D3D12_FEATURE_DATA_D3D12_OPTIONS17,
     options18 : D3D12_FEATURE_DATA_D3D12_OPTIONS18,
     options19 : D3D12_FEATURE_DATA_D3D12_OPTIONS19,

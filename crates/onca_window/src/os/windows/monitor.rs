@@ -1,9 +1,9 @@
-use core::mem::size_of;
-use std::collections::BTreeSet;
-use onca_core::{
-    prelude::*,
-    utils
+use std::{
+    mem::size_of,
+    collections::BTreeSet
 };
+
+use onca_core::utils;
 use onca_logging::log_error;
 use windows::{
     Win32::{
@@ -14,7 +14,7 @@ use windows::{
             MONITOR_DEFAULTTONULL, EnumDisplaySettingsExA, ENUM_CURRENT_SETTINGS, DEVMODEA, ENUM_DISPLAY_SETTINGS_MODE, DM_BITSPERPEL, DM_PELSWIDTH, DM_PELSHEIGHT, DM_DISPLAYFREQUENCY, EnumDisplayDevicesA, DISPLAY_DEVICEA, EDS_RAWMODE,
         },
         UI::{
-            WindowsAndMessaging::{MONITORINFOF_PRIMARY},
+            WindowsAndMessaging::MONITORINFOF_PRIMARY,
             HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}
         },
     },
@@ -138,7 +138,7 @@ pub(crate) fn enumerate_monitors() -> Vec<Monitor> {
         let lparam = LPARAM(&mut monitors as *mut Vec<Monitor> as isize);
         let res = EnumDisplayMonitors(HDC(0), None, Some(monitor_enum_proc), lparam).as_bool();
         if !res {
-            let err_code = GetLastError().0;
+            let err_code = GetLastError().map_or_else(|e| e.code().0, |_| 0);
             log_error!(LOG_CAT, enumerate_monitors, "Failed to enumerate monitors (err: {err_code})");
         }
 

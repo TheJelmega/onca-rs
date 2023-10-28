@@ -54,8 +54,9 @@ impl OSInput {
                 let mut size = header_size;
                 let byte_count = GetRawInputData(hrawinput, RID_INPUT, None, &mut size, header_size);
                 if byte_count == u32::MAX {
-                    let err = GetLastError().0;
-                    log_warning!(LOG_EVENT_CAT, "Failed to get raw input size (err: {err})");
+                    if let Err(err) = GetLastError() {
+                        log_warning!(LOG_EVENT_CAT, "Failed to get raw input size ({err})");
+                    }
                     return;
                 }
 
@@ -64,8 +65,9 @@ impl OSInput {
                 buffer.set_len(size as usize);
                 let byte_count = GetRawInputData(hrawinput, RID_INPUT, Some(buffer.as_mut_ptr() as *mut c_void), &mut size, header_size);
                 if byte_count == u32::MAX {
-                    let err = GetLastError().0;
-                    log_warning!(LOG_EVENT_CAT, "Failed to get raw input (err: {err})");
+                    if let Err(err) = GetLastError() {
+                        log_warning!(LOG_EVENT_CAT, "Failed to get raw input ({err})");
+                    }
                     return;
                 }
                 let rawinput = &*(buffer.as_ptr() as *const RAWINPUT);
@@ -89,7 +91,9 @@ impl OSInput {
                             let mut dev_info_size = mem::size_of::<RID_DEVICE_INFO>() as u32;
                             let res = GetRawInputDeviceInfoA(rawinput.header.hDevice, RIDI_DEVICEINFO, Some(&mut dev_info as *mut _ as *mut c_void), &mut dev_info_size);
                             if res == u32::MAX {
-                                log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info (err: {:X})", GetLastError().0);
+                                if let Err(err) = GetLastError() {
+                                    log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info ({err})");
+                                }
                                 return;
                             };
                             
@@ -107,7 +111,9 @@ impl OSInput {
                                 preparse_data.set_len(preparse_size as usize);
                                 let res = GetRawInputDeviceInfoA(rawinput.header.hDevice, RIDI_PREPARSEDDATA, Some(preparse_data.as_mut_ptr() as *mut c_void), &mut preparse_size);
                                 if res == u32::MAX {
-                                    log_warning!(LOG_EVENT_CAT, "Failed to retrieve HID preparse data. (error: {:X})", GetLastError().0);
+                                    if let Err(err) = GetLastError() {
+                                        log_warning!(LOG_EVENT_CAT, "Failed to retrieve HID preparse data ({err})");
+                                    }
                                     return;
                                 }
                                 
@@ -145,7 +151,9 @@ impl OSInput {
                         let mut dev_info_size = mem::size_of::<RID_DEVICE_INFO>() as u32;
                         let res = GetRawInputDeviceInfoA(win_handle, RIDI_DEVICEINFO, Some(&mut dev_info as *mut _ as *mut c_void), &mut dev_info_size);
                         if res == u32::MAX {
-                            log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info (err: {:X})", GetLastError().0);
+                            if let Err(err) = GetLastError() {
+                                log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info ({err})");
+                            }
                             return;
                         };
                         
@@ -163,7 +171,9 @@ impl OSInput {
                             preparse_data.set_len(preparse_size as usize);
                             let res = GetRawInputDeviceInfoA(win_handle, RIDI_PREPARSEDDATA, Some(preparse_data.as_mut_ptr() as *mut c_void), &mut preparse_size);
                             if res == u32::MAX {
-                                log_warning!(LOG_EVENT_CAT, "Failed to retrieve HID preparse data. (error: {:X})", GetLastError().0);
+                                if let Err(err) = GetLastError() {
+                                    log_warning!(LOG_EVENT_CAT, "Failed to retrieve HID preparse data ({err})");
+                                }
                                 return;
                             }
                             
@@ -188,22 +198,19 @@ impl OSInput {
     }
 
     pub fn register_device_usage(&self, usage: hid::Usage) -> bool {
-        unsafe {
-            let raw_input = RAWINPUTDEVICE {
-                usUsagePage: usage.page.as_u16(),
-                usUsage: usage.usage.as_u16(),
-                dwFlags: RAWINPUTDEVICE_FLAGS(0),
-                hwndTarget: HWND::default(),
-            };
+        let raw_input = RAWINPUTDEVICE {
+            usUsagePage: usage.page.as_u16(),
+            usUsage: usage.usage.as_u16(),
+            dwFlags: RAWINPUTDEVICE_FLAGS(0),
+            hwndTarget: HWND::default(),
+        };
 
-            let raw_input_devices = [raw_input];
-            let res = RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32).as_bool();
-            if !res {
-                log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the mouse (err code: {}).", GetLastError().0);
-                false
-            } else {
-                true
-            }
+        let raw_input_devices = [raw_input];
+        if let Err(err) = unsafe { RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32) } {
+            log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the mouse ({err}).");
+            false
+        } else {
+            true
         }
     }
 }
@@ -214,7 +221,9 @@ unsafe fn get_raw_input_devices() -> Vec<RAWINPUTDEVICELIST> {
     let mut num_devices = 0;
     let res = GetRawInputDeviceList(None, &mut num_devices, mem::size_of::<RAWINPUTDEVICELIST>() as u32);
     if res == u32::MAX {
-        log_error!(LOG_INPUT_CAT, get_raw_input_devices, "Failed to get number of raw input devices (err: {:X})", GetLastError().0);
+        if let Err(err) = GetLastError() {
+            log_error!(LOG_INPUT_CAT, get_raw_input_devices, "Failed to get number of raw input devices ({err})");
+        }
         return Vec::new();
     }
 
@@ -222,7 +231,9 @@ unsafe fn get_raw_input_devices() -> Vec<RAWINPUTDEVICELIST> {
     raw_devices.set_len(num_devices as usize);
     let res = GetRawInputDeviceList(Some(raw_devices.as_mut_ptr()), &mut num_devices, mem::size_of::<RAWINPUTDEVICELIST>() as u32);
     if res == u32::MAX {
-        log_error!(LOG_INPUT_CAT, get_raw_input_devices, "Failed to get raw input devices (err: {:X})", GetLastError().0);
+        if let Err(err) = GetLastError() {
+            log_error!(LOG_INPUT_CAT, get_raw_input_devices, "Failed to get raw input devices ({err})");
+        }
         raw_devices.clear();
     }
     raw_devices
@@ -236,7 +247,9 @@ unsafe fn get_raw_device_name(handle: HANDLE) -> String {
 
     let bytes_written = GetRawInputDeviceInfoA(handle, RIDI_DEVICENAME, Some(device_name.as_mut_ptr() as *mut c_void), &mut device_name_len);
     if bytes_written == u32::MAX {
-        log_warning!(LOG_INPUT_CAT, "Failed to retrieve device name (err: {:X})", GetLastError().0);
+        if let Err(err) = GetLastError() {
+            log_warning!(LOG_INPUT_CAT, "Failed to retrieve device name ({err})");
+        }
     } else {
         // '- 1', as the last '\0' is included in the written length
         device_name.as_mut_vec().set_len(bytes_written as usize - 1);
@@ -253,7 +266,9 @@ pub(crate) unsafe fn get_device_infos() -> Vec<DeviceInfo> {
         let mut size = mem::size_of::<RID_DEVICE_INFO>() as u32;
         let res = GetRawInputDeviceInfoA(raw_device.hDevice, RIDI_DEVICEINFO, Some(&mut dev_info as *mut _ as *mut c_void), &mut size);
         if res == u32::MAX {
-            log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info (err: {:X})", GetLastError().0);
+            if let Err(err) = GetLastError() {
+                log_warning!(LOG_INPUT_CAT, "Failed to get raw input device info ({err})");
+            }
             continue;
         }
 

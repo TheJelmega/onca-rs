@@ -47,7 +47,7 @@ impl ral::FenceInterface for Fence {
         device.signal_semaphore(&signal_info).map_err(|err| err.to_ral_error())
     }
     
-    unsafe fn wait(&self, value: u64, timeout: onca_core::time::Duration) -> ral::Result<()> {
+    unsafe fn wait(&self, value: u64, timeout: onca_core::time::Duration) -> ral::Result<bool> {
         let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let semaphores = [self.semaphore];
@@ -57,10 +57,14 @@ impl ral::FenceInterface for Fence {
         .semaphores(&semaphores)
         .values(&values);
 
-        device.wait_semaphores(&wait_info, timeout.as_millis() as u64).map_err(|err| err.to_ral_error())
+        match device.wait_semaphores(&wait_info, timeout.as_millis() as u64) {
+            Ok(_) => Ok(true),
+            Err(err) if err == vk::Result::TIMEOUT => Ok(false),
+            Err(err) => Err(err.to_ral_error()),
+        }
     }
 
-    unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: std::time::Duration) -> ral::Result<()> {
+    unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: std::time::Duration) -> ral::Result<bool> {
         scoped_alloc!(AllocId::TlsTemp);
 
         let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
@@ -78,7 +82,11 @@ impl ral::FenceInterface for Fence {
             .semaphores(&semaphores)
             .values(&values);
 
-        device.wait_semaphores(&wait_info, timeout.as_millis() as u64).map_err(|err| err.to_ral_error())
+        match device.wait_semaphores(&wait_info, timeout.as_millis() as u64) {
+            Ok(_) => Ok(true),
+            Err(err) if err == vk::Result::TIMEOUT => Ok(false),
+            Err(err) => Err(err.to_ral_error()),
+        }
     }  
 }
 

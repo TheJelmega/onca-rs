@@ -50,9 +50,9 @@ impl Drop for OSIcon {
     fn drop(&mut self) {
         unsafe {
             if !self.hicon.is_invalid() {
-                let res = DestroyIcon(self.hicon).as_bool();
-                if !res {
-                    log_warning!(LOG_CAT, "Failed to destoy icon with handle '{:X}' (err: {:X})", self.hicon.0, GetLastError().0);
+                let res = DestroyIcon(self.hicon);
+                if let Err(err) = res {
+                    log_warning!(LOG_CAT, "Failed to destoy icon with handle '{:X}' ({err})", self.hicon.0);
                 }
             }
         }

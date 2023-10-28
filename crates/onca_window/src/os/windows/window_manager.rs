@@ -10,14 +10,12 @@ use onca_core::{
 use onca_logging::{log_error, log_debug};
 use windows::{
     Win32::{
-        UI::{
-            WindowsAndMessaging::{
+        UI::WindowsAndMessaging::{
                 RegisterClassExA, PeekMessageA, TranslateMessage, DispatchMessageA,
                 WNDCLASSEXA, HICON, HCURSOR, MSG,
                 CS_HREDRAW, CS_VREDRAW,
                 PM_REMOVE, 
             },
-        },
         Foundation::{WPARAM, LPARAM, HWND, LRESULT, GetLastError},
         Graphics::Gdi::{COLOR_BACKGROUND, HBRUSH}
     },
@@ -58,7 +56,7 @@ impl WindowManagerData {
             let class_id = self.wnd_classes.values().len();
             let _ = write!(&mut class_name, "Win32 Class {class_id}");
 
-            let hinstance = get_app_handle().hmodule();
+            let hinstance = get_app_handle().hmodule().into();
 
             let hicon = settings.icon().map(|ico| ico.get_os_icon().hicon()).unwrap_or(HICON(0));
             let hicon_sm = settings.small_icon().map(|ico| ico.get_os_icon().hicon()).unwrap_or(HICON(0));
@@ -80,7 +78,7 @@ impl WindowManagerData {
 
             let atom = RegisterClassExA(&wndclassex);
             if atom == 0 {
-                let err_code = GetLastError().0;
+                let err_code = GetLastError().map_or_else(|err| err.code().0, |_| 0);
                 log_error!(LOG_CAT, Self::register_wndclassex, "Failed to create WNDCLASSEX (err: {err_code:x})");
                 None
             } else {

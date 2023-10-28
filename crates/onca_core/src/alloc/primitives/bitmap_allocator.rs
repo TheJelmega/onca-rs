@@ -10,14 +10,12 @@ use crate::{
 /// 
 /// A bitmap allocator stores a set of blocks with a fixed size, whenever memory is requested, the allocator will find a spot with enough contiguous blocks to store the allocation,
 /// it well then mark these in a bitmap to keep track of which blocks are in use and which are available
-pub struct BitmapAllocator
-{
-    buffer:        NonNull<u8>,
+pub struct BitmapAllocator {
+    buffer:        Mutex<NonNull<u8>>,
     buffer_layout: Layout,
     block_size:    usize,
     num_blocks:    usize,
     num_manage:    usize,
-    mutex:         Mutex<()>,
     id:            u16
 }
 
@@ -49,12 +47,11 @@ impl BitmapAllocator {
         }
 
         Self { 
-            buffer,
+            buffer: Mutex::new(buffer),
             buffer_layout,
             block_size,
             num_blocks,
             num_manage,
-            mutex: Mutex::new(()),
             id: 0
         }
     }
@@ -97,9 +94,9 @@ impl Allocator for BitmapAllocator {
             return None;
         }
 
-        let mut first_search_byte = self.buffer.as_ptr();
+        let buffer = self.buffer.lock();
+        let mut first_search_byte = buffer.as_ptr();
 
-        let _guard = self.mutex.lock();
         'outer: for i in 0..self.num_blocks {
             if i & 0x7 == 0 && i != 0 {
                 first_search_byte = first_search_byte.add(1);
@@ -121,10 +118,10 @@ impl Allocator for BitmapAllocator {
             }
 
             // If we get here, we found a space
-            Self::mark_bits(self.buffer, i, blocks_needed, true);
+            Self::mark_bits(*buffer, i, blocks_needed, true);
 
             let offset = (self.num_manage + i) * self.block_size;
-            let ptr = self.buffer.as_ptr().add(offset);
+            let ptr = buffer.as_ptr().add(offset);
             return NonNull::new(ptr);
         }
         None
@@ -133,18 +130,24 @@ impl Allocator for BitmapAllocator {
     unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
         assert!(self.owns(ptr, layout), "Cannot deallocate an allocation that isn't owned by the allocator");
 
-        let mut block_idx = unsafe { ptr.as_ptr().offset_from(self.buffer.as_ptr()) } as usize;
-        block_idx = block_idx / self.block_size - self.num_manage;
+        // SAFETY: The actual buffer cannot change when calling any code in the allocator,
+        //         so we can freely get the buffer to use it to calculate the distance
+        let buffer = unsafe { *self.buffer.data_ptr() };
 
+        let block_idx = unsafe { ptr.as_ptr().offset_from(buffer.as_ptr()) } as usize;
+        let block_idx = block_idx / self.block_size - self.num_manage;
         let num_blocks = (layout.size() + self.block_size - 1) / self.block_size;
 
-        let _guard = self.mutex.lock();
-        unsafe { Self::mark_bits(self.buffer, block_idx, num_blocks, false) };
+        let buffer = self.buffer.lock();
+        unsafe { Self::mark_bits(*buffer, block_idx, num_blocks, false) };
     }
 
     fn owns(&self, ptr: NonNull<u8>, _layout: Layout) -> bool {
-        let end = unsafe { self.buffer.as_ptr().add(self.buffer_layout.size()) };
-        ptr >= self.buffer && ptr.as_ptr() <= end
+        // SAFETY: The actual buffer cannot change when calling any code in the allocator,
+        //         so we can freely get the buffer to use it for a bound check
+        let buffer = unsafe { *self.buffer.data_ptr() };
+        let end = unsafe { buffer.as_ptr().add(self.buffer_layout.size()) };
+        ptr >= buffer && ptr.as_ptr() <= end
     }
 
     fn set_alloc_id(&mut self, id: u16) {
@@ -167,7 +170,8 @@ impl ComposableAllocator<(usize, usize)> for BitmapAllocator {
 
 impl Drop for BitmapAllocator {
     fn drop(&mut self) {
-        unsafe { get_memory_manager().dealloc(self.buffer, self.buffer_layout) };
+        // SAFETY: No need to lock, as we can't call the allocator when it's being dropped
+        unsafe { get_memory_manager().dealloc(*self.buffer.data_ptr(), self.buffer_layout) };
     }
 }
 
@@ -181,7 +185,6 @@ mod tests {
 
     #[test]
     fn alloc_dealloc() {
-        
         let block_size = 8;
         let num_blocks = 16;
         let buffer_size = BitmapAllocator::calc_needed_memory_size(block_size, num_blocks);

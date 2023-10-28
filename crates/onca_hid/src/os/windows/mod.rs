@@ -57,69 +57,61 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
 }
 
 pub fn close_handle(handle: DeviceHandle) {
-    unsafe {
-        let res = CloseHandle(HANDLE(handle.0 as isize)).as_bool();
-        if !res {
-            log_error!(LOG_HID_CAT, close_handle, "Failed to close the HID device. (error: {:X})", GetLastError().0);
-        }
+    if let Err(err) = unsafe { CloseHandle(HANDLE(handle.0 as isize)) } {
+        log_error!(LOG_HID_CAT, close_handle, "Failed to close the HID device. ({err})");
     }
 }
 
 pub fn create_os_device(_handle: &DeviceHandle) -> Option<OSDevice> {
-    unsafe {
-        let read_overlapped = create_overlapped("read")?;
-        let write_overlapped = create_overlapped("write")?;
-        Some(OSDevice { read_overlapped, write_overlapped })
-    }
+    let read_overlapped = create_overlapped("read")?;
+    let write_overlapped = create_overlapped("write")?;
+    Some(OSDevice { read_overlapped, write_overlapped })
 }
 
-unsafe fn create_overlapped(err_kind: &str) -> Option<Box<OVERLAPPED>> {
-    let event = CreateEventA(None, BOOL(0), BOOL(0), PCSTR(null_mut()));
-   let read_event = match event {
-       Ok(event) => event,
-       Err(err) => {
-           log_error!(LOG_HID_CAT, create_os_device, "Failed to create a {} event for the HID device. (error: {:X})", err_kind, err.code().0);
-           return None
-       },
-   };
+fn create_overlapped(err_kind: &str) -> Option<Box<OVERLAPPED>> {
+    let event = unsafe { CreateEventA(None, BOOL(0), BOOL(0), PCSTR(null_mut())) };
+    let read_event = match event {
+        Ok(event) => event,
+        Err(err) => {
+            log_error!(LOG_HID_CAT, create_os_device, "Failed to create a {} event for the HID device. (error: {:X})", err_kind, err.code().0);
+            return None
+        },
+    };
 
-   let mut overlapped = Box::new(OVERLAPPED::default());
-   overlapped.hEvent = read_event;
+    let mut overlapped = Box::new(OVERLAPPED::default());
+    overlapped.hEvent = read_event;
 
-   Some(overlapped)
+    Some(overlapped)
 }
 
 pub fn destroy_os_device(os_dev: &mut OSDevice) {
-    unsafe {
-        let res = CloseHandle(os_dev.read_overlapped.hEvent).as_bool();
-        if !res {
-            log_error!(LOG_HID_CAT, destroy_os_device, "Failed to destroy an event for the HID device. (error: {:X})", GetLastError().0);
-        }
+    if let Err(err) = unsafe { CloseHandle(os_dev.read_overlapped.hEvent) } {
+        log_error!(LOG_HID_CAT, destroy_os_device, "Failed to destroy an event for the HID device. ({err})");
     }
 }
 
 pub fn get_preparse_data(handle: DeviceHandle) -> Option<PreparseData> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
+    let handle = HANDLE(handle.0 as isize);
 
-        let mut preparse_data = 0isize;
-        let res = HidD_GetPreparsedData(handle, &mut preparse_data).as_bool();
-        if res {
-           Some(PreparseData(PreparseDataInternal::Address(preparse_data as usize))) 
-        } else {
-            log_error!(LOG_HID_CAT, get_preparse_data, "Failed to retrieve preparse data. (error: {:X})", GetLastError().0);
-            None
+    let mut preparse_data = unsafe { mem::zeroed() };
+    let res = unsafe { HidD_GetPreparsedData(handle, &mut preparse_data) }.as_bool();
+    if res {
+       Some(PreparseData(PreparseDataInternal::Address(preparse_data.0 as usize))) 
+    } else {
+        if let Err(err) = unsafe { GetLastError() } {
+            log_error!(LOG_HID_CAT, get_preparse_data, "Failed to retrieve preparse data. (error: {err})");
         }
+        None
     }
 }
 
 pub fn free_preparse_data(preparse_data: &mut PreparseData) {
-    unsafe {
-        if let PreparseDataInternal::Address(addr) = preparse_data.0 {
-            let preparse_data = addr as isize;
-            let res = HidD_FreePreparsedData(preparse_data).as_bool();
-            if !res {
-                log_error!(LOG_HID_CAT, get_preparse_data, "Failed to free preparse data. (error: {:X})", GetLastError().0);
+    if let PreparseDataInternal::Address(addr) = preparse_data.0 {
+        let preparse_data = addr as isize;
+        let res = unsafe { HidD_FreePreparsedData(PHIDP_PREPARSED_DATA(preparse_data as isize)) }.as_bool();
+        if !res {
+            if let Err(err) = unsafe { GetLastError() } {
+                log_error!(LOG_HID_CAT, get_preparse_data, "Failed to free preparse data. (error: {err})");
             }
         }
     }
@@ -130,215 +122,217 @@ pub fn free_preparse_data(preparse_data: &mut PreparseData) {
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Option<Identifier> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
+    let handle = HANDLE(handle.0 as isize);
 
-        let mut attribs = HIDD_ATTRIBUTES::default();
-        attribs.Size = mem::size_of::<HIDD_ATTRIBUTES>() as u32;
-        let res = HidD_GetAttributes(handle, &mut attribs).as_bool();
-        if !res {
-            log_error!(LOG_HID_CAT, get_identifier, "Failed to retieve hid attributes. (error: {:X})", GetLastError().0);
+    let mut attribs = HIDD_ATTRIBUTES::default();
+    attribs.Size = mem::size_of::<HIDD_ATTRIBUTES>() as u32;
+    let res = unsafe { HidD_GetAttributes(handle, &mut attribs) }.as_bool();
+    if !res {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_error!(LOG_HID_CAT, get_identifier, "Failed to retieve hid attributes. ({err})");
         }
-
-        let mut caps = HIDP_CAPS::default();
-        let res = HidP_GetCaps(preparse_data.get_address() as isize, &mut caps);
-        match res {
-            Ok(_) => (),
-            Err(_) => {
-                log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. (error: {:X})", GetLastError().0);
-                return None;
-            },
-        }
-
-        Some(Identifier {
-            vendor_device: VendorProduct::from_u16(attribs.VendorID,attribs.ProductID),
-            version: attribs.VersionNumber,
-            usage: Usage::from_u16(caps.UsagePage, caps.Usage),
-        })
+        return None;
     }
+
+    let mut caps = HIDP_CAPS::default();
+    let res = unsafe { HidP_GetCaps(PHIDP_PREPARSED_DATA(preparse_data.get_address() as isize), &mut caps) };
+    match res {
+        Ok(_) => (),
+        Err(_) => {
+            if let Err(err) = unsafe { GetLastError() } { 
+                log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. ({err})");
+            }
+            return None;
+        },
+    }
+
+    Some(Identifier {
+        vendor_device: VendorProduct::from_u16(attribs.VendorID,attribs.ProductID),
+        version: attribs.VersionNumber,
+        usage: Usage::from_u16(caps.UsagePage, caps.Usage),
+    })
 }
 
 pub fn get_vendor_string(handle: DeviceHandle) -> Option<String> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
-        // +1 for null terminator
-        let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
+    let handle = HANDLE(handle.0 as isize);
+    // +1 for null terminator
+    let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
 
-        let res = HidD_GetManufacturerString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32).as_bool();
-        if res {
-            let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-            let str_slice = slice::from_raw_parts(buf.as_ptr(), null_term_idx);
-            Some(String::from_utf16_lossy(str_slice))
-        } else {
-            log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. (error:{:X})", GetLastError().0);
-            None
+    let res = unsafe { HidD_GetManufacturerString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
+    if res {
+        let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
+        let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
+        Some(String::from_utf16_lossy(str_slice))
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
         }
+        None
     }
 }
 
 pub fn get_product_string(handle: DeviceHandle) -> Option<String> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
-        // +1 for null terminator
-        let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
-        let res = HidD_GetProductString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32).as_bool();
-        if res {
-            let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-            let str_slice = slice::from_raw_parts(buf.as_ptr(), null_term_idx);
-            Some(String::from_utf16_lossy(str_slice))
-        } else {
-            log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. (error:{:X})", GetLastError().0);
-            None
+    let handle = HANDLE(handle.0 as isize);
+    // +1 for null terminator
+    let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
+    let res = unsafe { HidD_GetProductString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
+    if res {
+        let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
+        let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
+        Some(String::from_utf16_lossy(str_slice))
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
         }
+        None
     }
 }
 
 pub fn get_serial_number_string(handle: DeviceHandle) -> Option<String> {
-    unsafe {
         let handle = HANDLE(handle.0 as isize);
         // +1 for null terminator
         let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
-        let res = HidD_GetSerialNumberString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32).as_bool();
+        let res = unsafe { HidD_GetSerialNumberString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
         if res {
             let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-            let str_slice = slice::from_raw_parts(buf.as_ptr(), null_term_idx);
+            let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
             Some(String::from_utf16_lossy(str_slice))
         } else {
-            log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. (error:{:X})", GetLastError().0);
+            if let Err(err) = unsafe { GetLastError() } { 
+                log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
+            }
             None
         }
-    }
 }
 
 pub fn get_indexed_string(handle: DeviceHandle, index: usize) -> Option<String> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
-        // +1 for null terminator
-        let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
+    let handle = HANDLE(handle.0 as isize);
+    // +1 for null terminator
+    let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
 
-        let res = HidD_GetIndexedString(handle, index as u32, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32).as_bool();
-        if res {
-            let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-            let str_slice = slice::from_raw_parts(buf.as_ptr(), null_term_idx);
-            Some(String::from_utf16_lossy(str_slice))
-        } else {
-            log_warning!(LOG_HID_CAT, "Failed to retrieve indexed string. (error:{:X})", GetLastError().0);
-            None
+    let res = unsafe { HidD_GetIndexedString(handle, index as u32, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
+    if res {
+        let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
+        let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
+        Some(String::from_utf16_lossy(str_slice))
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_warning!(LOG_HID_CAT, "Failed to retrieve indexed string. ({err})");
         }
+        None
     }
 }
 
 pub fn get_num_input_buffers(handle: DeviceHandle) -> Option<NonZeroU32> {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
+    let handle = HANDLE(handle.0 as isize);
 
-        let mut num_buffers = 0;
-        let res = HidD_GetNumInputBuffers(handle, &mut num_buffers).as_bool();
-        if res {
-            NonZeroU32::new(num_buffers)
-        } else {
-            log_warning!(LOG_HID_CAT, "Failed to retrieve number of input buffers. (error: {:X})", GetLastError().0);
-            None
+    let mut num_buffers = 0;
+    let res = unsafe { HidD_GetNumInputBuffers(handle, &mut num_buffers) }.as_bool();
+    if res {
+        NonZeroU32::new(num_buffers)
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_warning!(LOG_HID_CAT, "Failed to retrieve number of input buffers. ({err})");
         }
+        None
     }
 }
 
 pub fn set_num_input_buffers(handle: DeviceHandle, num_buffers: u32) {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
+    let handle = HANDLE(handle.0 as isize);
 
-        let res = HidD_SetNumInputBuffers(handle, num_buffers).as_bool();
-        if !res {
-            log_error!(LOG_HID_CAT, set_num_input_buffers, "Failed to set number of hid input buffers (error: {:X})", GetLastError().0);
+    let res = unsafe { HidD_SetNumInputBuffers(handle, num_buffers) }.as_bool();
+    if !res {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_error!(LOG_HID_CAT, set_num_input_buffers, "Failed to set number of hid input buffers ({err})");
         }
     }
 }
 
 pub fn flush_input_queue(handle: DeviceHandle) {
-    unsafe {
-        let handle = HANDLE(handle.0 as isize);
+    let handle = HANDLE(handle.0 as isize);
 
-        let res = HidD_FlushQueue(handle).as_bool();
-        if !res {
-            log_error!(LOG_HID_CAT, flush_input_queue, "Failed to flush input queue. (error: {:X})", GetLastError().0);
+    let res = unsafe { HidD_FlushQueue(handle) }.as_bool();
+    if !res {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_error!(LOG_HID_CAT, flush_input_queue, "Failed to flush input queue. ({err})");
         }
     }
 }
 
 pub fn get_capabilities(preparse_data: &PreparseData) -> Option<Capabilities> {
-    unsafe {
-        let mut caps = HIDP_CAPS::default();
-        let res = HidP_GetCaps(preparse_data.get_address() as isize, &mut caps);
-        match res {
-            Ok(_) => (),
-            Err(_) => {
-                log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. (error: {:X})", GetLastError().0);
-                return None;
-            },
-        }
-
-        Some(Capabilities {
-            input_report_byte_len: caps.InputReportByteLength,
-            output_report_byte_len: caps.OutputReportByteLength,
-            feature_report_byte_len: caps.FeatureReportByteLength,
-            num_collection_nodes: caps.NumberLinkCollectionNodes,
-            num_input_button_caps: caps.NumberInputButtonCaps,
-            num_input_value_caps: caps.NumberInputValueCaps,
-            num_input_data_indices: caps.NumberInputDataIndices,
-            num_output_button_caps: caps.NumberOutputButtonCaps,
-            num_output_value_caps: caps.NumberOutputValueCaps,
-            num_output_data_indices: caps.NumberOutputDataIndices,
-            num_feature_button_caps: caps.NumberFeatureButtonCaps,
-            num_feature_value_caps: caps.NumberFeatureValueCaps,
-            num_feature_data_indices: caps.NumberFeatureDataIndices
-        })
+    let mut caps = HIDP_CAPS::default();
+    let res = unsafe { HidP_GetCaps(PHIDP_PREPARSED_DATA(preparse_data.get_address() as isize), &mut caps) };
+    match res {
+        Ok(_) => (),
+        Err(_) => {
+            if let Err(err) = unsafe { GetLastError() } { 
+                log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. ({err})");
+            }
+            return None;
+        },
     }
+
+    Some(Capabilities {
+        input_report_byte_len: caps.InputReportByteLength,
+        output_report_byte_len: caps.OutputReportByteLength,
+        feature_report_byte_len: caps.FeatureReportByteLength,
+        num_collection_nodes: caps.NumberLinkCollectionNodes,
+        num_input_button_caps: caps.NumberInputButtonCaps,
+        num_input_value_caps: caps.NumberInputValueCaps,
+        num_input_data_indices: caps.NumberInputDataIndices,
+        num_output_button_caps: caps.NumberOutputButtonCaps,
+        num_output_value_caps: caps.NumberOutputValueCaps,
+        num_output_data_indices: caps.NumberOutputDataIndices,
+        num_feature_button_caps: caps.NumberFeatureButtonCaps,
+        num_feature_value_caps: caps.NumberFeatureValueCaps,
+        num_feature_data_indices: caps.NumberFeatureDataIndices
+    })
+   
 }
 
 pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ButtonCaps>; NUM_REPORT_TYPES]> {
-    unsafe {
-        let preparse_data = preparse_data.get_address() as isize;
+    let preparse_data = preparse_data.get_address() as isize;
 
-        let input_caps = if caps.num_input_button_caps > 0 {
-            match get_button_capabilities_for(HidP_Input, preparse_data, caps.num_input_button_caps) {
-                Some(caps) => caps,
-                None => return None,
-            }
-        } else {
-            Vec::new()
-        };
-        
-        let output_caps = if caps.num_output_button_caps > 0 {
-            match get_button_capabilities_for(HidP_Output, preparse_data, caps.num_output_button_caps) {
-                Some(caps) => caps,
-                None => return None,
-            }
-        } else {
-            Vec::new()
-        };
+    let input_caps = if caps.num_input_button_caps > 0 {
+        match get_button_capabilities_for(HidP_Input, preparse_data, caps.num_input_button_caps) {
+            Some(caps) => caps,
+            None => return None,
+        }
+    } else {
+        Vec::new()
+    };
+    
+    let output_caps = if caps.num_output_button_caps > 0 {
+        match get_button_capabilities_for(HidP_Output, preparse_data, caps.num_output_button_caps) {
+            Some(caps) => caps,
+            None => return None,
+        }
+    } else {
+        Vec::new()
+    };
 
-        let feature_caps = if caps.num_feature_button_caps > 0 {
-            match get_button_capabilities_for(HidP_Feature, preparse_data, caps.num_feature_button_caps) {
-                Some(caps) => caps,
-                None => return None,
-            }
-        } else {
-            Vec::new()
-        };
+    let feature_caps = if caps.num_feature_button_caps > 0 {
+        match get_button_capabilities_for(HidP_Feature, preparse_data, caps.num_feature_button_caps) {
+            Some(caps) => caps,
+            None => return None,
+        }
+    } else {
+        Vec::new()
+    };
 
-        Some([input_caps, output_caps, feature_caps])
-    }
+    Some([input_caps, output_caps, feature_caps])
 }
 
-unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ButtonCaps>> {
-    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ButtonCaps>> {
+    let mut win_caps = unsafe {
+        scoped_alloc!(AllocId::TlsTemp);
+        let mut win_caps = Vec::with_capacity(num_caps as usize);
+        win_caps.set_len(num_caps as usize);
+        win_caps
+    };
 
-    let mut win_caps = Vec::with_capacity(num_caps as usize);
-    win_caps.set_len(num_caps as usize);
-    
-    drop(scoped_alloc);
-
-    let res = HidP_GetButtonCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, preparse_data);
+    let res = unsafe { HidP_GetButtonCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, PHIDP_PREPARSED_DATA(preparse_data)) };
     if let Err(err) = res {
         log_error!(LOG_HID_CAT, get_button_capabilities, "Failed to retrieve input button capabilities (error: {:X})", err.code().0);
         return None;
@@ -346,40 +340,41 @@ unsafe fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_da
 
     let mut caps = Vec::with_capacity(num_caps as usize);
     for cap in win_caps {
-
-        let (usage, data_index) = if cap.IsRange.as_bool() {
-            ((UsageId::new(cap.Anonymous.Range.UsageMin)..=UsageId::new(cap.Anonymous.Range.UsageMax)).into(),
-             (cap.Anonymous.Range.DataIndexMin..=cap.Anonymous.Range.DataIndexMax).into())
-        } else {
-            let usage = cap.Anonymous.NotRange.Usage;
-            let index = cap.Anonymous.NotRange.DataIndex;
-            ((UsageId::new(usage)..=UsageId::new(usage)).into(), (index..=index).into())
-        };
-        let string_index = if cap.IsStringRange.as_bool() {
-            (cap.Anonymous.Range.StringMin..=cap.Anonymous.Range.StringMax).into()
-        } else {
-            let index = cap.Anonymous.NotRange.StringIndex;
-            (index..=index).into()
-        };
-        let designator = if cap.IsDesignatorRange.as_bool() {
-            (cap.Anonymous.Range.DesignatorMin..=cap.Anonymous.Range.DesignatorMax).into()
-        } else {
-            let index = cap.Anonymous.NotRange.DesignatorIndex;
-            (index..=index).into()
-        };
-
-        caps.push(ButtonCaps {
-            usage_page: UsagePageId::new(cap.UsagePage),
-            report_id: cap.ReportID,
-            data_fields: cap.BitField,
-            collection_id: cap.LinkCollection,
-            report_count: cap.ReportCount,
-            usage,
-            string_index,
-            designator,
-            data_index,
-            is_absolute: cap.IsAbsolute.as_bool(),
-        })
+        unsafe {
+            let (usage, data_index) = if cap.IsRange.as_bool() {
+                ((UsageId::new(cap.Anonymous.Range.UsageMin)..=UsageId::new(cap.Anonymous.Range.UsageMax)).into(),
+                (cap.Anonymous.Range.DataIndexMin..=cap.Anonymous.Range.DataIndexMax).into())
+            } else {
+                let usage = cap.Anonymous.NotRange.Usage;
+                let index = cap.Anonymous.NotRange.DataIndex;
+                ((UsageId::new(usage)..=UsageId::new(usage)).into(), (index..=index).into())
+            };
+            let string_index = if cap.IsStringRange.as_bool() {
+                (cap.Anonymous.Range.StringMin..=cap.Anonymous.Range.StringMax).into()
+            } else {
+                let index = cap.Anonymous.NotRange.StringIndex;
+                (index..=index).into()
+            };
+            let designator = if cap.IsDesignatorRange.as_bool() {
+                (cap.Anonymous.Range.DesignatorMin..=cap.Anonymous.Range.DesignatorMax).into()
+            } else {
+                let index = cap.Anonymous.NotRange.DesignatorIndex;
+                (index..=index).into()
+            };
+            
+            caps.push(ButtonCaps {
+                usage_page: UsagePageId::new(cap.UsagePage),
+                report_id: cap.ReportID,
+                data_fields: cap.BitField,
+                collection_id: cap.LinkCollection,
+                report_count: cap.ReportCount,
+                usage,
+                string_index,
+                designator,
+                data_index,
+                is_absolute: cap.IsAbsolute.as_bool(),
+            })
+        }
     }
 
     Some(caps)
@@ -421,14 +416,14 @@ pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities)
 }
 
 unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isize, mut num_caps: u16) -> Option<Vec<ValueCaps>> {
-    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+    let mut win_caps = unsafe {
+        scoped_alloc!(AllocId::TlsTemp);
+        let mut win_caps = Vec::with_capacity(num_caps as usize);
+        win_caps.set_len(num_caps as usize);
+        win_caps
+    };
 
-    let mut win_caps = Vec::with_capacity(num_caps as usize);
-    win_caps.set_len(num_caps as usize);
-
-    drop(scoped_alloc);
-
-    let res = HidP_GetValueCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, preparse_data);
+    let res = HidP_GetValueCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, PHIDP_PREPARSED_DATA(preparse_data));
     if let Err(err) = res {
         log_error!(LOG_HID_CAT, get_button_capabilities, "Failed to retrieve input button capabilities (error: {:X})", err.code().0);
         return None;
@@ -485,33 +480,31 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
 }
 
 pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollection<'a>> {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
+    let preparse_data = dev.preparse_data.get_address() as isize;
 
-        let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
-        let num_collection_nodes = dev.capabilities.num_collection_nodes;
-        let mut win_nodes = Vec::with_capacity(num_collection_nodes as usize);
-        win_nodes.set_len(num_collection_nodes as usize);
+    let num_collection_nodes = dev.capabilities.num_collection_nodes;
+    let mut win_nodes = Vec::with_capacity(num_collection_nodes as usize);
+    unsafe { win_nodes.set_len(num_collection_nodes as usize) };
 
-        drop(scoped_alloc);
+    drop(scoped_alloc);
 
-        let mut len = num_collection_nodes as u32;
-        let err = HidP_GetLinkCollectionNodes(win_nodes.as_mut_ptr(), &mut len, preparse_data);
-        match err {
-            Ok(_) => (),
-            Err(err) => { 
-                log_error!(LOG_HID_CAT, get_top_level_collection,"Failed to get collections. (error: {:X})", err.code().0);
-                return None;
-            },
-        }
-
-        let mut nodes = Vec::new();
-        let mut children = Vec::new();
-        process_collection_nodes(&win_nodes, &mut nodes, &mut children, 0, None);
-
-        Some(TopLevelCollection::new(nodes, children))
+    let mut len = num_collection_nodes as u32;
+    let err =  unsafe {HidP_GetLinkCollectionNodes(win_nodes.as_mut_ptr(), &mut len, PHIDP_PREPARSED_DATA(preparse_data)) };
+    match err {
+        Ok(_) => (),
+        Err(err) => { 
+            log_error!(LOG_HID_CAT, get_top_level_collection,"Failed to get collections. (error: {:X})", err.code().0);
+            return None;
+        },
     }
+
+    let mut nodes = Vec::new();
+    let mut children = Vec::new();
+    process_collection_nodes(&win_nodes, &mut nodes, &mut children, 0, None);
+
+    Some(TopLevelCollection::new(nodes, children))
 }
 
 fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &mut Vec<CollectionNode>, children: &mut Vec<Vec<u16>>, mut win_idx: usize, parent_idx: Option<usize>) {
@@ -570,20 +563,18 @@ fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) -> Option<Vec<u8>> {
-    unsafe {
         let preparse_data = dev.preparse_data.get_address() as isize;
         let report_type = to_native_report_type(report_type);
 
         let report_size = dev.capabilities.output_report_byte_len as usize;
         let mut blob = Vec::with_capacity(report_size);
-        blob.set_len(report_size);
+        unsafe { blob.set_len(report_size) };
 
-        let res = HidP_InitializeReportForID(report_type, report_id, preparse_data, &mut blob);
+        let res = unsafe { HidP_InitializeReportForID(report_type, report_id, PHIDP_PREPARSED_DATA(preparse_data), &mut blob) };
         match res {
             Ok(_) => Some(blob),
             Err(_) => None,
         }
-    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -591,126 +582,112 @@ pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) 
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<InputReport>, ()> {
-    unsafe {
-        let handle = HANDLE(dev.handle.0 as isize);
-        let event = dev.os_dev.read_overlapped.hEvent;
-        let overlapped = &mut *dev.os_dev.write_overlapped;
+    let handle = HANDLE(dev.handle.0 as isize);
+    let event = dev.os_dev.read_overlapped.hEvent;
+    let overlapped = &mut *dev.os_dev.write_overlapped;
 
-        let report_len = dev.capabilities.input_report_byte_len as u32;
-        let mut bytes_read = 0;
+    let report_len = dev.capabilities.input_report_byte_len as u32;
+    let mut bytes_read = 0;
 
-        if !dev.read_pending {
-            dev.read_buffer.reserve(report_len as usize);
-            dev.read_buffer.set_len(report_len as usize);
+    if !dev.read_pending {
+        dev.read_buffer.reserve(report_len as usize);
+        unsafe { dev.read_buffer.set_len(report_len as usize) };
 
-            let res = ReadFile(handle, Some(dev.read_buffer.as_mut_ptr() as *mut c_void), report_len, Some(&mut bytes_read), Some(overlapped)).as_bool();
-            
-            dev.read_pending = if !res {
-                let err = GetLastError().0;
-                if err == ERROR_IO_PENDING.0 {
-                    true
-                } else {
-                    CancelIoEx(handle, Some(overlapped));
-                    log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report (err: {:X})", GetLastError().0);
-                    return Err(());
-                }
+        dev.read_pending = match unsafe { ReadFile(handle, Some(&mut dev.read_buffer), Some(&mut bytes_read), Some(overlapped)) } {
+            Ok(_) => false,
+            Err(err) => if err.code().0 as u32 == ERROR_IO_PENDING.0 {
+                true
             } else {
-                false
-            };
+                unsafe { CancelIoEx(handle, Some(overlapped)) };
+                log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report ({err})");
+                return Err(());
+            },
         }
+    }
 
-        if !timeout.is_zero() {
-            let res = WaitForSingleObject(event, timeout.as_millis() as u32);
-            if res != WAIT_OBJECT_0 {
-                return Ok(None);
-            }
+    if !timeout.is_zero() {
+        let res = unsafe { WaitForSingleObject(event, timeout.as_millis() as u32) };
+        if res != WAIT_OBJECT_0 {
+            return Ok(None);
         }
+    }
 
-        let res = GetOverlappedResult(handle, overlapped, &mut bytes_read, true).as_bool();
-        dev.read_pending = true;
-
-        if res && bytes_read > 0 {
-            dev.read_buffer.set_len(bytes_read as usize);
+    dev.read_pending = true;
+    match unsafe { GetOverlappedResult(handle, overlapped, &mut bytes_read, true)} {
+        Ok(_) if bytes_read > 0 => {
+            unsafe { dev.read_buffer.set_len(bytes_read as usize) };
             let report_buf = mem::replace(&mut dev.read_buffer, Vec::with_capacity(report_len as usize));
             Ok(Some(InputReport { data: crate::ReportData::Blob(report_buf), device: dev }))
-        } else {
-            Err(())
-        }
+        },
+        _ => Err(()),
     }
 }
 
 pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Result<(), OutputReport<'a>> {
-    unsafe {
-        let handle = HANDLE(dev.handle.0 as isize);
-        let event = dev.os_dev.read_overlapped.hEvent;
-        let overlapped = &mut *dev.os_dev.write_overlapped;
+    let handle = HANDLE(dev.handle.0 as isize);
+    let event = dev.os_dev.read_overlapped.hEvent;
+    let overlapped = &mut *dev.os_dev.write_overlapped;
 
-        let mut bytes_written = 0;
-        let data = report.data.get_data();
-        let res = WriteFile(handle, Some(data), Some(&mut bytes_written), Some(overlapped)).as_bool();
-
-        let write_pending = if !res {
-            let err = GetLastError().0;
-            if err == ERROR_IO_PENDING.0 {
-                true
-            } else {
-                log_error!(LOG_HID_CAT, write_output_report, "Failed to write output report (err: {:X})", GetLastError().0);
-                return Err(report);
-            }
+    let mut bytes_written = 0;
+    let data = report.data.get_data();
+    let write_pending = match unsafe { WriteFile(handle, Some(data), Some(&mut bytes_written), Some(overlapped)) } {
+        Ok(_) => false,
+        Err(err) => if err.code().0 as u32 == ERROR_IO_PENDING.0 {
+            true
         } else {
-            false
-        };
-        
+            log_error!(LOG_HID_CAT, write_output_report, "Failed to write output report (err: {err})");
+            return Err(report);
+        },
+    };
+    
 
-        if write_pending {
-            // Wait for about a second, if we failed writing at that point, we fail
-            let res = WaitForSingleObject(event, 1000);
-            if res != WAIT_OBJECT_0 {
-                CancelIoEx(handle, Some(overlapped));
-                log_error!(LOG_HID_CAT, write_output_report, "Timout while writing output report (error: {:X})", res.0);
-                return Err(report);
-            }
-
-            let res = GetOverlappedResult(handle, overlapped, &mut bytes_written, BOOL(1)).as_bool();
-            if !res {
-                log_error!(LOG_HID_CAT, write_output_report, "Failed to get overlapped result for output report. (error: {:X})", GetLastError().0);
-                return Err(report);
-            }
+    if write_pending {
+        // Wait for about a second, if we failed writing at that point, we fail
+        let res = unsafe { WaitForSingleObject(event, 1000) };
+        if res != WAIT_OBJECT_0 {
+            unsafe { CancelIoEx(handle, Some(overlapped)) };
+            log_error!(LOG_HID_CAT, write_output_report, "Timout while writing output report (error: {:X})", res.0);
+            return Err(report);
         }
-        Ok(())
+
+        if let Err(err) = unsafe { GetOverlappedResult(handle, overlapped, &mut bytes_written, BOOL(1)) } {
+            log_error!(LOG_HID_CAT, write_output_report, "Failed to get overlapped result for output report. ({err})");
+            return Err(report);
+        }
     }
+    Ok(())
 }
 
 pub fn get_feature_report(dev: &mut Device) -> Option<FeatureReport<'_>> {
-    unsafe {
-        let handle = HANDLE(dev.handle.0 as isize);
-        let report_len = dev.capabilities.feature_report_byte_len as u32;
+    let handle = HANDLE(dev.handle.0 as isize);
+    let report_len = dev.capabilities.feature_report_byte_len as u32;
 
-        let mut report_blob = Vec::with_capacity(report_len as usize);
-        report_blob.set_len(report_len as usize);
+    let mut report_blob = Vec::with_capacity(report_len as usize);
+    unsafe { report_blob.set_len(report_len as usize) };
 
-        let res = HidD_GetFeature(handle, report_blob.as_mut_ptr() as *mut c_void, report_len).as_bool();
-        if res {
-            Some(FeatureReport { data: ReportData::Blob(report_blob), device: dev })
-        } else {
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report (err: {:X})", GetLastError().0);
-            None
+    let res = unsafe { HidD_GetFeature(handle, report_blob.as_mut_ptr() as *mut c_void, report_len) }.as_bool();
+    if res {
+        Some(FeatureReport { data: ReportData::Blob(report_blob), device: dev })
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report ({err})");
         }
+        None
     }
 }
 
 pub fn set_feature_report<'a>(dev: &mut Device, report: FeatureReport<'a>) -> Result<(), FeatureReport<'a>> {
-    unsafe {
-        let handle = HANDLE(dev.handle.0 as isize);
-        let data = report.data.get_data();
+    let handle = HANDLE(dev.handle.0 as isize);
+    let data = report.data.get_data();
 
-        let res = HidD_SetFeature(handle, data.as_ptr() as *const c_void, data.len() as u32).as_bool();
-        if res {
-            Ok(())
-        } else {
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report (err: {:X})", GetLastError().0);
-            Err(report)
+    let res = unsafe { HidD_SetFeature(handle, data.as_ptr() as *const c_void, data.len() as u32) }.as_bool();
+    if res {
+        Ok(())
+    } else {
+        if let Err(err) = unsafe { GetLastError() } { 
+            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report ({err})");
         }
+        Err(report)
     }
 }
 
@@ -719,93 +696,85 @@ pub fn set_feature_report<'a>(dev: &mut Device, report: FeatureReport<'a>) -> Re
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<Vec<Usage>> {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut button_count = 0;
-        _ = HidP_GetUsagesEx(report_type, collection_id, null_mut(), &mut button_count, preparse_data, report);
+    let mut button_count = 0;
+    _ = unsafe { HidP_GetUsagesEx(report_type, collection_id, null_mut(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report) };
 
-        let mut win_buttons = Vec::with_capacity(button_count as usize);
-        
-        let res = HidP_GetUsagesEx(report_type, collection_id, win_buttons.as_mut_ptr(), &mut button_count, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. (error: {:X})", err.code().0);
-            return None;
-        }
-        win_buttons.set_len(button_count as usize);
-
-        Some(win_buttons.into_iter()
-                .map(|usage_and_page| Usage::from_u16(usage_and_page.UsagePage, usage_and_page.Usage))
-                .collect()
-        )
+    let mut win_buttons = Vec::with_capacity(button_count as usize);
+    
+    let res = unsafe { HidP_GetUsagesEx(report_type, collection_id, win_buttons.as_mut_ptr(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. (error: {:X})", err.code().0);
+        return None;
     }
+    unsafe { win_buttons.set_len(button_count as usize) };
+
+    Some(win_buttons.into_iter()
+            .map(|usage_and_page| Usage::from_u16(usage_and_page.UsagePage, usage_and_page.Usage))
+            .collect()
+    )
 }
 
 pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<Vec<UsageId>> {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut button_count = 0;
+    let mut button_count = 0;
 
-        // Safety: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
-        #[allow(cast_ref_to_mut)]
-        let report_data = &mut *(report as *const _ as *mut [u8]);
+    // SAFETY: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
+    #[allow(cast_ref_to_mut)]
+    let report_data = unsafe { &mut *(report as *const _ as *mut [u8]) };
 
-        _ = HidP_GetUsages(report_type, page.as_u16(), collection_id, null_mut(), &mut button_count, preparse_data, report_data);
+    _ = unsafe { HidP_GetUsages(report_type, page.as_u16(), collection_id, null_mut(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report_data) };
 
-        let mut win_buttons = Vec::with_capacity(button_count as usize);
-        
-        let res = HidP_GetUsages(report_type, page.as_u16(), collection_id, win_buttons.as_mut_ptr(), &mut button_count, preparse_data, report_data);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. (error: {:X})", err.code().0);
-            return None;
-        }
-        win_buttons.set_len(button_count as usize);
-
-        Some(win_buttons.into_iter()
-                .map(|usage| UsageId::new(usage))
-                .collect()
-        )
+    let mut win_buttons = Vec::with_capacity(button_count as usize);
+    
+    let res = unsafe { HidP_GetUsages(report_type, page.as_u16(), collection_id, win_buttons.as_mut_ptr(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report_data) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. (error: {:X})", err.code().0);
+        return None;
     }
+    unsafe { win_buttons.set_len(button_count as usize) };
+
+    Some(win_buttons.into_iter()
+            .map(|usage| UsageId::new(usage))
+            .collect()
+    )
 }
 
 pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<RawValue> {
-    unsafe {
-        let (report_count, bit_size) = get_value_report_count_and_bitsize_for_usage(dev, usage, collection_id, report_type);
-        if report_count == 0 {
-            log_error!(LOG_HID_CAT, get_raw_value, "Failed to find any valid report counts for the current collection id '{}'", collection_id);
-            return None;
+    let (report_count, bit_size) = get_value_report_count_and_bitsize_for_usage(dev, usage, collection_id, report_type);
+    if report_count == 0 {
+        log_error!(LOG_HID_CAT, get_raw_value, "Failed to find any valid report counts for the current collection id '{}'", collection_id);
+        return None;
+    }
+
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
+
+    if report_count == 1 {
+        let mut value = 0;
+        let res = unsafe { HidP_GetUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), &mut value, PHIDP_PREPARSED_DATA(preparse_data), report) };
+        match res {
+            Ok(_) => Some(RawValue::Single(value, bit_size)),
+            Err(err) => {
+                log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. (error: {:X})", err.code().0);
+                None
+            },
         }
+    } else {
+        let mut values = Vec::with_capacity(report_count as usize);
+        unsafe { values.set_len(report_count as usize) };
 
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
-
-        if report_count == 1 {
-            let mut value = 0;
-            let res = HidP_GetUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), &mut value, preparse_data, report);
-            match res {
-                Ok(_) => Some(RawValue::Single(value, bit_size)),
-                Err(err) => {
-                    log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. (error: {:X})", err.code().0);
-                    None
-                },
-            }
-        } else {
-            let mut values = Vec::with_capacity(report_count as usize);
-            values.set_len(report_count as usize);
-
-            let slice = slice::from_raw_parts_mut(values.as_mut_ptr() as *mut u8, report_count as usize * mem::size_of::<u32>());
-
-            let res = HidP_GetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.page.as_u16(), slice, preparse_data, report);
-            match res {
-                Ok(_) => Some(RawValue::Array(values, bit_size)),
-                Err(err) => {
-                    log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. (error: {:X})", err.code().0);
-                    None
-                },
-            }
+        let res = unsafe { HidP_GetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.page.as_u16(), &mut values, PHIDP_PREPARSED_DATA(preparse_data), report) };
+        match res {
+            Ok(_) => Some(RawValue::Array(values, bit_size)),
+            Err(err) => {
+                log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. (error: {:X})", err.code().0);
+                None
+            },
         }
     }
 }
@@ -829,61 +798,57 @@ fn get_value_report_count_and_bitsize_for_usage(dev: &Device, usage: Usage, coll
 }
 
 pub fn get_scaled_value(dev: &Device, usage: Usage, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<i32> {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut value = 0;
-        let res = HidP_GetScaledUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), &mut value, preparse_data, report);
-        match res {
-            Ok(_) => Some(value),
-            Err(err) => {
-                log_error!(LOG_HID_CAT, get_scaled_value, "Failed to get the scaled value for a specific usage. (error: {:X})", err.code().0);
-                None
-            },
-        }
+    let mut value = 0;
+    let res = unsafe { HidP_GetScaledUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), &mut value, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    match res {
+        Ok(_) => Some(value),
+        Err(err) => {
+            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to get the scaled value for a specific usage. (error: {:X})", err.code().0);
+            None
+        },
     }
 }
 
 pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<Vec<Data>> {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let win_report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let win_report_type = to_native_report_type(report_type);
 
-        // Safety: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
-        #[allow(cast_ref_to_mut)]
-        let report_data = &mut *(report as *const _ as *mut [u8]);
+    // SAFETY: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
+    #[allow(cast_ref_to_mut)]
+    let report_data = unsafe {  &mut *(report as *const _ as *mut [u8]) };
 
-        let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
 
-        let mut data_len = HidP_MaxDataListLength(win_report_type, preparse_data);
-        let mut data = Vec::with_capacity(data_len as usize);
-        
-        drop(scoped_alloc);
+    let mut data_len = unsafe { HidP_MaxDataListLength(win_report_type, PHIDP_PREPARSED_DATA(preparse_data)) };
+    let mut data = Vec::with_capacity(data_len as usize);
+    
+    drop(scoped_alloc);
 
-        let res = HidP_GetData(win_report_type, data.as_mut_ptr(), &mut data_len, preparse_data, report_data);
-        match res {
-            Ok(_) => {
-                data.set_len(data_len as usize);
-                Some(data.into_iter()
-                    .map(|data| 
-                        Data {
-                            index: data.DataIndex,
-                            value: if is_data_button(dev, data.DataIndex, report_type) { 
-                                DataValue::Button(data.Anonymous.On.as_bool())
-                            } else {
-                                DataValue::Value(data.Anonymous.RawValue)
-                            }
+    let res = unsafe { HidP_GetData(win_report_type, data.as_mut_ptr(), &mut data_len, PHIDP_PREPARSED_DATA(preparse_data), report_data) };
+    match res {
+        Ok(_) => {
+            unsafe { data.set_len(data_len as usize) };
+            Some(data.into_iter()
+                .map(|data| 
+                    Data {
+                        index: data.DataIndex,
+                        value: if is_data_button(dev, data.DataIndex, report_type) { 
+                            DataValue::Button(unsafe { data.Anonymous.On }.as_bool())
+                        } else {
+                            DataValue::Value(unsafe { data.Anonymous.RawValue })
                         }
-                    )
-                    .collect()
+                    }
                 )
-            },
-            Err(err) => {
-                log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set the scaled value for a specific usage. (error: {:X})", err.code().0);
-                None
-            },
-        }
+                .collect()
+            )
+        },
+        Err(err) => {
+            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set the scaled value for a specific usage. (error: {:X})", err.code().0);
+            None
+        },
     }
 }
 
@@ -901,79 +866,68 @@ fn is_data_button(dev: &Device, data_index: u16, report_type: ReportType) -> boo
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn set_buttons(dev: &Device, page: UsagePageId, collection_id: u16, usages: &mut [UsageId], report_type: ReportType, report: &mut [u8]) {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut len = usages.len() as u32;
-        let res = HidP_SetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set buttons in the report. (error: {:X})", err.code().0);
-        }
-
+    let mut len = usages.len() as u32;
+    let res = unsafe { HidP_SetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set buttons in the report. (error: {:X})", err.code().0);
     }
 }
 
 pub fn unset_buttons(dev: &Device, page: UsagePageId, collection_id: u16, usages: &mut [UsageId], report_type: ReportType, report: &mut [u8]) {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut len = usages.len() as u32;
-        let res = HidP_UnsetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
-        }
+    let mut len = usages.len() as u32;
+    let res = unsafe { HidP_UnsetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
     }
 }
 
 pub fn set_value(dev: &Device, usage: Usage, collection_id: u16, raw_value: u32, report_type: ReportType, report: &mut [u8]) {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let res = HidP_SetUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_value, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
-        }
+    let res = unsafe { HidP_SetUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_value, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
     }
 }
 
 pub fn set_values(dev: &Device, usage: Usage, collection_id: u16, raw_values: &[u8], report_type: ReportType, report: &mut [u8]) {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let res = HidP_SetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_values, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
-        }
+    let res = unsafe { HidP_SetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_values, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. (error: {:X})", err.code().0);
     }
 }
 
 pub fn set_data(dev: &Device, data: &[Data], report_type: ReportType, report: &mut [u8]) {
-    unsafe {
-        let preparse_data = dev.preparse_data.get_address() as isize;
-        let report_type = to_native_report_type(report_type);
+    let preparse_data = dev.preparse_data.get_address() as isize;
+    let report_type = to_native_report_type(report_type);
 
-        let mut win_data = Vec::new();
-        win_data.reserve(data.len());
-        for datum in data {
-            let mut hid_data = HIDP_DATA::default();
-            hid_data.DataIndex = datum.index;
-            match datum.value {
-                DataValue::Button(on) => hid_data.Anonymous.On = BOOLEAN(on as u8),
-                DataValue::Value(raw_value) => hid_data.Anonymous.RawValue = raw_value,
-            }
-
-            win_data.push(hid_data)
+    let mut win_data = Vec::new();
+    win_data.reserve(data.len());
+    for datum in data {
+        let mut hid_data = HIDP_DATA::default();
+        hid_data.DataIndex = datum.index;
+        match datum.value {
+            DataValue::Button(on) => hid_data.Anonymous.On = BOOLEAN(on as u8),
+            DataValue::Value(raw_value) => hid_data.Anonymous.RawValue = raw_value,
         }
 
-        let mut len = win_data.len() as u32;
-        let res = HidP_SetData(report_type, win_data.as_mut_ptr(), &mut len, preparse_data, report);
-        if let Err(err) = res {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set data in the report. (error: {:X})", err.code().0);
-        }
+        win_data.push(hid_data)
+    }
+
+    let mut len = win_data.len() as u32;
+    let res = unsafe { HidP_SetData(report_type, win_data.as_mut_ptr(), &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) };
+    if let Err(err) = res {
+        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set data in the report. (error: {:X})", err.code().0);
     }
 }
 

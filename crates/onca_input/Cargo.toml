@@ -19,10 +19,11 @@ raw_input_logging = []
 mouse_pos_logging = []
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.48.0", features = [
+windows = { version = "0.51.1", features = [
     "Win32_Foundation",
     "Win32_System_WindowsProgramming",
     "Win32_Devices_HumanInterfaceDevice",
-    "Win32_UI_TextServices"
+    "Win32_UI_TextServices",
+    "Win32_UI_Input"
 ] }
 onca_windows_utils = { path = "../onca_windows_utils" }

@@ -4,28 +4,24 @@ use crate::alloc::*;
 
 /// Segregator arena
 /// 
-/// An allocator arena that decides which allocator to used based on boundary value, which is inclusive for the first allocator
-pub struct SegregatorArena<A: Allocator, B: Allocator>
-{
+/// An allocator arena that decides which allocator to used based on boundary value, which is inclusive for the first allocator.
+pub struct SegregatorArena<A: Allocator, B: Allocator> {
     boundary: usize,
     le_alloc: A,
     gt_alloc: B,
     id:       u16
 }
 
-impl<A: Allocator, B: Allocator> SegregatorArena<A, B>
-{
+impl<A: Allocator, B: Allocator> SegregatorArena<A, B> {
     /// Create a new segregator arena
     /// 
-    /// The `boundary` defines the maximum inclusive size to be allocated on the `le_alloc`, otherwise allocation will be done on the `gt_alloc`
-    pub fn new(boundary: usize, le_alloc: A, gt_alloc: B) -> SegregatorArena<A, B>
-    {
+    /// The `boundary` defines the maximum inclusive size to be allocated on the `le_alloc`, otherwise allocation will be done on the `gt_alloc`.
+    pub fn new(boundary: usize, le_alloc: A, gt_alloc: B) -> SegregatorArena<A, B> {
         Self { boundary, le_alloc, gt_alloc, id: 0 }
     }
 }
 
-impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B>
-{
+impl<A: Allocator, B: Allocator> Allocator for SegregatorArena<A, B> {
     unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         if layout.size() <= self.boundary {
             self.le_alloc.alloc(layout)

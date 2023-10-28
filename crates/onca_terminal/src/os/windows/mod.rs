@@ -8,8 +8,8 @@ use windows::Win32::{
     }, Storage::FileSystem::WriteFile,
 };
 
-unsafe fn get_std_handle(handle: STD_HANDLE) -> io::Result<HANDLE> {
-    GetStdHandle(handle).map_err(|err| io::Error::from_raw_os_error(err.code().0))
+fn get_std_handle(handle: STD_HANDLE) -> io::Result<HANDLE> {
+    unsafe { GetStdHandle(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
 }
 
 // The terminal code expects codepage 65001 (UTF-8) to be set, otherwise it may cause some weird glitches
@@ -19,18 +19,15 @@ pub type IOHandle = HANDLE;
 
 impl Terminal {
     pub(crate) fn init() -> io::Result<()> {
-        unsafe {
-            // Try to create a new terminal. This will fail if one already exists, in case that happens, just reuse it
-            let res = AllocConsole().as_bool();
-            if res {
+        // Try to create a new terminal. This will fail if one already exists, in case that happens, just reuse it
+        match unsafe { AllocConsole() } {
+            Ok(_) => Ok(()),
+            Err(_) => {
                 let output = get_std_handle(STD_OUTPUT_HANDLE)?;
-                let res = SetConsoleMode(output, ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING).as_bool();
-                if !res {
-                    return Err(io::Error::last_os_error());
-                }
-            }
-            Ok(())
-        } 
+                unsafe { SetConsoleMode(output, ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING) }
+                    .map_err(|err| io::Error::from_raw_os_error(err.code().0))
+            },
+        }
     }
 
     pub(crate) fn write(text: &str) -> io::Result<usize> {
@@ -50,41 +47,30 @@ impl Terminal {
 
     unsafe fn write_terminal(handle: HANDLE, bytes: &[u8]) -> io::Result<usize> {
         let mut chars_written = 0;
-        let res  = WriteConsoleA(
+        unsafe { WriteConsoleA(
             handle,
             bytes,
             Some(&mut chars_written),
             None
-        );
-        if res.as_bool() {
-            Ok(chars_written as usize)
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        ) }.map_or_else(|err| Err(io::Error::from_raw_os_error(err.code().0)), |_| Ok(chars_written as usize))
     }
 
     unsafe fn write_non_terminal(handle: HANDLE, utf8: &[u8]) -> io::Result<usize> {
         let mut chars_written = 0;
-        let res = WriteFile(
+        WriteFile(
             handle,
             Some(utf8),
             Some(&mut chars_written),
             None
-        );
-
-        if res.as_bool() {
-            Ok(chars_written as usize)
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        ).map_or_else(|err| Err(io::Error::from_raw_os_error(err.code().0)), |_| Ok(chars_written as usize))
     }
 
     pub(crate) fn get_output_handle() -> IOHandle {
-        unsafe { get_std_handle(STD_OUTPUT_HANDLE).unwrap_or_default() }
+        get_std_handle(STD_OUTPUT_HANDLE).unwrap_or_default()
     }
 }
 
 fn is_terminal(handle: HANDLE) -> bool {
     let mut mode = Default::default();
-    unsafe { GetConsoleMode(handle, &mut mode).as_bool() }
+    unsafe { GetConsoleMode(handle, &mut mode) }.is_ok()
 }

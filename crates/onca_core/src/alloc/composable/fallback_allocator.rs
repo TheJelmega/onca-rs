@@ -4,11 +4,11 @@ use crate::alloc::*;
 
 /// Fallback allocator
 /// 
-/// An allocator that will first try to allocate memory using its main allocator, if that fails, the allocator will fallback on its secondary allocator
+/// An allocator that will first try to allocate memory using its main allocator, if that fails, the allocator will fallback on its secondary allocator.
 pub struct FallbackAllocator<A: Allocator, F: Allocator> {
     main:     A,
     fallback: F,
-    id:      u16
+    id:       u16,
 }
 
 impl <A: Allocator, F: Allocator> FallbackAllocator<A, F> {
@@ -16,7 +16,7 @@ impl <A: Allocator, F: Allocator> FallbackAllocator<A, F> {
     /// 
     /// `alloc` denotes the main allocator
     /// 
-    /// `fallback` denotes the secondary allocator to use when the main allocator fails to allocate the memory
+    /// `fallback` denotes the secondary allocator to use when the main allocator fails to allocate the memory.
     pub fn new(main: A, fallback: F) -> Self {
         Self{ main, fallback, id: 0 }
     }

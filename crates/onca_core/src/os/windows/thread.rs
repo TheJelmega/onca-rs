@@ -15,7 +15,7 @@ pub(crate) fn get_main_thread_id() -> ThreadId {
         /// Function pointer used in CRT initialization section to set the cached main thread id 
         // Make sure this function isn't removed
         #[used]
-        // Place the poitner inside of CRT initialization section so it is loaded before the main entry point
+        // Place the pointer inside of CRT initialization section so it is loaded before the main entry point
         //
         // See: https://doc.rust-lang.org/stable/reference/abi.html#the-link_section-attribute
         // and: https://learn.microsoft.com/en-us/cpp/c-runtime-library/crt-initialization

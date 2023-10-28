@@ -15,10 +15,10 @@ pub trait FenceInterface {
     /// Signal the fence with a given value
     unsafe fn signal(&self, value: u64) -> Result<()>;
     /// Wait for a fence to get to a certain value
-    unsafe fn wait(&self, value: u64, timeout: Duration) -> Result<()>;
+    unsafe fn wait(&self, value: u64, timeout: Duration) -> Result<bool>;
 
     /// `self` should not be used, `self` is only present to be able to dynamically dispatch this function
-    unsafe fn wait_multiple(&self, fences: &[(Handle<Fence>, u64)], wait_for_all: bool, timeout: Duration) -> Result<()>;
+    unsafe fn wait_multiple(&self, fences: &[(Handle<Fence>, u64)], wait_for_all: bool, timeout: Duration) -> Result<bool>;
 }
 
 pub type FenceInterfaceHandle = InterfaceHandle<dyn FenceInterface>;
@@ -43,14 +43,18 @@ impl FenceHandle {
     pub fn signal(&self, value: u64) -> Result<()> {
         unsafe { self.handle.signal(value) }
     }
-
+    
     /// Wait for a given fence value to be present
-    pub fn wait(&self, value: u64, timeout: Duration) -> Result<()> {
+    /// 
+    /// Returns result with `Ok(true)` when the fence was signelled, and `Ok(false)` if the wait hit a timeout
+    pub fn wait(&self, value: u64, timeout: Duration) -> Result<bool> {
         unsafe { self.handle.wait(value, timeout) }
     }
-
+    
     /// Wait for multiple fences, until 1 or all match the given fence values
-    pub fn wait_multiple(fences: &[(Handle<Fence>, u64)], wait_for_all: bool, timeout: Duration) -> Result<()> {
+    /// 
+    /// Returns result with `Ok(true)` when the fence was signelled, and `Ok(false)` if the wait hit a timeout
+    pub fn wait_multiple(fences: &[(Handle<Fence>, u64)], wait_for_all: bool, timeout: Duration) -> Result<bool> {
         unsafe { fences[0].0.handle.wait_multiple(fences, wait_for_all, timeout) }
     }
 }

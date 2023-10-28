@@ -5,7 +5,6 @@ use windows::Win32::{
 
 use crate::time::TimeStamp;
 
-
 pub fn get_timestamp() -> TimeStamp {
     unsafe {
         let sys_time = GetSystemTime();

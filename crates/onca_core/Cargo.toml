@@ -18,7 +18,7 @@ parking_lot = "0.12.1"
 static_assertions = "1.1.0"
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.48.0", features = [
+windows = { version = "0.51.1", features = [
         "Win32_Foundation",
         "Win32_System_WindowsProgramming",
         "Win32_System_Kernel",
@@ -27,7 +27,9 @@ windows = { version = "0.48.0", features = [
         "Win32_System_LibraryLoader",
         "Win32_System_SystemServices",
         "Win32_System_SystemInformation",
-        "Win32_Globalization"
+        "Win32_Globalization",
+        "Win32_System_Console",
+        "Win32_System_Ole"
     ] }
 
 mimalloc = "0.1.39"

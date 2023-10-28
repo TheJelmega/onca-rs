@@ -7,12 +7,12 @@ use crate::mem::{MemTag, MemoryManager};
 
 /// Header pefixed to allocation with info + magic value
 /// ```
-/// check_code              tracked       alloc_id
-///     |     memory tag      |  freeable    |
-/// +------+---------------+----+----+--------+
-/// | AC40 |               |    |    |        |
-/// +------+---------------+----+----+--------+
-/// 0     16               48   49   50       64
+/// check_code              tracked    unused
+///     |     memory tag      | freeable |  alloc_idalloc_id
+/// +------+-----....------+----+----+--------+--------+
+/// | AC40 |               |    |    |        |        |
+/// +------+-----....------+----+----+--------+--------+
+/// 0     16               48   49   50       52       64
 /// ````
 pub struct AllocHeader {
     data: u16,
@@ -22,7 +22,7 @@ pub struct AllocHeader {
 
 impl AllocHeader { 
     const MAGIC: [u8; 2] = [ 0x04, 0xCA ];
-    const ALLOC_ID_MASK: u16 = 0x3FFF;
+    const ALLOC_ID_MASK: u16 = 0x0FFF;
     const TRACKED_BIT:   u16 = 0x8000;
     const FREEABLE_BIT:   u16 = 0x4000;
 

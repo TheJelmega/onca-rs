@@ -18,7 +18,7 @@ impl<const COUNT: usize> BitSet<COUNT> where
 
     /// Number of bytes needed to store all bits
     /// 
-    /// ## NOTE
+    /// # NOTE
     /// 
     /// This does not reflect the size of the bitset, as for alignment reasons, the bitset will always be a multiple of 64 bits, or 8 bytes
     pub const BYTE_COUNT : usize = (COUNT + 7) / 8;
@@ -82,7 +82,7 @@ impl<const COUNT: usize> BitSet<COUNT> where
     }
 
     /// Check if any bits are set
-    pub fn any(&self) -> bool  {
+    pub fn any(&self) -> bool {
         let (front, back) = self.get_u64_and_bytes();
         for bytes in front {
             if *bytes != 0 {
@@ -408,9 +408,9 @@ impl<const COUNT: usize> ExactSizeIterator for IterOnes<'_, COUNT> where
 pub struct IterZeros<'a, const COUNT: usize> where
     [u64; (COUNT + 63) / 64]:
 {
-    bitset : &'a BitSet<COUNT>,
-    idx    : usize,
-    end    : usize
+    bitset: &'a BitSet<COUNT>,
+    idx:    usize,
+    end:    usize
 }
 
 impl<const COUNT: usize> Iterator for IterZeros<'_, COUNT> where
@@ -457,9 +457,9 @@ impl<const COUNT: usize> ExactSizeIterator for IterZeros<'_, COUNT> where
 pub struct IntoIter<const COUNT: usize> where
     [u64; (COUNT + 63) / 64]:
 {
-    bitset : BitSet<COUNT>,
-    idx    : usize,
-    end    : usize,
+    bitset: BitSet<COUNT>,
+    idx:    usize,
+    end:    usize,
 }
 
 impl<const COUNT: usize> Iterator for IntoIter<COUNT>  where

@@ -16,8 +16,7 @@ pub struct LinearAllocator {
 
 impl LinearAllocator {
     /// Create a new stack allocator from a buffer
-    pub fn new(mut buffer: NonNull<u8>, buffer_layout: Layout) -> Self
-    {
+    pub fn new(mut buffer: NonNull<u8>, buffer_layout: Layout) -> Self {
         let head = buffer.as_ptr();
         let end = unsafe {
             buffer.as_ptr().add(buffer_layout.size())

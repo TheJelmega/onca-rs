@@ -31,7 +31,7 @@
 //! The internal representation may change in the future, but it would need to be proven to give a substantial benefit over the current representation.
 //! As it's highly likely that the conversion to the OS/filesystem specific representation is negligable compared to the time needed by the filesystem to do an operation.
 
-// NOTE(jel): std::path::* supports redox, so if we ever plan on supporting it, check its source
+// NOTE: std::path::* supports redox, so if we ever plan on supporting it, check its source
 
 use core::{
     cmp,
@@ -302,7 +302,7 @@ pub enum Component<'a> {
     /// This variant is the most common one, it represents references to files or directories
     Normal(&'a str),
 
-    // TODO(jel): VFS Macro
+    // TODO: VFS Macro
 }
 
 impl<'a> Component<'a> {
@@ -1644,6 +1644,7 @@ struct PrefixParser<'a, const LEN: usize> {
 } 
 
 impl<'a, const LEN: usize> PrefixParser<'a, LEN> {
+    #[allow(unused)]
     #[inline]
     fn get_prefix(path: &str) -> [u8; LEN] {
         let mut prefix = [0; LEN];

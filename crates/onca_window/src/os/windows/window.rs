@@ -47,7 +47,7 @@ impl OSWindowHandle {
     }
 
     pub(crate) fn close(&mut self) -> bool {
-        unsafe { PostMessageA(self.hwnd, WM_CLOSE, WPARAM(0), LPARAM(0)).as_bool() }
+        unsafe { PostMessageA(self.hwnd, WM_CLOSE, WPARAM(0), LPARAM(0)).map_or(false, |_| true) }
     }
 
     pub(crate) fn move_to(&mut self, window_id: WindowId, settings: &WindowSettings, x: i32, y: i32) {
@@ -60,11 +60,10 @@ impl OSWindowHandle {
                 0,
                 0,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
-            )
-            .as_bool();
-            if !res {
+            );
+            if let Err(err) = res {
                 let old_pos = settings.position();
-                log_warning!(LOG_CAT, "Failed to move window '{window_id}' to ({x}, {y}). Window is still located at ({}, {}). (err: {:X})", old_pos.x, old_pos.y, GetLastError().0);
+                log_warning!(LOG_CAT, "Failed to move window '{window_id}' to ({x}, {y}). Window is still located at ({}, {}). ({err})", old_pos.x, old_pos.y);
             }
         }
     }
@@ -79,40 +78,29 @@ impl OSWindowHandle {
                 width as i32,
                 height as i32,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-            )
-            .as_bool();
-            if !res {
+            );
+            if let Err(err) = res {
                 let size = settings.size();
-                log_warning!(LOG_CAT, "Failed to resize window '{window_id}' to {width}x{height}. Window is still has size {}x{}. (err: {:X})", size.width, size.height, GetLastError().0);
+                log_warning!(LOG_CAT, "Failed to resize window '{window_id}' to {width}x{height}. Window is still has size {}x{}. ({err})", size.width, size.height);
             }
         }
     }
 
     pub(crate) fn minimize(&mut self, window_id: WindowId) {
         unsafe {
-            let res = CloseWindow(self.hwnd).as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to minimize window '{window_id}'. (err{:X})", GetLastError().0);
+            let res = CloseWindow(self.hwnd);
+            if let Err(err) = res {
+                log_warning!(LOG_CAT, "Failed to minimize window '{window_id}'. ({err})");
             }
         }
     }
 
     pub(crate) fn maximize(&mut self, window_id: WindowId) {
-        unsafe {
-            let res = ShowWindow(self.hwnd, SW_SHOWMAXIMIZED).as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to maximize window '{window_id}'. (err{:X})", GetLastError().0);
-            }
-        }
+        unsafe { ShowWindow(self.hwnd, SW_SHOWMAXIMIZED) };
     }
 
     pub(crate) fn restore(&mut self, window_id: WindowId) {
-        unsafe {
-            let res = ShowWindow(self.hwnd, SW_RESTORE).as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to restore window '{window_id}'. (err{:X})", GetLastError().0);
-            }
-        }
+        unsafe { ShowWindow(self.hwnd, SW_RESTORE) };
     }
 
     pub(crate) fn set_fullscreen(
@@ -124,9 +112,9 @@ impl OSWindowHandle {
         unsafe {
             let mut window_placement = WINDOWPLACEMENT::default();
             window_placement.length = mem::size_of::<WINDOWPLACEMENT>() as u32;
-            let res = GetWindowPlacement(self.hwnd, &mut window_placement).as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to store pre-fullscreen window state");
+            let res = GetWindowPlacement(self.hwnd, &mut window_placement);
+            if let Err(err) = res {
+                log_warning!(LOG_CAT, "Failed to store pre-fullscreen window state ({err})");
             }
 
             let hmon = if fullscreen {
@@ -157,23 +145,20 @@ impl OSWindowHandle {
                         rect.width as i32,
                         rect.height as i32,
                         SWP_NOZORDER,
-                    )
-                    .as_bool();
-                    if !res {
+                    );
+                    if let Err(err) = res {
                         settings.flags.set(Flags::Fullscreen, false);
-                        log_warning!(LOG_CAT, "Failed to set fullscreen position and size");
+                        log_warning!(LOG_CAT, "Failed to set fullscreen position and size ({err})");
                     }
                 } else {
                     settings.flags.set(Flags::Fullscreen, false);
-                    log_warning!(
-                        LOG_CAT,
-                        "Failed to get monitor rect to set the fullscreen size and position"
-                    )
+                    log_warning!(LOG_CAT, "Failed to get monitor rect to set the fullscreen size and position");
                 }
             } else {
-                let res = SetWindowPlacement(self.hwnd, &os_data.windowed_state).as_bool();
-                if !res {
+                let res = SetWindowPlacement(self.hwnd, &os_data.windowed_state);
+                if let Err(err) = res {
                     settings.flags.set(Flags::Fullscreen, false);
+                    log_warning!(LOG_CAT, "Failed to get monitor rect to set the fullscreen size and position ({err})");
                 }
             }
         }
@@ -189,10 +174,9 @@ impl OSWindowHandle {
                 0,
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-            .as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to bring window '{window_id}' in focus. (err: {:X})", GetLastError().0);
+            );
+            if let Err(err) = res {
+                log_warning!(LOG_CAT, "Failed to bring window '{window_id}' in focus. ({err})");
             }
         }
     }
@@ -211,10 +195,9 @@ impl OSWindowHandle {
                 0,
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-            .as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to bring window '{window_id}' to the front. (err: {:X})", GetLastError().0);
+            );
+            if let Err(err) = res {
+                log_warning!(LOG_CAT, "Failed to bring window '{window_id}' to the front. ({err})");
             }
         }
     }
@@ -222,31 +205,21 @@ impl OSWindowHandle {
     pub(crate) fn enable_input(&mut self, window_id: WindowId, enable: bool) {
         unsafe {
             let res = EnableWindow(self.hwnd, BOOL(enable as i32)).as_bool();
-            if !res {
+            if res != enable {
                 let enable_disable = if enable { "enable" } else { "disable" };
-                log_warning!(LOG_CAT, "Failed to {enable_disable} input for window '{}'. (err: {:X})", window_id, GetLastError().0);
+                log_warning!(LOG_CAT, "Failed to {enable_disable} input for window '{}'.", window_id);
             }
         }
     }
 
     pub(crate) fn set_visible(&mut self, window_id: WindowId, settings: &WindowSettings, visible: bool) {
-        unsafe {
-            let res = ShowWindow(self.hwnd, get_show_window_cmd(visible, settings.is_active(), settings.is_minimized(), settings.is_maximized())).as_bool();
-            if !res {
-                let show_hide = if visible { "show" } else { "hide" };
-                log_warning!(LOG_CAT, "Failed to {show_hide} the window '{window_id}'. (err: {:X})", GetLastError().0);
-            }
-        }
+        let window_cmd = get_show_window_cmd(visible, settings.is_active(), settings.is_minimized(), settings.is_maximized());
+        unsafe { ShowWindow(self.hwnd, window_cmd) };
     }
 
     pub(crate) fn set_active(&mut self, window_id: WindowId, settings: &WindowSettings, active: bool) {
-        unsafe {
-            let res = ShowWindow(self.hwnd, get_show_window_cmd(settings.is_visible(), active, settings.is_minimized(), settings.is_maximized())).as_bool();
-            if !res {
-                let activate_deactivate = if active { "activate" } else { "deactivate" };
-                log_warning!(LOG_CAT, "Failed to {activate_deactivate} the window '{window_id}'. (err: {:X})", GetLastError().0);
-            }
-        }
+        let window_cmd = get_show_window_cmd(settings.is_visible(), active, settings.is_minimized(), settings.is_maximized());
+        unsafe { ShowWindow(self.hwnd, window_cmd) };
     }
 
     /// Only a single bit is allowed to be set with this function
@@ -272,8 +245,8 @@ impl OSWindowHandle {
             Ok(_) => {
                 let mut margins = RECT::default();
                 let (style, style_ex) = get_win32_style(settings);
-                let res = unsafe { AdjustWindowRectEx(&mut margins, style, BOOL(0), style_ex).as_bool() };
-                assert!(res, "This should not fail!");
+                let res = unsafe { AdjustWindowRectEx(&mut margins, style, BOOL(0), style_ex) };
+                assert!(res.is_ok(), "This should not fail!");
                 settings.margins = Margins {
                     top: (-margins.top) as u16,
                     left: (-margins.left) as u16,
@@ -325,20 +298,19 @@ impl OSWindowHandle {
                     log_error!(
                         LOG_CAT,
                         Self::begin_drag,
-                        "Failed getting the mouse's position before dragging. (err: {})",
-                        GetLastError().0
+                        "Failed getting the mouse's position before dragging. ({})",
+                        GetLastError().unwrap_err()
                     );
                     return false;
                 }
             };
 
-            let res = ReleaseCapture().as_bool();
-            if !res {
+            let res = ReleaseCapture();
+            if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
                     Self::begin_drag,
-                    "Failed to release mouse capture before starting to drag window. (err: {})",
-                    GetLastError().0
+                    "Failed to release mouse capture before starting to drag window. ({err})"
                 );
                 return false;
             }
@@ -363,19 +335,18 @@ impl OSWindowHandle {
                         LOG_CAT,
                         Self::begin_drag,
                         "Failed getting the mouse's position before dragging. (err: {})",
-                        GetLastError().0
+                        GetLastError().unwrap_err()
                     );
                     return false;
                 }
             };
 
-            let res = ReleaseCapture().as_bool();
-            if !res {
+            let res = ReleaseCapture();
+            if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
                     Self::begin_drag,
-                    "Failed to release mouse capture before starting to drag window. (err: {})",
-                    GetLastError().0
+                    "Failed to release mouse capture before starting to drag window. ({err})"
                 );
                 return false;
             }
@@ -419,21 +390,17 @@ impl OSWindowHandle {
                 dwTimeout: 0,
             };
 
-            let res = FlashWindowEx(&flash_info).as_bool();
-            if !res {
-                log_warning!(LOG_CAT, "Failed to notify the user for window {window_id} (err: {:X})", GetLastError().0);
-            }
+            FlashWindowEx(&flash_info);
         }
     }
 
     pub(crate) unsafe fn destroy(&mut self) {
-        let res = DestroyWindow(self.hwnd).as_bool();
-        if !res{
+        let res = DestroyWindow(self.hwnd);
+        if let Err(err)= res {
             log_error!(
                 LOG_MSG_CAT,
                 wnd_proc,
-                "Failed to destroy an HWND (win32 err: {:X})",
-                GetLastError().0
+                "Failed to destroy an HWND ({err})"
             );
         }
     }
@@ -500,12 +467,7 @@ unsafe fn ok_or_last_error(res: bool) -> Result<(), u32> {
     if res {
         Ok(())
     } else {
-        let err = GetLastError().0;
-        if err == 0 {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        GetLastError().map_err(|e| e.code().0 as u32)
     }
 }
 
@@ -677,7 +639,7 @@ unsafe extern "system" fn wnd_proc(
                         log_warning!(
                             LOG_CAT,
                             "Failed getting the mouse's position while releasing drag. (err: {})",
-                            GetLastError().0
+                            GetLastError().unwrap_err()
                         );
                         POINTS::default()
                     }
@@ -930,9 +892,9 @@ unsafe extern "system" fn wnd_proc(
                 track_mouse_event.dwFlags = TME_LEAVE;
                 track_mouse_event.hwndTrack = window.os_handle().hwnd();
 
-                let res = TrackMouseEvent(&mut track_mouse_event).as_bool();
-                if !res {
-                    log_error!(LOG_MSG_CAT, wnd_proc, "Failed to setup mouse leave event");
+                let res = TrackMouseEvent(&mut track_mouse_event);
+                if let Err(err) = res {
+                    log_error!(LOG_MSG_CAT, wnd_proc, "Failed to setup mouse leave event ({err})");
                 }
 
                 window.send_window_event(WindowEvent::MouseEnter);
@@ -1024,7 +986,7 @@ pub(crate) fn create(
                 LOG_CAT,
                 create,
                 "Failed to create a window (win32 err: {:X})",
-                GetLastError().0
+                GetLastError().map_or_else(|e| e.code().0, |_| 0)
             );
             return None;
         }
@@ -1046,10 +1008,9 @@ pub(crate) fn create(
                     width as i32,
                     height as i32,
                     SWP_NOMOVE | SWP_NOZORDER,
-                )
-                .as_bool();
-                if !res {
-                    log_error!(LOG_CAT, create, "Failed to resize a window to have the correct DPI scaling (win32 err: {:X})", GetLastError().0);
+                );
+                if let Err(err) = res {
+                    log_error!(LOG_CAT, create, "Failed to resize a window to have the correct DPI scaling (win32 err: {:X})", err.code().0);
                     window_ptr.settings.size = old_size.into();
                 }
             }
@@ -1159,13 +1120,9 @@ fn get_show_window_cmd(visible: bool, active: bool, minimized: bool, maximized: 
 fn calculate_margins(style: WINDOW_STYLE, ex_style: WINDOW_EX_STYLE) -> Margins {
     unsafe {
         let mut rect = RECT::default();
-        let res = AdjustWindowRectEx(&mut rect, style, BOOL(0), ex_style).as_bool();
-        if !res {
-            log_warning!(
-                LOG_CAT,
-                "Failed to calculate window margins (win32 err: {:X})",
-                GetLastError().0
-            );
+        let res = AdjustWindowRectEx(&mut rect, style, BOOL(0), ex_style);
+        if let Err(err) = res {
+            log_warning!(LOG_CAT, "Failed to calculate window margins (win32 err: {err})");
         }
 
         Margins {
@@ -1179,8 +1136,8 @@ fn calculate_margins(style: WINDOW_STYLE, ex_style: WINDOW_EX_STYLE) -> Margins 
 
 fn cursor_coords() -> Option<POINTS> {
     let mut points = POINT::default();
-    let res = unsafe { GetCursorPos(&mut points).as_bool() };
-    if res {
+    let res = unsafe { GetCursorPos(&mut points) };
+    if let Err(err) = res {
         Some(POINTS {
             x: points.x as i16,
             y: points.y as i16,

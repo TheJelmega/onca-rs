@@ -5,22 +5,28 @@ use onca_core::{
 
 use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
 
-/// Returns if the given path is valid and points to a directory
+/// Returns if the given path is valid and points to a directory.
+#[must_use]
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
-    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+    scoped_alloc!(AllocId::TlsTemp);
 
     let entry = Entry::new(path.as_ref().to_path_buf());
     match entry {
-        Some(entry) => entry.file_type() == FileType::Directory,
-        None => false
+        Ok(entry) => entry.file_type() == FileType::Directory,
+        Err(_) => false,
     }
 }
 
 /// Creates a directory with the given path.
 /// 
-/// If the directory is crated recursively, parent directories that do not exists will also be created.
+/// If the directory is created recursively, parent directories that do not exists will also be created.
 /// 
-/// If the directory is *not* created recursively, the function will only create the directory if the parent directory exists, otherwise it will return an error
+/// If the directory is *not* created recursively, the function will only create the directory if the parent directory exists.
+/// 
+/// # Errors
+/// 
+/// Returns an error if any directory failed to be created.
+#[must_use]
 pub fn create<P: AsRef<Path>>(path: P, resursively: bool) -> io::Result<()> {
     if resursively {
         os_imp::directory::create_recursive(path.as_ref())
@@ -29,33 +35,41 @@ pub fn create<P: AsRef<Path>>(path: P, resursively: bool) -> io::Result<()> {
     }
 }
 
-/// Remove a directory, the directory needs to be empty
+/// Remove a directory, the directory needs to be empty.
+/// 
+/// # Errors
+/// 
+/// Returns an error when the file could not be removed.
+#[must_use]
 pub fn remove<P: AsRef<Path>>(path: P) -> io::Result<()> {
     os_imp::directory::remove(path.as_ref())
 }
 
-/// Remove a directory and all it's content
+/// Remove a directory and all its content.
 /// 
-/// Use carefully!
+/// ***Use carefully!***
+/// 
+/// # Errors
+/// 
+/// Returns an error when any file or the folder could not be removed.
+#[must_use]
 pub fn remove_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+    scoped_alloc!(AllocId::TlsTemp);
 
-    if let Some(iter) = read(path.as_ref()) {
-        for entry in iter {
-            match entry.file_type() {
-                FileType::Unknown => {}
-                FileType::File => crate::file::delete(entry.path())?,
-                FileType::Directory => remove_all(entry.path())?,
-                FileType::SymlinkFile => crate::file::delete(entry.path())?,
-                FileType::SymlinkDirectory => remove_all(entry.path())?,
-            }
+    for entry in read(path.as_ref())? {
+        match entry.file_type() {
+            FileType::Unknown          => {}
+            FileType::File             => crate::file::delete(entry.path())?,
+            FileType::Directory        => remove_all(entry.path())?,
+            FileType::SymlinkFile      => crate::file::delete(entry.path())?,
+            FileType::SymlinkDirectory => remove_all(entry.path())?,
         }
     }
-
     remove(path)
 }
 
-/// Reads the content of a directory and returns an iterator over the content
-pub fn read<P: AsRef<Path>>(path: P) -> Option<EntryIter> {
+/// Reads the content of a directory and returns an iterator over the content.
+#[must_use]
+pub fn read<P: AsRef<Path>>(path: P) -> io::Result<EntryIter> {
     EntryIter::new(path)
 }

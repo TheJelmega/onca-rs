@@ -14,8 +14,8 @@ struct FreeBlock {
 }
 
 struct Header {
-    front:      u16,
-    back: u16,
+    front: u16,
+    back:  u16,
 }
 
 // TODO: Add multiple search implementations, currently only fit-first (which could be atomic)
@@ -26,8 +26,7 @@ struct Header {
 pub struct FreelistAllocator {
     buffer:        NonNull<u8>,
     buffer_layout: Layout,
-    head:          Option<NonNull<FreeBlock>>,
-    mutex:         Mutex<()>,
+    head:          Mutex<Option<NonNull<FreeBlock>>>,
     id:            u16
 }
 
@@ -40,12 +39,11 @@ impl FreelistAllocator {
             head.as_mut().size = buffer_layout.size();
         }
 
-        Self { buffer, buffer_layout, head: Some(head), mutex: Mutex::new(()), id: 0 }
+        Self { buffer, buffer_layout, head: Mutex::new(Some(head)), id: 0 }
     }
 
     // Allocate from the first fitting element (not optimal for fragmentation)
     unsafe fn alloc_first(&mut self, layout: Layout) -> Option<NonNull<u8>> {
-        
         let size = layout.size();
 
         // Guaranteed to be at least 8
@@ -53,10 +51,10 @@ impl FreelistAllocator {
 
         let alloc_block_size = size_of::<Header>();
 
-        let mut cur_block_opt = self.head;
         let mut prev_block: Option<NonNull<FreeBlock>> = None;
-
-        let _guard = self.mutex.lock();
+        
+        let mut head = self.head.lock();
+        let mut cur_block_opt = *head;
         while let Some(mut cur_block) = cur_block_opt {
             let mut next_block = cur_block.as_mut().next;
 
@@ -81,7 +79,7 @@ impl FreelistAllocator {
 
                 match &mut prev_block {
                     Some(block) => block.as_mut().next = next_block,
-                    None => self.head = next_block,
+                    None => *head = next_block,
                 }
 
                 Self::write_alloc_block(NonNull::new_unchecked(aligned_ptr), padding as u16, back as u16);
@@ -136,8 +134,9 @@ impl Allocator for FreelistAllocator {
 
         let (orig_ptr, front, back) = Self::get_orig_ptr_and_padding(ptr);
         let mut prev_block = None;
-        let _guard = self.mutex.lock();
-        let mut next_block = self.head;
+
+        let mut head = self.head.lock();
+        let mut next_block = *head;
 
         while let Some(next) = next_block {
             if next.as_ptr() > orig_ptr.as_ptr().cast() {
@@ -158,7 +157,7 @@ impl Allocator for FreelistAllocator {
             prev_block.as_mut().next = Some(cur_block);
             Self::coalesce(prev_block, cur_block);
         } else {
-            self.head = Some(cur_block);
+            *head = Some(cur_block);
         }
     }
 

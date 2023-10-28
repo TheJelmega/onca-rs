@@ -1,25 +1,26 @@
-use onca_core::prelude::*;
-use onca_core_macros::flags;
+use std::num::NonZeroU32;
 
-use crate::{PathBuf, os::os_imp};
+use onca_core::{prelude::*, io};
+use onca_core_macros::{flags, EnumFromIndex};
 
+use crate::{PathBuf, os::os_imp, Path};
 
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, EnumFromIndex)]
 pub enum DriveType {
-    /// The drive type cannot be determined
+    /// The drive type cannot be determined.
     #[default]
     Unknown,
-    /// The drive has an invalid path
+    /// The drive has an invalid path.
     NoRootDir,
-    /// The drive is removable, e.g. a USB drive
+    /// The drive is removable, e.g. a USB drive.
     Removable,
-    /// The drive is fixed, e.g. an SSD
+    /// The drive is fixed, e.g. an SSD.
     Fixed,
-    /// The drive is a remote (network) drive
+    /// The drive is a remote (network) drive.
     Remote,
-    /// The drive is a disk drive, e.g. a CD-ROM
+    /// The drive is a disk drive, e.g. a CD-ROM.
     Disk,
-    /// The drive is a RAM disk
+    /// The drive is a RAM disk.
     RamDisk
 }
 
@@ -27,103 +28,120 @@ pub enum DriveType {
 #[derive(Default, Debug)]
 pub struct DriveInfo {
     /// Path representing the root of this drive.
-    pub root                : PathBuf,
+    pub root:                PathBuf,
     /// Drive type
-    pub drive_type          : DriveType,
+    pub drive_type:          DriveType,
     /// Total size of the drive (in bytes).
-    pub total_bytes         : u64,
+    pub total_size:          u64,
     /// Size of the available space on the drive (in bytes).
-    pub available_bytes     : u64,
+    pub available_size:      u64,
     /// Size of the available space on the drive that the user can use (in bytes).
     /// 
-    /// This value may be smaller than the total available space on an OS that supports per-user quotas
-    pub available_to_user   : u64,
-    /// Number of bytes per drive sector
+    /// This value may be smaller than the total available space on an OS that supports per-user quotas.
+    pub available_to_user:   u64,
+    /// Number of bytes per drive sector.
     /// 
-    /// In general, this value is highly likely to be `512`, as 512-byte sectors are most common
-    pub bytes_per_sector    : u32,
-    /// Number of sectors per cluster/block
-    pub sectors_per_cluster : u32,
-    /// Total number of clusters/blocks
+    /// In general, this value is highly likely to be `512`, as 512-byte sectors are most common.
+    pub sector_size:         u32,
+    /// Number of sectors per cluster/block.
+    pub sectors_per_cluster: u32,
+    /// Total number of clusters/blocks.
     /// 
-    /// Note that the value is the total number of clusters/blocks available to the current user
-    pub total_clusters      : u64,
-    /// Number of free clusters/blocks
+    /// Nhe value corresponds to the total number of clusters/blocks available to the current user.
+    pub total_clusters:      u64,
+    /// Number of free clusters/blocks.
     /// 
-    /// Note that the value is the number of free clusters/blocks available to the current user
-    pub free_clusters       : u64,
+    /// The value corresponds to the number of free clusters/blocks available to the current user.
+    pub free_clusters:       u64,
 }
 
-/// File system flags associated with a volume
+/// File system flags associated with a volume.
 #[flags]
 pub enum FilesystemFlags {
-    /// The volume supports case sensitive file names
+    /// The volume supports case sensitive file names.
     CaseSensitiveSearch,
-    /// The volume preserves the case of file names when stored
+    /// The volume preserves the case of file names when stored.
     CasePreservedNames,
-    /// The volume supports unicode file names
+    /// The volume supports unicode file names.
     UnicodePaths,
-    /// The volume supports compression
+    /// The volume supports compression.
     FileCompression,
-    /// The volume supports quotas (limits on what a user can use)
+    /// The volume supports quotas (limits on what a user can use).
     VolumeQuotas,
-    /// The volume supports sparse files
+    /// The volume supports sparse files.
     SparseFiles,
-    /// The volume supports reparse points
+    /// The volume supports reparse points.
     ReparsePoint,
-    /// The volume is a compressed volume
+    /// The volume is a compressed volume.
     Compressed,
-    /// The volume supports encryption
+    /// The volume supports encryption.
     Encryption,
-    /// The volume is read-only
+    /// The volume is read-only.
     ReadOnly,
 }
 
 
 #[derive(Default, Debug)]
 pub struct VolumeInfo {
-    /// Path representing the drive roots of this volume
-    pub roots        : Vec<PathBuf>,
-    /// Volume name
-    pub name         : String,
-    /// Serial number associated with the volume by the OS (0 if no serial number is associated)
-    pub serial       : u32,
-    /// Maximum lenght of each path component
-    pub max_comp_len : u32,
-    /// Filesystem flags associated with a volume
-    pub fs_flags     : FilesystemFlags,
-    /// File system name
-    pub fs_name      : String
+    /// Paths representing the drive roots of this volume.
+    pub roots:        Vec<PathBuf>,
+    /// Volume name.
+    pub name:         String,
+    /// Serial number associated with the volume by the OS.
+    pub serial:       Option<NonZeroU32>,
+    /// Maximum lenght of each path component.
+    pub max_comp_len: u32,
+    /// Filesystem flags associated with a volume.
+    pub fs_flags:     FilesystemFlags,
+    /// File system name.
+    pub fs_name:      String
 }
 
-/// Retrieve the drive info for the given root
+/// Retrieve the drive info for the given root.
 /// 
-/// Returns `None` if the path is not a valid drive root, returns the drive's info otherwise
-pub fn get_drive_info(path: PathBuf) -> Option<DriveInfo> {
-    os_imp::drive_volume::get_drive_info(path)
+/// # Error
+/// 
+/// Returns an error if the path is not a valid drive root.
+#[must_use]
+pub fn get_drive_info<P: AsRef<Path>>(path: &P) -> io::Result<DriveInfo> {
+    os_imp::drive_volume::get_drive_info(path.as_ref())
 }
 
-pub fn get_drive_type(path: PathBuf) -> DriveType {
-    os_imp::drive_volume::get_drive_type(path)
+/// Retrieve the drive type for a given root.
+/// 
+/// # Error
+/// 
+/// Returns an error if the path is not a valid drive root.
+#[must_use]
+pub fn get_drive_type<P: AsRef<Path>>(path: &P) -> DriveType {
+    os_imp::drive_volume::get_drive_type(path.as_ref())
 }
 
-/// Retrieve the drive info for all available drives
-// TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_drive_info() -> Vec<DriveInfo> {
+/// Retrieve the drive info for all available drives.
+/// 
+/// # Error
+/// 
+/// Returns an error if not all drive info could be retreived.
+#[must_use]
+pub fn get_all_drive_info() -> io::Result<Vec<DriveInfo>> {
     os_imp::drive_volume::get_all_drive_info()
 }
 
-/// Retrieve the volume info for the given root
+/// Retrieve the volume info for the given root.
 /// 
-/// Returns `None` if the the path is not a valid volume root, returns the volume's into otherwise
-// TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_volume_info(path: PathBuf) -> Option<VolumeInfo> {
-    os_imp::drive_volume::get_volume_info(path)
+/// # Error
+/// 
+/// Returns an erro if the path is not valid volume root.
+#[must_use]
+pub fn get_volume_info<P: AsRef<Path>>(path: &P) -> Option<VolumeInfo> {
+    os_imp::drive_volume::get_volume_info(path.as_ref())
 }
 
-/// Retrieve th evolume info for all available volumes
-// TODO(jel): Alloc context containing main and temp alloc?
-pub fn get_all_volume_info() -> Vec<VolumeInfo> {
+/// Retrieve th evolume info for all available volumes.
+/// 
+/// Returns an error if not all volume error could be retrieved
+#[must_use]
+pub fn get_all_volume_info() -> io::Result<Vec<VolumeInfo>> {
     os_imp::drive_volume::get_all_volume_info()
 }
 

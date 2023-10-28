@@ -8,7 +8,8 @@ use windows::{
         Foundation::{GetLastError, HMODULE, OLE_E_WRONGCOMPOBJ, RPC_E_CHANGED_MODE},
         System::{
             LibraryLoader::GetModuleHandleA,
-            Console::{SetConsoleOutputCP, SetConsoleCP}, Ole::{OleUninitialize, OleInitialize}
+            Console::{SetConsoleOutputCP, SetConsoleCP},
+            Ole::{OleUninitialize, OleInitialize}
         }, 
         Globalization::{CP_UTF8, GetACP}
     },
@@ -23,7 +24,10 @@ pub mod thread;
 pub mod dynlib;
 
 pub(crate) fn errno() -> u32 {
-    unsafe { GetLastError().0 }
+    match unsafe { GetLastError() } {
+        Ok(_) => 0,
+        Err(err) => err.code().0 as u32,
+    }
 }
 
 pub(crate) fn ensure_utf8() -> Result<(), u32> {
@@ -33,17 +37,8 @@ pub(crate) fn ensure_utf8() -> Result<(), u32> {
             return Err(0);
         }
         
-        let res = SetConsoleOutputCP(CP_UTF8).as_bool();
-        if !res {
-            return Err(errno());
-        }
-
-        let res = SetConsoleCP(CP_UTF8).as_bool();
-        if !res {
-            return Err(errno());
-        }
-        
-        Ok(())
+        SetConsoleOutputCP(CP_UTF8).map_err(|err| err.code().0 as u32)?;
+        SetConsoleCP(CP_UTF8).map_err(|err| err.code().0 as u32)
     }
 }
 
@@ -84,7 +79,7 @@ pub(crate) fn init_system() -> Result<(), &'static str> {
     if !OLE_INITIALIZED.load(Ordering::Relaxed) {
         // Setup OLE
         unsafe {
-            let ole_res = OleInitialize(ptr::null_mut());
+            let ole_res = OleInitialize(None);
             match ole_res {
                 Ok(_) => {
                     OLE_INITIALIZED.store(true, Ordering::Relaxed);

@@ -1,69 +1,73 @@
+use onca_core::io;
+
 use crate::{
     os::os_imp::{self, entry::EntrySearchHandle},
     Path, PathBuf, Metadata, FileType, 
 };
 
-/// An entry in the file system
+/// An entry in the file system.
 pub struct Entry {
-    path   : PathBuf
+    path: PathBuf
 }
 
 impl Entry {
     /// Create new entry if the given path points towards a valid location.
-    pub fn new(path: PathBuf) -> Option<Entry> {
+    /// 
+    /// # Error
+    /// 
+    /// Return an error if the path does not point to a valid entry.
+    #[must_use]
+    pub fn new(path: PathBuf) -> io::Result<Entry> {
         let entry = Entry { path };
         if entry.file_type() == FileType::Unknown {
-            None
+            Err(io::Error::last_os_error())
         } else {
-            Some(entry)
+            Ok(entry)
         }
     }
 
     /// Create a new entry without validating that it points towards a valid location.
+    #[must_use]
     pub unsafe fn new_unchecked(path: PathBuf) -> Entry {
         Entry { path }
     }
 
-    /// Returns the path pointed to by the entry
+    /// Get the path pointed to by the entry.
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    /// Retrieves the metadata associated with the entry
+    /// Get the metadata associated with the entry.
+    #[must_use]
     pub fn metadata(&self) -> Metadata {
         os_imp::entry::get_entry_meta(&self.path).unwrap_or_default()
     }
 
-    /// Retieves the file type of the entry
+    /// Get the file type of the entry.
+    #[must_use]
     pub fn file_type(&self) -> FileType {
-        os_imp::entry::get_entry_file_type(&self.path)
+        os_imp::entry::get_entry_file_type(&self.path).unwrap_or_default()
     }
 
-    /// Returns the file name of the entry
+    /// Get the file name of the entry.
+    #[must_use]
     pub fn file_name(&self) -> &str {
         self.path.file_name().expect("Invalid entry")
     }
 }
 
-/// Iterator to go through the contents of a directory
+/// Iterator to go through the contents of a directory.
 pub struct EntryIter {
-    path       : PathBuf,
-    handle     : EntrySearchHandle,
+    path:   PathBuf,
+    handle: EntrySearchHandle,
 }
 
 impl EntryIter {
-    /// Create a new entry iterator from a given path
-    // TODO(jel): Alloc context containing main and temp alloc?
-    pub(crate) fn new<P: AsRef<Path>>(path: P) -> Option<EntryIter> {
-        Self::_new(path.as_ref())
-    }
-
-    fn _new(path: &Path) -> Option<EntryIter> {
-        let handle = EntrySearchHandle::new(path);
-        match handle {
-            Ok((handle, path)) => Some(EntryIter { path, handle }),
-            Err(_) => None,
-        }
+    /// Create a new entry iterator from a given path.
+    #[must_use]
+    pub(crate) fn new<P: AsRef<Path>>(path: P) -> io::Result<EntryIter> {
+        EntrySearchHandle::new(path.as_ref()).map(|(handle, path)| Self { path, handle })
     }
 }
 
