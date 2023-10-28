@@ -24,12 +24,16 @@ impl StringId {
 
 /// Interned string
 /// 
-/// When in debug, the `InternedString` has an internal cached pointer to show the current text in the debugger (may not be the correct lenght)
+/// When the 'cached_interned_strings' features is enabled, the `InternedString` has an internal cached str to show the current text in the debugger
+/// 
+/// # SAFETY
+/// 
+/// The cached `&str` is sound, as it can only exists when the interned string manager exists, which is global
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct InternedString {
-    id : StringId,
-    #[cfg(debug_assertions)]
-    cached : *const u8
+    id:     StringId,
+    #[cfg(feature = "cached_interned_strings")]
+    cached: &'static str,
 }
 
 impl InternedString {
@@ -105,7 +109,7 @@ impl InternedStringManager {
         Self { strings: Mutex::new(None) }
     }
 
-    fn register_string(&self, s: &str, id: StringId) -> *const u8 {
+    fn register_string(&self, s: &str, id: StringId) -> &'static str {
         let mut strings = self.strings.lock();
         if strings.is_none() {
             *strings = Some(HashMap::new());
@@ -115,11 +119,13 @@ impl InternedStringManager {
         if !data.contains_key(&id) {
             let s = s.to_string();
             let ptr = s.as_ptr();
+            let len = s.len();
             data.insert(id, s);
-            ptr
+            unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(ptr, len)) }
         } else {
             assert_eq!(s, data[&id]);
-            data[&id].as_ptr()
+            let s = &data[&id];
+            unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(s.as_ptr(), s.len())) }
         }
     }
 
@@ -128,9 +134,13 @@ impl InternedStringManager {
         strings.as_ref().map_or(None, |data| data.get(&id).map(|s| s.to_string()))
     }
 
-    fn get_cached(&self, id: StringId) -> *const u8 {
+    fn get_cached(&self, id: StringId) -> &str {
         let strings = self.strings.lock();
-        strings.as_ref().map_or(null(), |data| data.get(&id).map_or(null(), |s| s.as_ptr()))
+        strings.as_ref().map_or("<invalid cached interned string>", 
+            |s| s.get(&id).map_or("<invalid cached interned string>", |s|
+                unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(s.as_ptr(), s.len())) }
+            )
+        )
     }
 }
 
