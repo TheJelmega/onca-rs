@@ -3,7 +3,7 @@ use crate::{
     WindowSettings, LOG_CAT,
 };
 use core::fmt;
-use onca_core::{
+use onca_common::{
     alloc::ScopedAlloc,
     event_listener::{EventListenerArray, EventListenerRef, EventListener},
     prelude::*,

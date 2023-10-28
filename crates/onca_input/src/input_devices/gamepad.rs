@@ -5,7 +5,7 @@ use core::fmt;
 use crate::{InputDevice, InputAxisDefinition, AxisValue, AxisType, DeviceType, GamepadSubType, InputAxisId};
 #[cfg(feature = "raw_input_logging")]
 use crate::LOG_INPUT_CAT;
-use onca_core::{
+use onca_common::{
     prelude::*,
     collections::BitSet,
     sync::{Mutex, RwLock}

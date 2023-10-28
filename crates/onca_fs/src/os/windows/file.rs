@@ -4,7 +4,7 @@ use std::{
     num::NonZeroU64,
     sync::atomic::{AtomicU32, Ordering},
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     io,
 };

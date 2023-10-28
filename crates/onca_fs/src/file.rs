@@ -1,7 +1,7 @@
 use std::future::Future;
 
-use onca_core::io;
-use onca_core_macros::flags;
+use onca_common::io;
+use onca_common_macros::flags;
 
 use crate::{Path, os::os_imp, Permission, PathBuf};
 

@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 #![feature(int_roundings)]
 
-use onca_core::{
+use onca_common::{
 	prelude::*,
 	mem::{set_memory_manager, MemoryManager}
 };

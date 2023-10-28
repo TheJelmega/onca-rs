@@ -1,6 +1,6 @@
 use core::num::NonZeroU16;
 
-use onca_core::{KiB, MiB, GiB};
+use onca_common::{KiB, MiB, GiB};
 use crate::{WorkGroupSize, Range, MemAlign, TextureSize};
 
 //==============================================================================================================================

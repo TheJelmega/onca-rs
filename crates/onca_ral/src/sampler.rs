@@ -1,4 +1,4 @@
-use onca_core_macros::EnumDisplay;
+use onca_common_macros::EnumDisplay;
 use crate::{CompareOp, handle::{InterfaceHandle, create_ral_handle}, Handle, HandleImpl, ShaderVisibility};
 
 /// Sampler filter type

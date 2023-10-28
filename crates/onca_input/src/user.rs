@@ -1,6 +1,6 @@
 use core::mem::take;
 use std::sync::{Weak, Arc};
-use onca_core::{
+use onca_common::{
     prelude::*,
     sync::Mutex,
     time::DeltaTime

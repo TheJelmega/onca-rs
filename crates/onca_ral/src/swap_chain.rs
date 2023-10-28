@@ -1,4 +1,4 @@
-use onca_core::{
+use onca_common::{
     prelude::*,
     sys::{AppHandle, get_app_handle}, sync::{RwLock, RwLockReadGuard, MappedRwLockReadGuard},
 };

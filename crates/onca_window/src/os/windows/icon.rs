@@ -1,4 +1,4 @@
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_logging::log_warning;
 use windows::{
     Win32::{

@@ -1,6 +1,6 @@
 /// Module containing OS abstractions.
 /// 
-/// Direct OS implementations aren't available to the user, usable functionality/abstractions defined in the `onca_core::sys` module.
+/// Direct OS implementations aren't available to the user, usable functionality/abstractions defined in the `onca_common::sys` module.
 
 use cfg_if::cfg_if;
 

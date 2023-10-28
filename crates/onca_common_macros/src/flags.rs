@@ -302,7 +302,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 
-		/// Implicitly implemtents onca_core::string::ToString
+		/// Implicitly implemtents onca_common::string::ToString
 		impl ::core::fmt::Display for #flag_name {
 			fn fmt(&self, mut f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
 				::core::fmt::Debug::fmt(&self, &mut f)

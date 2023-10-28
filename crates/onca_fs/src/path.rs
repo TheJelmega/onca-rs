@@ -44,7 +44,7 @@ use core::{
     ops::Deref,
 };
 use std::collections::TryReserveError;
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 
 //--------------------------------------------------------------
 

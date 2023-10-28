@@ -1,7 +1,7 @@
 use core::num::NonZeroU8;
 
-use onca_core::prelude::*;
-use onca_core_macros::{flags, EnumDisplay};
+use onca_common::prelude::*;
+use onca_common_macros::{flags, EnumDisplay};
 
 use crate::{common::*, handle::InterfaceHandle, Version};
 

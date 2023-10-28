@@ -1,9 +1,9 @@
 use std::fmt::Write;
-use onca_core::{
+use onca_common::{
     prelude::*,
     io
 };
-use onca_core_macros::flags;
+use onca_common_macros::flags;
 
 
 

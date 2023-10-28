@@ -1,5 +1,5 @@
 use std::io::Error;
-use onca_core::{
+use onca_common::{
     prelude::*,
     io,
 };

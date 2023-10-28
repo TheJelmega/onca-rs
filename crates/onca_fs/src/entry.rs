@@ -1,4 +1,4 @@
-use onca_core::io;
+use onca_common::io;
 
 use crate::{
     os::os_imp::{self, entry::EntrySearchHandle},

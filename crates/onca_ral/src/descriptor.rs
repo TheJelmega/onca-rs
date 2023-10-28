@@ -1,7 +1,7 @@
 use core::{num::NonZeroU32, mem::ManuallyDrop};
 
-use onca_core::prelude::*;
-use onca_core_macros::{EnumDisplay, EnumCount};
+use onca_common::prelude::*;
+use onca_common_macros::{EnumDisplay, EnumCount};
 
 use crate::{
     HandleImpl, Handle, Result, Error,

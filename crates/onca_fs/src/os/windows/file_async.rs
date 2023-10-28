@@ -3,7 +3,7 @@ use std::{
     mem,
 };
 
-use onca_core::io::{SeekFrom, self};
+use onca_common::io::{SeekFrom, self};
 use windows::Win32::{
     Storage::FileSystem::{ReadFileEx, WriteFileEx},
     System::{

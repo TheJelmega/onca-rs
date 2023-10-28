@@ -1,7 +1,7 @@
 use core::num::NonZeroU8;
 use std::sync::{Weak, Arc};
 
-use onca_core::{prelude::*, utils::is_flag_set};
+use onca_common::{prelude::*, utils::is_flag_set};
 use onca_logging::{log_warning, log_verbose};
 use onca_ral as ral;
 use ral::{

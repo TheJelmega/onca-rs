@@ -3,7 +3,7 @@ use core::{
     ffi::c_void,
 };
 
-use onca_core::{
+use onca_common::{
     prelude::*,
     utils::is_flag_set,
     MiB,

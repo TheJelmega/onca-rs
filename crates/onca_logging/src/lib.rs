@@ -7,7 +7,7 @@ use core::{
     cell::RefCell
 };
 use std::fmt::Write;
-use onca_core::{
+use onca_common::{
     prelude::*,
     io::{self, prelude::*},
     sync::{RwLock, Mutex},
@@ -157,10 +157,10 @@ pub fn get_func_name<F>(_: F) -> &'static str {
 #[macro_export]
 macro_rules! log_location {
     () => {
-        $crate::LogLocation::new(file!(), line!(), "", onca_core::time::get_timestamp())
+        $crate::LogLocation::new(file!(), line!(), "", onca_common::time::get_timestamp())
     };
     ($func: expr) => {
-        $crate::LogLocation::new(file!(), line!(), $crate::get_func_name($func), onca_core::time::get_timestamp())
+        $crate::LogLocation::new(file!(), line!(), $crate::get_func_name($func), onca_common::time::get_timestamp())
     };
 }
 

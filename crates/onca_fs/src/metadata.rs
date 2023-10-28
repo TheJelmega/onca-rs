@@ -1,6 +1,6 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
-use onca_core_macros::flags;
+use onca_common_macros::flags;
 
 /// Flags for a filesystem entry's metadata.
 #[flags]

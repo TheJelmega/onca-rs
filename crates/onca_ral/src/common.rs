@@ -1,7 +1,7 @@
 use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU64}, hash::Hash};
 use std::collections::HashSet;
-use onca_core::prelude::*;
-use onca_core_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
+use onca_common::prelude::*;
+use onca_common_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
 use onca_logging::{log_verbose, LogCategory};
 use crate::*;
 
@@ -17,7 +17,7 @@ pub use mem_align::*;
 // UTILS
 //==============================================================================================================================
 
-// TODO: Could this be common to onca_core ???
+// TODO: Could this be common to onca_common ???
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct Version {
     pub major : u16,

@@ -1,4 +1,4 @@
-use onca_core::io;
+use onca_common::io;
 use crate::{Path, os::os_imp};
 
 /// Create a new hard-link file at `dest` pointing towards file `source`.

@@ -3,7 +3,7 @@ use std::{
     collections::BTreeSet
 };
 
-use onca_core::utils;
+use onca_common::utils;
 use onca_logging::log_error;
 use windows::{
     Win32::{

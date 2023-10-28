@@ -1,5 +1,5 @@
-use onca_core::prelude::*;
-use onca_core_macros::{EnumCount, EnumFromIndex, EnumDisplay};
+use onca_common::prelude::*;
+use onca_common_macros::{EnumCount, EnumFromIndex, EnumDisplay};
 
 
 

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Weak};
 
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_ral as ral;
 use ash::vk;
 use ral::HandleImpl;
@@ -47,7 +47,7 @@ impl ral::FenceInterface for Fence {
         device.signal_semaphore(&signal_info).map_err(|err| err.to_ral_error())
     }
     
-    unsafe fn wait(&self, value: u64, timeout: onca_core::time::Duration) -> ral::Result<bool> {
+    unsafe fn wait(&self, value: u64, timeout: onca_common::time::Duration) -> ral::Result<bool> {
         let device = Weak::upgrade(&self.device).ok_or(ral::Error::UseAfterDeviceDropped)?;
         
         let semaphores = [self.semaphore];

@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use onca_core::time::Duration;
+use onca_common::time::Duration;
 use onca_ral as ral;
 use ral::{HandleImpl, FenceInterface};
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};

@@ -1,7 +1,7 @@
 use core::{mem::ManuallyDrop, num::NonZeroU64};
 
-use onca_core::{prelude::*, sync::{Mutex, RwLock, RwLockUpgradableReadGuard}};
-use onca_core_macros::flags;
+use onca_common::{prelude::*, sync::{Mutex, RwLock, RwLockUpgradableReadGuard}};
+use onca_common_macros::flags;
 use onca_logging::log_error;
 
 use crate::{handle::{InterfaceHandle, create_ral_handle}, Handle, HandleImpl, MappedMemory, Result, Error, MemoryType, LOG_CAT, GpuAllocation, WeakHandle, Device, DeviceHandle, GpuAllocationDesc, GpuAddress, Format};

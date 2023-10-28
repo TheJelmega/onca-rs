@@ -1,5 +1,5 @@
 use std::{mem, num::NonZeroU32};
-use onca_core::{
+use onca_common::{
     prelude::*,
     utils::{self, is_flag_set}, io,
 };

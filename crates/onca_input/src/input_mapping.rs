@@ -1,13 +1,13 @@
 use core::{num::NonZeroU32, ops::BitOr};
 use std::sync::{Weak, Arc};
 
-use onca_core::{
+use onca_common::{
     prelude::*,
     time::DeltaTime,
     sync::Mutex,
     event_listener::*,
 };
-use onca_core_macros::flags;
+use onca_common_macros::flags;
 use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z};
 
 use crate::{AxisValue, AxisType, User, InputProcessContext, InputAxisId};

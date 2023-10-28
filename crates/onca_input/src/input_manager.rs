@@ -4,7 +4,7 @@ use core::{
 };
 use std::{collections::HashMap, sync::Arc};
 
-use onca_core::{
+use onca_common::{
     prelude::*,
     sync::{Mutex, RwLock},
     event_listener::EventListener,

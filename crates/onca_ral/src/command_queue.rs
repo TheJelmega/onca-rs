@@ -1,5 +1,5 @@
 use core::fmt;
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 
 use crate::{handle::{InterfaceHandle, create_ral_handle}, Handle, Result, CommandList, Error, CommandListSubmitInfo, api, HandleImpl, CommandListState};
 

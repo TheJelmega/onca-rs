@@ -1,4 +1,4 @@
-use onca_core::{prelude::*, utils};
+use onca_common::{prelude::*, utils};
 use crate::{os, Window, PhysicalSize};
 
 pub type OSMonitorHandle = os::MonitorHandle;

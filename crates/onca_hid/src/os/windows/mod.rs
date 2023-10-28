@@ -5,7 +5,7 @@ use core::{
     num::NonZeroU32,
     ptr::null_mut,
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     time::Duration,
 };

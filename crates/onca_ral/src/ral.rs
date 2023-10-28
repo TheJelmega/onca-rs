@@ -2,7 +2,7 @@ use core::{
     mem::{ManuallyDrop, MaybeUninit},
     fmt,
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     dynlib::DynLib,
     mem::MemoryManager,

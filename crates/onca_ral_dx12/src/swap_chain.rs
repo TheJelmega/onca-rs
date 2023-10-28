@@ -1,6 +1,6 @@
 use core::{ptr::null_mut, time::Duration};
 
-use onca_core::{prelude::*, sync::Mutex};
+use onca_common::{prelude::*, sync::Mutex};
 use onca_ral as ral;
 use ral::{FenceInterface, HandleImpl};
 use windows::{Win32::{Graphics::Dxgi::{*, Common::DXGI_SAMPLE_DESC}, Foundation::{RECT, POINT, FALSE}}, core::ComInterface};

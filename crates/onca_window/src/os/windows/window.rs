@@ -1,7 +1,7 @@
 use crate::*;
 use core::{ffi::c_void, mem, ptr::null_mut};
 use std::cell::Cell;
-use onca_core::{
+use onca_common::{
     prelude::*,
     sync::Mutex,
     sys::get_app_handle,

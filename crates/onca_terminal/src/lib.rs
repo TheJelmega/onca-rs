@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
     io::Write,
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     io,
 };

@@ -1,4 +1,4 @@
-use onca_core::time::Duration;
+use onca_common::time::Duration;
 
 use crate::{
     handle::{InterfaceHandle, HandleImpl, create_ral_handle},

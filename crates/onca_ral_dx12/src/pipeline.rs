@@ -1,6 +1,6 @@
 use core::{ffi::c_void, mem::ManuallyDrop};
 
-use onca_core::collections::ByteBuffer;
+use onca_common::collections::ByteBuffer;
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::Win32::Graphics::{

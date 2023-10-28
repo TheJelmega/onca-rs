@@ -1,5 +1,5 @@
 use core::num::NonZeroUsize;
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_logging::log_warning;
 
 use crate::{DeviceType, LOG_INPUT_CAT, DeviceTypeMatchSupport, DeviceHandle};

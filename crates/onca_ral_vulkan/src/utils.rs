@@ -1,4 +1,4 @@
-use onca_core::utils::is_flag_set;
+use onca_common::utils::is_flag_set;
 use onca_ral as ral;
 use ash::vk;
 

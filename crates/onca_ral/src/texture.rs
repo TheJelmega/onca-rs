@@ -5,11 +5,11 @@ use core::{
 };
 use std::collections::HashMap;
 
-use onca_core::{
+use onca_common::{
     sync::{RwLock, RwLockUpgradableReadGuard},
     prelude::*
 };
-use onca_core_macros::{flags, EnumDisplay};
+use onca_common_macros::{flags, EnumDisplay};
 
 use crate::{*, handle::{InterfaceHandle, create_ral_handle}};
 

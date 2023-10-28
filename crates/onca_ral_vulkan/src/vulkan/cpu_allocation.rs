@@ -1,7 +1,7 @@
 use core::{ptr::null_mut, ffi::c_void, mem::ManuallyDrop};
 use std::{collections::HashMap, sync::Arc, alloc::Layout, ptr::NonNull};
 
-use onca_core::{
+use onca_common::{
     prelude::*,
     mem::{AllocInitState, get_memory_manager},
     sync::Mutex

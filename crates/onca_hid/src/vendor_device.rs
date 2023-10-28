@@ -1,6 +1,6 @@
 use core::fmt;
 
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 
 use crate::hid_data::USB_VENDORS;
 

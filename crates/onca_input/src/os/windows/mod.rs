@@ -2,7 +2,7 @@ use core::{
     mem,
     ffi::c_void,
 };
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_hid as hid;
 use windows::Win32::{
     UI::{

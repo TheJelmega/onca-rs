@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-onca_core = { path = "../onca_core" }
+onca_common = { path = "../onca_common" }
 onca_parser_utils = { path = "../onca_parser_utils"}

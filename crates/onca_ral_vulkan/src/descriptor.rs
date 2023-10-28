@@ -1,7 +1,7 @@
 use core::mem::ManuallyDrop;
 use std::sync::{Weak, Arc};
 
-use onca_core::{prelude::*, sync::Mutex};
+use onca_common::{prelude::*, sync::Mutex};
 use onca_ral as ral;
 use ash::{vk, extensions::ext};
 use ral::{HandleImpl, BufferInterface, GpuAddress};

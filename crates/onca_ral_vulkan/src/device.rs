@@ -1,8 +1,8 @@
 use core::mem::MaybeUninit;
 use std::sync::{Arc, Weak};
 
-use onca_core::{prelude::*, strings::ToString};
-use onca_core_macros::flags;
+use onca_common::{prelude::*, strings::ToString};
+use onca_common_macros::flags;
 use onca_ral as ral;
 use ash::{vk, extensions::ext};
 use ral::HandleImpl;

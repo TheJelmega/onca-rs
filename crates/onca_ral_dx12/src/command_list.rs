@@ -1,6 +1,6 @@
 use core::mem::{ManuallyDrop, MaybeUninit};
 
-use onca_core::{prelude::*, sync::RwLock};
+use onca_common::{prelude::*, sync::RwLock};
 use onca_ral as ral;
 use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl};
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};

@@ -3,7 +3,7 @@ use std::sync::{Weak, Arc};
 
 use cfg_if::cfg_if;
 
-use onca_core::{collections::BitSet, prelude::*,};
+use onca_common::{collections::BitSet, prelude::*,};
 use onca_ral as ral;
 use ash::{vk, extensions::khr};
 use ral::{HandleImpl, CommandQueueHandle};

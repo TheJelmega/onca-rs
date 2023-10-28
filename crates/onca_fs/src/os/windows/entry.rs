@@ -3,7 +3,7 @@ use std::{
     ptr::null_mut,
     ffi::c_void, num::NonZeroU32
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     io, utils::{self, is_flag_set},
 };

@@ -6,7 +6,7 @@ use core::{
 };
 use std::{sync::Arc, sync::Weak};
 
-use onca_core::{
+use onca_common::{
     prelude::*
 };
 

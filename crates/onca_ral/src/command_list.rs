@@ -58,11 +58,11 @@
 
 use core::sync::atomic::{AtomicBool, self};
 
-use onca_core::{
+use onca_common::{
     prelude::*,
     sync::{RwLock, Mutex}
 };
-use onca_core_macros::flags;
+use onca_common_macros::flags;
 
 use crate::{
     handle::{InterfaceHandle, HandleImpl},

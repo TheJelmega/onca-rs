@@ -1,5 +1,5 @@
 use core::fmt;
-use onca_core::{
+use onca_common::{
     prelude::*,
     collections::BitSet,
     sync::{Mutex, RwLock},

@@ -1,6 +1,6 @@
 use std::sync::{Weak, Arc};
 
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_ral as ral;
 use ash::vk;
 use ral::HandleImpl;

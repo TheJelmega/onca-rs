@@ -9,7 +9,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-onca_core = { path = "../onca_core" }
+onca_common = { path = "../onca_common" }
 onca_logging = { path = "../onca_logging" }
 onca_ral = { path = "../onca_ral" }
 

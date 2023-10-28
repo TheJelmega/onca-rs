@@ -2,7 +2,7 @@
 
 use core::fmt;
 use std::collections::HashMap;
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_parser_utils::{str_parser::*, ParserError};
 
 /// TOML parsing error

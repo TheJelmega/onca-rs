@@ -1,5 +1,5 @@
 use core:: mem;
-use onca_core::utils::is_flag_set;
+use onca_common::utils::is_flag_set;
 use onca_logging::log_error;
 use windows::Win32::{
     UI::{

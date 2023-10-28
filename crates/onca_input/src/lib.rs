@@ -20,7 +20,7 @@ mod control_scheme;
 pub use control_scheme::*;
 
 mod user;
-use onca_core::{prelude::*, sync::Mutex};
+use onca_common::{prelude::*, sync::Mutex};
 pub use user::*;
 
 use onca_logging::LogCategory;

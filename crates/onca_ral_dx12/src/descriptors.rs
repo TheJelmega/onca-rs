@@ -1,6 +1,6 @@
 use core::{sync::atomic::{AtomicU16, Ordering}, cell::Cell};
 
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::Win32::Graphics::{Direct3D12::*, Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R32_TYPELESS}};

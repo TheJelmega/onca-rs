@@ -1,4 +1,4 @@
-use onca_core::{
+use onca_common::{
     prelude::*,
     alloc::{get_active_alloc},
     sys::is_on_main_thread, sync::Mutex, event_listener::{EventListenerArray, EventListenerRef, EventListener},

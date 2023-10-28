@@ -1,4 +1,4 @@
-use onca_core::io;
+use onca_common::io;
 use windows::Win32::{
     Foundation::HANDLE, 
     System::Console::{

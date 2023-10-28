@@ -7,9 +7,9 @@ use core::{
 	ops::{self, RangeInclusive, RangeBounds},
 };
 
-use onca_core::time::Duration;
+use onca_common::time::Duration;
 
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_logging::{LogCategory, log_warning};
 
 mod os;

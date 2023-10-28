@@ -1,4 +1,4 @@
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_logging::log_error;
 use onca_ral::{Settings, Interface};
 use windows::Win32::Graphics::Dxgi::*;

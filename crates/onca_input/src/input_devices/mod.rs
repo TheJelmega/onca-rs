@@ -1,5 +1,5 @@
 use core::fmt;
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_hid as hid;
 use crate::{os, AxisValue, AxisType};
 

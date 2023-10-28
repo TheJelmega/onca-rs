@@ -1,4 +1,4 @@
-use onca_core::prelude::*;
+use onca_common::prelude::*;
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::Win32::{
@@ -34,7 +34,7 @@ impl ral::FenceInterface for Fence {
         self.fence.Signal(value).map_err(|err| err.to_ral_error())
     }
 
-    unsafe fn wait(&self, value: u64, timeout: onca_core::time::Duration) -> ral::Result<bool> {
+    unsafe fn wait(&self, value: u64, timeout: onca_common::time::Duration) -> ral::Result<bool> {
         self.fence.SetEventOnCompletion(value, self.event).map_err(|err| err.to_ral_error())?;
         match WaitForSingleObject(self.event, timeout.as_millis() as u32){
             WAIT_FAILED => Err(ral::Error::Other(GetLastError().unwrap_err().to_string())),
@@ -43,7 +43,7 @@ impl ral::FenceInterface for Fence {
         }
     }
 
-    unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: onca_core::time::Duration) -> ral::Result<bool> {
+    unsafe fn wait_multiple(&self, fences: &[(ral::Handle<ral::Fence>, u64)], wait_for_all: bool, timeout: onca_common::time::Duration) -> ral::Result<bool> {
         scoped_alloc!(AllocId::TlsTemp);
 
         let mut events = Vec::with_capacity(fences.len());

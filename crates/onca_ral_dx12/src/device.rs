@@ -1,7 +1,7 @@
 use core::{mem::MaybeUninit, sync::atomic::AtomicU64};
 use std::sync::Arc;
 
-use onca_core::{utils::EnumCountT, prelude::*};
+use onca_common::{utils::EnumCountT, prelude::*};
 use onca_ral as ral;
 
 use ral::constants::{MAX_RENDER_TARGET_VIEWS, MAX_DEPTH_STENCIL_VIEWS};

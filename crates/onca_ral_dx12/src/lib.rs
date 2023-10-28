@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 
-use onca_core::{
+use onca_common::{
 	prelude::*,
 	mem::{MemoryManager, set_memory_manager}, alloc::OncaGlobalAlloc,
 };

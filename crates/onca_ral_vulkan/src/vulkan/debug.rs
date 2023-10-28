@@ -4,7 +4,7 @@ use std::{
     fmt::Write,
 };
 
-use onca_core::{
+use onca_common::{
     prelude::*
 };
 use onca_logging::{get_logger, LogCategory, LogLevel, log_location};

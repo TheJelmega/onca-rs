@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
-use onca_core::{prelude::*, io};
-use onca_core_macros::{flags, EnumFromIndex};
+use onca_common::{prelude::*, io};
+use onca_common_macros::{flags, EnumFromIndex};
 
 use crate::{PathBuf, os::os_imp, Path};
 

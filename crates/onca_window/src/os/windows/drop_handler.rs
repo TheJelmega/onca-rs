@@ -1,5 +1,5 @@
 use core::ffi::c_void;
-use onca_core::{
+use onca_common::{
     prelude::*,
     alloc::ScopedAlloc,
 };

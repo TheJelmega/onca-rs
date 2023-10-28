@@ -2,7 +2,7 @@ use std::{
     mem,
     fmt::Write, collections::HashMap,
 };
-use onca_core::{
+use onca_common::{
     prelude::*,
     sys::get_app_handle,
 };
