@@ -598,7 +598,7 @@ pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<I
             Err(err) => if err.code().0 as u32 == ERROR_IO_PENDING.0 {
                 true
             } else {
-                unsafe { CancelIoEx(handle, Some(overlapped)) };
+                _ = unsafe { CancelIoEx(handle, Some(overlapped)) };
                 log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report ({err})");
                 return Err(());
             },
@@ -645,7 +645,7 @@ pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Re
         // Wait for about a second, if we failed writing at that point, we fail
         let res = unsafe { WaitForSingleObject(event, 1000) };
         if res != WAIT_OBJECT_0 {
-            unsafe { CancelIoEx(handle, Some(overlapped)) };
+            _ = unsafe { CancelIoEx(handle, Some(overlapped)) };
             log_error!(LOG_HID_CAT, write_output_report, "Timout while writing output report (error: {:X})", res.0);
             return Err(report);
         }
