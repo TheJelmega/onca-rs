@@ -84,10 +84,10 @@ impl<T: Real> Ray<T> {
     }
 }
 
-impl<T: Real> ApproxEq for Ray<T> {
-    type Epsilon = T;
+impl<T: Real> ApproxEq<T> for Ray<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.orig.is_close_to(rhs.orig, epsilon) &&
         self.min_t.is_close_to(rhs.min_t, epsilon) &&
         self.dir.is_close_to(rhs.dir, epsilon) &&
@@ -193,10 +193,10 @@ impl<T: Real> Ray2D<T> {
     }
 }
 
-impl<T: Real> ApproxEq for Ray2D<T> {
-    type Epsilon = T;
+impl<T: Real> ApproxEq<T> for Ray2D<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.orig.is_close_to(rhs.orig, epsilon) &&
         self.min_t.is_close_to(rhs.min_t, epsilon) &&
         self.dir.is_close_to(rhs.dir, epsilon) &&

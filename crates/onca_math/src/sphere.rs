@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec3, ApproxEq, Real};
+use crate::{Numeric, Vec3, ApproxEq, Real, Lerp, NumericCast};
 
 /// 2D sphere
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -13,8 +13,10 @@ impl<T: Numeric> Sphere<T> {
     /// Get the volume of the sphere
     #[inline]
     #[must_use]
-    pub fn volume(self) -> T {
-        T::from_i32(4) * self.radius * self.radius * self.radius * T::PI / T::from_i32(3)
+    pub fn volume(self) -> T where
+        i32: NumericCast<T>
+    {
+        4.cast() * self.radius * self.radius * self.radius * T::PI / 3.cast()
     }
 
     /// Check if the sphere fully contains another sphere
@@ -32,7 +34,7 @@ impl<T: Numeric> Sphere<T> {
         self.center.dist_sq(point) <= self.radius * self.radius
     }
 
-    // TODO(jel): should we distiguish between overlap and touching?
+    // TODO: should we distiguish between overlap and touching?
     #[inline]
     #[must_use]
     /// Check if 2 spheres overlap
@@ -61,10 +63,13 @@ impl<T: Numeric> Sphere<T> {
 }
 
 impl<T: Real> Sphere<T> {
-    // TODO(jel): is there a way of doing this regardless of whether the number is an integer or real number
+    // TODO: is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest sphere fitting both spheres
     #[inline]
-    pub fn merge(self, other: Self) -> Self {
+    pub fn merge(self, other: Self) -> Self where
+        f32: NumericCast<T>,
+        i32: NumericCast<T>
+    {
         let dist = self.center.dist(other.center);
 
         // early exit if 1 of the spheres fits into the other
@@ -75,19 +80,19 @@ impl<T: Real> Sphere<T> {
         }
 
         let diam = dist + self.radius + other.radius;
-        let radius = diam / T::from_i32(2);
+        let radius = diam / 2.cast();
 
-        let theta = T::from_f32(0.5) + (other.radius - self.radius) / (dist * T::from_f32(2f32));
+        let theta = 0.5.cast() + (other.radius - self.radius) / (dist * 2.cast());
         let center = self.center.lerp(other.center, theta);
 
         Self { center, radius }
     }
 }
 
-impl<T: Numeric> ApproxEq for Sphere<T> {
-    type Epsilon = T;
+impl<T: Numeric> ApproxEq<T> for Sphere<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.center.is_close_to(rhs.center, epsilon) &&
         self.radius.is_close_to(rhs.radius, epsilon)
     }

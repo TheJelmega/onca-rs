@@ -1,7 +1,10 @@
-use std::{ops::{Mul, MulAssign}, fmt::Display};
+use std::{
+    ops::*,
+    fmt::Display
+};
 use crate::*;
 
-impl<T: Numeric> Vec4<T> {
+impl<T: Copy> Vec4<T> {
     /// Shrink a `Vec4` to a `Vec3`
     #[inline]
     #[must_use]
@@ -9,49 +12,18 @@ impl<T: Numeric> Vec4<T> {
         Vec3 { x: self.x, y: self.y, z: self.z }
     }
 
-    /// Check if all elements are approximately equal, given an epsilon
-    pub fn is_uniform(self, epsilon: T) -> bool {
-        self.x.abs_diff(self.y) <= epsilon &&
-        self.x.abs_diff(self.z) <= epsilon &&
-        self.x.abs_diff(self.w) <= epsilon 
-    }
-
     /// Check if the 4d vector represents a 3d vector (z-coord == 0)
-    pub fn represents_3d_vector(self) -> bool {
-        self.w == T::zero()
+    pub fn represents_3d_vector(self) -> bool where
+        T: ApproxZero
+    {
+        self.w.is_zero()
     }
 
     /// Check if the 4d vector represents a 3d point (z-coord == 1)
-    pub fn represents_3d_point(self) -> bool {
-        self.w == T::one()
-    }
-
-    /// Get the minimum component of the vector
-    pub fn min_component(self) -> T {
-        self.x.min(self.y)
-              .min(self.z)
-              .min(self.w)
-    }
-
-    /// Get the minimum absolute component of the vector
-    pub fn min_abs_component(self) -> T {
-        self.x.abs().min(self.y.abs())
-                    .min(self.z.abs())
-                    .min(self.w.abs())
-    }
-
-    /// Get the maximum component of the vector
-    pub fn max_component(self) -> T {
-        self.x.max(self.y)
-              .max(self.z)
-              .max(self.w)
-    }
-
-    /// Get the maximum absolute component of the vector
-    pub fn max_abs_component(self) -> T {
-        self.x.abs().max(self.y.abs())
-                    .max(self.z.abs())
-                    .max(self.w.abs())
+    pub fn represents_3d_point(self) -> bool where
+        T: One + ApproxEq
+    {
+        self.w.is_approx_eq(T::one())
     }
 }
 
@@ -680,7 +652,7 @@ mod tests {
 
         assert_eq!(Vec4::new(1.2f32, 1.6f32, 2.5f32, 3.9f32).snap(1f32), Vec4::new(1f32, 2f32, 3f32, 4f32));
 
-        assert_eq!(Vec4::new(-0.2f32, 0.4f32, 1.5f32, 1f32).saturated(), Vec4::new(0f32, 0.4f32, 1f32, 1f32));
+        assert_eq!(Vec4::new(-0.2f32, 0.4f32, 1.5f32, 1f32).saturate(), Vec4::new(0f32, 0.4f32, 1f32, 1f32));
 
         let v0 = Vec4::new(2f32, 3f32, 6f32, 11f32); // len == sqrt(170)
         let v1 = Vec4::new(1f32, 4f32, 8f32, 13f32); // len == sqrt(250)

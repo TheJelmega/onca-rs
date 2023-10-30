@@ -1,7 +1,23 @@
-use std::{ops::{Mul, MulAssign}, fmt::Display};
+use std::{
+    ops::*,
+    fmt::Display
+};
 use crate::*;
 
-impl<T: Numeric> Vec2<T> {
+generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, x, y;
+    i8v2  => i8
+    i16v2 => i16
+    i32v2 => i32
+    i64v2 => i64
+    u8v2  => u8
+    u16v2 => u16
+    u32v2 => u32
+    u64v2 => u64
+    f32v2 => f32
+    f64v2 => f64
+}
+
+impl<T: Copy> Vec2<T> {
     /// Extend a `Vec2` to a `Vec3`
     #[inline]
     #[must_use]
@@ -9,39 +25,16 @@ impl<T: Numeric> Vec2<T> {
         Vec3 { x: self.x, y: self.y, z }
     }
 
-    /// Check if all elements are approximately equal, given an epsilon
-    pub fn is_uniform(self, epsilon: T) -> bool {
-        self.x.abs_diff(self.y) <= epsilon
-    }
-
-    /// Get the minimum component of the vector
-    pub fn min_component(self) -> T {
-        self.x.min(self.y)
-    }
-
-    /// Get the minimum absolute component of the vector
-    pub fn min_abs_component(self) -> T {
-        self.x.abs().min(self.y.abs())
-    }
-
-    /// Get the maximum component of the vector
-    pub fn max_component(self) -> T {
-        self.x.max(self.y)
-    }
-
-    /// Get the maximum absolute component of the vector
-    pub fn max_abs_component(self) -> T {
-        self.x.abs().max(self.y.abs())
-    }
-
     /// Calculate the 1D cross product of 2 vectors
     #[inline]
-    pub fn cross(self, rhs: Self) -> T {
+    pub fn cross(self, rhs: Self) -> T where
+        T: Sub<Output = T> + Mul<Output = T>
+    {
         self.x * rhs.y - self.y * rhs.x
     }
 }
 
-impl<T: Signed> Vec2<T> {
+impl<T: Copy + Neg<Output = T>> Vec2<T> {
     /// Get a vector that's perpendicular to the vector, rotated clockwise
     #[inline]
     pub fn perpendicular_cw(self) -> Self {
@@ -63,28 +56,36 @@ impl<T: Real> Vec2<T> {
     }
 
     //// Rotate the vector by a given angle
-    pub fn rotate(self, angle: Radians<T>) -> Self {
+    pub fn rotate(self, angle: Radians<T>) -> Self where
+        Radians<T>: Trig<Output = T>
+    {
         let (sin, cos) = angle.sin_cos();
         Vec2 { x: self.x * cos - self.y * sin, y: self.x * sin + self.y * cos }
     }
 
     /// Get the angle the vector makes (with the x-axis)
-    pub fn angle(self) -> T {
+    pub fn angle(self) -> Radians<T> where
+        Radians<T>: Zero + InvTrig<T>
+    {
         if self.x.is_zero() && self.y.is_zero() {
-            T::zero()
+            Radians::zero()
         } else {
-            T::atan2(self.y, self.x)
+            Radians::atan2(self.y, self.x)
         }
     }
 
     /// Find the shortest angle with another vector 
-    pub fn angle_with(self, other: Self) -> T {
+    pub fn angle_with(self, other: Self) -> Radians<T> where
+        Radians<T>: InvTrig<T>
+    {
         let acos = self.dot(other) / (self.len() * other.len());
-        T::acos(acos)
+        Radians::acos(acos)
     }
 
     /// Find the shortest angle with another vector, where the given vectors are normalized (avoid division by the product of the lengths)
-    pub fn angle_with_normalized(self, other: Self) -> Radians<T> {
+    pub fn angle_with_normalized(self, other: Self) -> Radians<T> where
+        Radians<T>: InvTrig<T>
+    {
         debug_assert!(self.is_normalized());
         debug_assert!(other.is_normalized());
         let acos = self.dot(other);
@@ -92,7 +93,9 @@ impl<T: Real> Vec2<T> {
     }
 
     /// Find the angle with another vector, respecting the order of the vectors
-    pub fn angle_with_full(self, other: Self) -> Radians<T> {
+    pub fn angle_with_full(self, other: Self) -> Radians<T> where
+        Radians<T>: InvTrig<T>
+    {
         let acos = self.dot(other) / (self.len() * other.len());
         let angle = Radians::acos(acos);
         let cross = self.cross(other);
@@ -100,7 +103,9 @@ impl<T: Real> Vec2<T> {
     }
 
     /// Find the angle with another vector, respecting the order of the vectors (avoid division by the product of the lengths)
-    pub fn angle_with_full_normalized(self, other: Self) -> Radians<T> {
+    pub fn angle_with_full_normalized(self, other: Self) -> Radians<T> where
+        Radians<T>: InvTrig<T>
+    {
         debug_assert!(self.is_normalized());
         debug_assert!(other.is_normalized());
         let acos = self.dot(other);
@@ -115,9 +120,11 @@ impl<T: Real> Vec2<T> {
     }
 
     /// Reflect a vector on a 'surface' with a normal
-    pub fn reflect(self, normal: Self) -> Self {
+    pub fn reflect(self, normal: Self) -> Self where
+        i32: NumericCast<T>
+    {
         debug_assert!(normal.is_normalized());
-        self - normal * self.dot(normal) * T::from_f32(2f32)
+        self - normal * self.dot(normal) * 2.cast()
     }
 
     /// Refract the vector through a `surface` with a given `normal` and `eta` (ratio of indices of refraction at the surface interface (outgoing / ingoing))
@@ -171,22 +178,11 @@ impl<T: Numeric> Vec2<T> {
 
 // Constants
 impl<T: Signed> Vec2<T> {
-    fn left()  -> Self { Self{ x:  T::one() , y:  T::zero() } }
-    fn right() -> Self { Self{ x: -T::one() , y:  T::zero() } }
-    fn up()    -> Self { Self{ x:  T::zero(), y:  T::one()  } }
-    fn down()  -> Self { Self{ x:  T::zero(), y: -T::one()  } }
+    pub fn left()  -> Self { Self{ x:  T::one() , y:  T::zero() } }
+    pub fn right() -> Self { Self{ x: -T::one() , y:  T::zero() } }
+    pub fn up()    -> Self { Self{ x:  T::zero(), y:  T::one()  } }
+    pub fn down()  -> Self { Self{ x:  T::zero(), y: -T::one()  } }
 }
-
-#[allow(non_camel_case_types)] pub type i8v2  = Vec2<i8>;
-#[allow(non_camel_case_types)] pub type i16v2 = Vec2<i16>;
-#[allow(non_camel_case_types)] pub type i32v2 = Vec2<i32>;
-#[allow(non_camel_case_types)] pub type i64v2 = Vec2<i64>;
-#[allow(non_camel_case_types)] pub type u8v2  = Vec2<u8>;
-#[allow(non_camel_case_types)] pub type u16v2 = Vec2<u16>;
-#[allow(non_camel_case_types)] pub type u32v2 = Vec2<u32>;
-#[allow(non_camel_case_types)] pub type u64v2 = Vec2<u64>;
-#[allow(non_camel_case_types)] pub type f32v2 = Vec2<f32>;
-#[allow(non_camel_case_types)] pub type f64v2 = Vec2<f64>;
 
 #[cfg(test)]
 mod tests {
@@ -358,7 +354,7 @@ mod tests {
 
         assert_eq!(Vec2::new(1.2f32, 1.6f32).snap(1f32), Vec2::new(1f32, 2f32));
 
-        assert_eq!(Vec2::new(-0.2f32, 1.5f32).saturated(), Vec2::new(0f32, 1f32));
+        assert_eq!(Vec2::new(-0.2f32, 1.5f32).saturate(), Vec2::new(0f32, 1f32));
 
         let v0 = Vec2::new(3f32, 4f32); // len == 5
         let v1 = Vec2::new(5f32, 12f32); // len == 13

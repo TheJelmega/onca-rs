@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec2, ApproxEq, Real};
+use crate::{Numeric, Vec2, ApproxEq, Real, Lerp, NumericCast};
 
 /// 2D circle
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -64,7 +64,9 @@ impl<T: Real> Circle<T> {
     // TODO(jel): is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest circle fitting both circles
     #[must_use]
-    pub fn merge(self, other: Self) -> Self {
+    pub fn merge(self, other: Self) -> Self where
+        f32: NumericCast<T>
+    {
         let dist = self.center.dist(other.center);
 
         // early exit if 1 of the circles fits into the other
@@ -75,19 +77,19 @@ impl<T: Real> Circle<T> {
         }
 
         let diam = dist + self.radius + other.radius;
-        let radius = diam / T::from_i32(2);
+        let radius = diam / 2.0.cast();
 
-        let theta = T::from_f32(0.5) + (other.radius - self.radius) / (dist * T::from_f32(2f32));
+        let theta = 0.5.cast() + (other.radius - self.radius) / 0.5.cast();
         let center = self.center.lerp(other.center, theta);
 
         Self { center, radius }
     }
 }
 
-impl<T: Numeric> ApproxEq for Circle<T> {
-    type Epsilon = T;
+impl<T: Numeric> ApproxEq<T> for Circle<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.center.is_close_to(rhs.center, epsilon) &&
         self.radius.is_close_to(rhs.radius, epsilon)
     }

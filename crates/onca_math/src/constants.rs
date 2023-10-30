@@ -1,9 +1,9 @@
-/// Trait that defines common math constants
+/// A trait that defines common math constants
 pub trait MathConsts {
 
     /// Minimum value
     const MIN : Self;
-    /// Vaximum value
+    /// Maximum value
     const MAX : Self;
 
     /// pi
@@ -72,7 +72,7 @@ pub trait MathRealConsts {
 }
 
 macro_rules! impl_math_constants {
-    {$($ty:ty),*} => {
+    {$($ty:ty)*} => {
         $(
             impl MathConsts for $ty {
                 const MIN               : $ty = <$ty>::MIN;
@@ -115,10 +115,10 @@ macro_rules! impl_math_constants {
         )*
     };
 }
-impl_math_constants!{ i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 }
+impl_math_constants!{ i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
 
 macro_rules! impl_math_real_constants {
-    ($($ty:ty),*) => {
+    ($($ty:ty)*) => {
         $(
             impl MathRealConsts for $ty {
                 const INF : $ty = <$ty>::INFINITY;
@@ -126,4 +126,4 @@ macro_rules! impl_math_real_constants {
         )*
     };
 }
-impl_math_real_constants!{f32, f64}
+impl_math_real_constants!{f32 f64}

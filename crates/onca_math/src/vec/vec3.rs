@@ -1,8 +1,11 @@
-use std::{ops::{Mul, MulAssign}, fmt::Display};
+use std::{
+    ops::*,
+    fmt::Display
+};
 use crate::*;
 
 
-impl<T: Numeric> Vec3<T> {
+impl<T: Copy> Vec3<T> {
     /// Extend a `Vec3` to a `Vec4`
     #[inline]
     #[must_use]
@@ -17,49 +20,25 @@ impl<T: Numeric> Vec3<T> {
         Vec2 { x: self.x, y: self.y }
     }
 
-    /// Check if all elements are approximately equal, given an epsilon
-    pub fn is_uniform(self, epsilon: T) -> bool {
-        self.x.abs_diff(self.y) <= epsilon &&
-        self.x.abs_diff(self.z) <= epsilon
-    }
-
     /// Check if the 3d vector represents a 2d vector (z-coord == 0)
-    pub fn represents_2d_vector(self) -> bool {
-        self.z == T::zero()
+    pub fn represents_2d_vector(self) -> bool where
+        T: ApproxZero
+    {
+        self.z.is_zero()
     }
 
     /// Check if the 3d vector represents a 2d point (z-coord == 1)
-    pub fn represents_2d_point(self) -> bool {
-        self.z == T::one()
-    }
-
-    /// Get the minimum component of the vector
-    pub fn min_component(self) -> T {
-        self.x.min(self.y)
-              .min(self.z)
-    }
-
-    /// Get the minimum absolute component of the vector
-    pub fn min_abs_component(self) -> T {
-        self.x.abs().min(self.y.abs())
-                    .min(self.z.abs())
-    }
-
-    /// Get the maximum component of the vector
-    pub fn max_component(self) -> T {
-        self.x.max(self.y)
-              .max(self.z)
-    }
-
-    /// Get the maximum absolute component of the vector
-    pub fn max_abs_component(self) -> T {
-        self.x.abs().max(self.y.abs())
-                    .max(self.z.abs())
+    pub fn represents_2d_point(self) -> bool where
+        T: One + ApproxEq
+    {
+        self.z.is_approx_eq(T::one())
     }
 
     /// Calculate the cross product of 2 vectors
     #[inline]
-    pub fn cross(self, rhs: Self) -> Self {
+    pub fn cross(self, rhs: Self) -> Self where
+        T: Sub<Output = T> + Mul<Output = T>
+    {
         Vec3 { x: self.y * rhs.z - self.z * rhs.y, 
                y: self.z * rhs.x - self.x * rhs.z, 
                z: self.x * rhs.y - self.y * rhs.x }
@@ -79,9 +58,11 @@ impl<T: Real> Vec3<T> {
     }
 
     /// Reflect a vector on a 'surface' with a normal
-    pub fn reflect(self, normal: Self) -> Self {
+    pub fn reflect(self, normal: Self) -> Self where
+        i32: NumericCast<T>
+    {
         debug_assert!(normal.is_normalized());
-        self - normal * self.dot(normal) * T::from_f32(2f32)
+        self - normal * self.dot(normal) * 2.cast()
     }
 
     /// Refract the vector through a `surface` with a given `normal` and `eta` (ratio of indices of refraction at the surface interface (outgoing / ingoing))
@@ -177,12 +158,12 @@ impl<T: Numeric> Vec3<T> {
 
 // Constants
 impl<T: Signed> Vec3<T> {
-    fn left()     -> Self { Self{ x:  T::one() , y:  T::zero(), z: T::zero() } }
-    fn right()    -> Self { Self{ x: -T::one() , y:  T::zero(), z: T::zero() } }
-    fn up()       -> Self { Self{ x:  T::zero(), y:  T::one() , z: T::zero() } }
-    fn down()     -> Self { Self{ x:  T::zero(), y: -T::one() , z: T::zero() } }
-    fn forward()  -> Self { Self{ x:  T::zero(), y:  T::zero(), z:  T::one()  } }
-    fn backward() -> Self { Self{ x:  T::zero(), y:  T::zero(), z: -T::one()  } }
+    pub fn left()     -> Self { Self{ x:  T::one() , y:  T::zero(), z: T::zero() } }
+    pub fn right()    -> Self { Self{ x: -T::one() , y:  T::zero(), z: T::zero() } }
+    pub fn up()       -> Self { Self{ x:  T::zero(), y:  T::one() , z: T::zero() } }
+    pub fn down()     -> Self { Self{ x:  T::zero(), y: -T::one() , z: T::zero() } }
+    pub fn forward()  -> Self { Self{ x:  T::zero(), y:  T::zero(), z:  T::one()  } }
+    pub fn backward() -> Self { Self{ x:  T::zero(), y:  T::zero(), z: -T::one()  } }
 }
 
 #[allow(non_camel_case_types)] pub type i8v3  = Vec3<i8>;
@@ -368,7 +349,6 @@ mod tests {
         assert!(!a.is_zero());
     }
 
-    
     #[test]
     fn test_common_funcs() {
         let a = Vec3::new(2, -3, 4);
@@ -391,7 +371,7 @@ mod tests {
 
         assert_eq!(Vec3::new(1.2f32, 1.6f32, 2.5f32).snap(1f32), Vec3::new(1f32, 2f32, 3f32));
 
-        assert_eq!(Vec3::new(-0.2f32, 0.4f32, 1.5f32).saturated(), Vec3::new(0f32, 0.4f32, 1f32));
+        assert_eq!(Vec3::new(-0.2f32, 0.4f32, 1.5f32).saturate(), Vec3::new(0f32, 0.4f32, 1f32));
 
         let v0 = Vec3::new(2f32, 3f32, 6f32); // len == 7
         let v1 = Vec3::new(1f32, 4f32, 8f32); // len == 9

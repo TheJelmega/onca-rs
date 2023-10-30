@@ -25,10 +25,10 @@ impl<T: Real> Plane<T> {
     }
 }
 
-impl<T: Real> ApproxEq for Plane<T> {
-    type Epsilon = T;
+impl<T: Real> ApproxEq<T> for Plane<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.normal.is_close_to(rhs.normal, epsilon) &&
         self.dist.is_close_to(rhs.dist, epsilon)
     }

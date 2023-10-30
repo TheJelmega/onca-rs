@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec2, ApproxEq};
+use crate::{Numeric, Vec2, ApproxEq, MinMax, NumericCast};
 
 /// 2D rectangle (can also be used as a 2D AABB)
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -20,26 +20,32 @@ impl<T: Numeric> Rect<T> {
     /// Get the center of the rect
     #[inline]
     #[must_use]
-    pub fn center(self) -> Vec2<T> {
-        (self.min + self.max) / T::from_i32(2)
+    pub fn center(self) -> Vec2<T> where
+        i32: NumericCast<T>
+    {
+        (self.min + self.max) / 2.cast()
     }
 
     /// Resize the rect around its center
     #[must_use]
-    pub fn resize(self, size: Vec2<T>) -> Self {
+    pub fn resize(self, size: Vec2<T>) -> Self where
+        i32: NumericCast<T>
+    {
         debug_assert!(size.x >= T::zero());
         debug_assert!(size.y >= T::zero());
 
         let center = self.center();
-        let half_size = size / T::from_i32(2);
+        let half_size = size / 2.cast();
         Self { min: center - half_size, max: center + half_size }
     }
 
     /// Recenter the rect
     #[inline]
     #[must_use]
-    pub fn recenter(self, center: Vec2<T>) -> Self {
-        let half_size = self.size() / T::from_i32(2);
+    pub fn recenter(self, center: Vec2<T>) -> Self where
+        i32: NumericCast<T>
+    {
+        let half_size = self.size() / 2.cast();
         Self { min: center - half_size, max: center + half_size }
     }
 
@@ -88,7 +94,7 @@ impl<T: Numeric> Rect<T> {
         point.y <= self.max.y && point.y <= self.max.y
     }
 
-    // TODO(jel): should we distiguish between overlap and touching?
+    // TODO: should we distiguish between overlap and touching?
     /// Check if 2 rects overlap
     #[inline]
     #[must_use]
@@ -149,10 +155,10 @@ impl<T: Numeric> Rect<T> {
 }
 
 
-impl<T: Numeric> ApproxEq for Rect<T> {
-    type Epsilon = T;
+impl<T: Numeric> ApproxEq<T> for Rect<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.min.is_close_to(rhs.min, epsilon) &&
         self.max.is_close_to(rhs.max, epsilon)
     }

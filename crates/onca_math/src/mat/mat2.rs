@@ -120,7 +120,7 @@ impl<T: Real> Mat2<T> {
         if det.is_zero() {
             Self::zero()
         } else {
-            self.adjugate() * det.rcp()
+            self.adjugate() * det.recip()
         }
     }
 
@@ -133,7 +133,9 @@ impl<T: Real> Mat2<T> {
     }
 
     /// Decompose the matrix into a 2D scale and rotation
-    fn decompose(self) -> (Vec2<T>, Radians<T>) {
+    fn decompose(self) -> (Vec2<T>, Radians<T>) where
+        Radians<T>: InvTrig<T>
+    {
         let scale = Vec2::new(self.column(0).len(), self.column(1).len());
         let angle = Radians::acos(self[0] / scale.x);
 
@@ -155,7 +157,9 @@ impl<T: Real> Mat2<T> {
     }
 
     /// Create a 2d rotation matrix
-    pub fn create_rotation(angle: Radians<T>) -> Self {
+    pub fn create_rotation(angle: Radians<T>) -> Self where
+        Radians<T>: Trig<Output = T>
+    {
         let (sin, cos) = angle.sin_cos();
 
         Self { vals: [cos , -sin,
@@ -164,7 +168,9 @@ impl<T: Real> Mat2<T> {
 
 
     /// Create a 2d transformation matrix
-    pub fn create_transform(scale: Vec2<T>, angle: Radians<T>) -> Self {
+    pub fn create_transform(scale: Vec2<T>, angle: Radians<T>) -> Self where
+        Radians<T>: Trig<Output = T>
+    {
         let (sin, cos) = angle.sin_cos();
 
         Self { vals: [scale.x * cos, scale.y * -sin,

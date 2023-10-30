@@ -1,7 +1,4 @@
-use core::{
-    mem,
-    ops::*,
-};
+use std::ops::*;
 use crate::{
     numeric::*,
     smoothstep_interpolant,
@@ -17,104 +14,90 @@ pub use vec3::*;
 mod vec4;
 pub use vec4::*;
 
-macro_rules! strip_plus {
-    (+ $($rest:tt)*) => {
-        $($rest)*
-    };
-}
-
 macro_rules! generic_vec {
     {
         $docs:meta;
         $name:ident,
         $elem_cnt:literal,
-        $($field:ident),+
+        $($comp:ident),+;
+        $($alias_ty:ident => $base_ty:ty)*
     } => {
         #[$docs]
         #[derive(Clone, Copy, PartialEq, Debug)]
-        pub struct $name<T: Numeric> {
-            $(pub $field : T,)+
+        pub struct $name<T: Copy> {
+            $(pub $comp: T,)+
         }
 
-        impl<T: Numeric> $name<T> {
+        impl<T: Copy> $name<T> {
             /// Create a new vector
             #[inline(always)]
             #[must_use]
-            pub fn new($($field: T),+) -> Self {
-                Self{ $($field: $field),+ }
+            pub fn new($($comp: T),+) -> Self {
+                Self{ $($comp: $comp),+ }
             }
 
             /// Create a vector with all components set to `val`
             #[inline(always)]
             #[must_use]
             pub fn set(val: T) -> Self {
-                Self{ $($field: val),+ }
+                Self{ $($comp: val),+ }
             }
 
             /// Create a vector from an array
             #[inline(always)]
             #[must_use]
             pub fn from_array(arr: [T; $elem_cnt]) -> Self {
-                unsafe { mem::transmute_copy(&arr) }
+                unsafe { std::mem::transmute_copy(&arr) }
             }
 
             /// Interpret a reference to an array as a reference to a vector
             #[inline(always)]
             #[must_use]
             pub fn ref_from_array(arr: &[T; $elem_cnt]) -> &Self {
-                unsafe { mem::transmute(arr) }
+                unsafe { std::mem::transmute(arr) }
             }
 
             /// Interpret a mutable reference to an array as a mutable reference to a vector
             #[inline(always)]
             #[must_use]
             pub fn mut_from_array(arr: &mut [T; $elem_cnt]) -> &mut Self {
-                unsafe { mem::transmute(arr) }
+                unsafe { std::mem::transmute(arr) }
             }
 
             /// Get the content of the vector as an array
             #[inline(always)]
             #[must_use]
             pub fn to_array(self) -> [T; $elem_cnt] {
-                unsafe{ mem::transmute_copy(&self) }
+                [$(self.$comp),*]
             }
         
             /// Interpret a reference to an vector as a reference to a array
             #[inline(always)]
             #[must_use]
             pub fn as_array(&self) -> &[T; $elem_cnt] {
-                unsafe{ mem::transmute(self) }
+                unsafe{ std::mem::transmute(self) }
             }
         
             /// Interpret a mutable reference to an vector as a mutable reference to a array
             #[inline(always)]
             #[must_use]
             pub fn as_mut_array(&mut self) -> &mut [T; $elem_cnt] {
-                unsafe{ mem::transmute(self) }
+                unsafe{ std::mem::transmute(self) }
             }
 
-            /// Get a vector with the component-wise minimum component of 2 vectors
-            pub fn min(self, other: Self) -> Self {
-                Self{ $($field: self.$field.min(other.$field)),+ }
-            }
-        
-            /// Get a vector with the component-wise maximum component of 2 vectors
-            pub fn max(self, other: Self) -> Self {
-                Self{ $($field: self.$field.max(other.$field)),+ }
-            }
+        //--------------------------------------------------------------
 
             /// Component-wise clamp of the vector, using scalar min and max
-            pub fn clamp_scalar(self, min: T, max: T) -> Self {
-                Self{ $($field: self.$field.clamp(min, max)),+ }
+            pub fn clamp_scalar(self, min: T, max: T) -> Self where
+                T: MinMax
+            {
+                Self{ $($comp: self.$comp.clamp(min, max)),+ }
             }
-
-            /// Component-wise clamp of the vector, using component-wise min and max
-            pub fn clamp(self, min: Self, max: Self) -> Self {
-                Self{ $($field: self.$field.clamp(min.$field, max.$field)),+ }
-            }
-
             /// Clamp the length of the vector
-            pub fn clamp_len(self, min: T, max: T) -> Self {
+            pub fn clamp_len(self, min: T, max: T) -> Self where
+                T: PartialOrd + Add<Output = T> + Mul<Output = T> + Div<Output = T> + Sqrt,
+                Self: Mul<T, Output = Self>
+            {
                 let len = self.len();
                 if len < min {
                     self * (min / len)
@@ -125,55 +108,57 @@ macro_rules! generic_vec {
                 }
             }
 
-            /// Clamp the components between 0 and 1
-            pub fn saturated(self) -> Self {
-                self.clamp_scalar(T::zero(), T::one())
-            }
-
-            /// Linearly interpolate between 2 vectors using `val`
-            pub fn lerp(self, other: Self, val: T) -> Self {
-                self + (other - self) * val
-            }
-
             /// Smoothstep between 2 vectors using `val`
-            pub fn smoothstep(self, other: Self, val: T) -> Self {
+            pub fn smoothstep(self, other: Self, val: T) -> Self where
+                Self: Lerp<T>,
+                T: PartialOrd + Sub<Output = T> + Mul<Output = T> + Zero + One,
+                i32: NumericCast<T>,
+            {
                 self.lerp(other, smoothstep_interpolant(val))
-            }
-
-            /// Snap each component to the nearest multiple of `step_size`
-            #[inline]
-            pub fn snap(self, step_size: T) -> Self {
-                Self{ $($field: self.$field.snap(step_size)),+ }
             }
 
             /// Calculate the dot product of 2 vectors
             #[inline]
-            pub fn dot(self, rhs: Self) -> T {
-                strip_plus!($(+ self.$field * rhs.$field)+)
+            pub fn dot(self, rhs: Self) -> T where
+                T: Add<Output = T> + Mul<Output = T>
+            {
+                crate::utils::strip_plus!($(+ self.$comp * rhs.$comp)+)
             }
 
             /// Calculate the square length of the vector
-            pub fn len_sq(self) -> T {
-                strip_plus!($(+ self.$field * self.$field)+)
+            pub fn len_sq(self) -> T where
+                T: Add<Output = T> + Mul<Output = T>
+            {
+                crate::utils::strip_plus!($(+ self.$comp * self.$comp)+)
             }
 
             /// Calculate the length of the vector
-            pub fn len(self) -> T {
+            pub fn len(self) -> T  where
+                T: Add<Output = T> + Mul<Output = T> + Sqrt
+            {
                 self.len_sq().sqrt()
             }
 
             /// Calculate the square distance between 2 vectors
-            pub fn dist_sq(self, other: Self) -> T {
+            pub fn dist_sq(self, other: Self) -> T where
+                T: Add<Output = T> + Mul<Output = T>,
+                Self: Sub<Output = Self>
+            {
                 (other - self).len_sq()
             }
 
             /// Calculate the distance between 2 vectors
-            pub fn dist(self, other: Self) -> T {
+            pub fn dist(self, other: Self) -> T where
+                T: Add<Output = T> + Mul<Output = T> + Sqrt,
+                Self: Sub<Output = Self>
+            {
                 self.dist_sq(other).sqrt()
             }
 
             /// Normalize the vector
-            pub fn normalize(self) -> Self {
+            pub fn normalize(self) -> Self where
+                T: Add<Output = T> + Mul<Output = T> + ApproxZero<T> + Rsqrt
+            {
                 if self.is_zero() {
                     self
                 } else {
@@ -182,12 +167,16 @@ macro_rules! generic_vec {
             }
 
             /// Normalize the vector (no check for a length of 0)
-            pub unsafe fn normalize_unsafe(self) -> Self {
+            pub unsafe fn normalize_unsafe(self) -> Self  where
+                T: Add<Output = T> + Mul<Output = T> + Rsqrt
+            {
                 self * self.len_sq().rsqrt()
             }
 
             /// Normalize the vector if the length is not 0, return `or` otherwise
-            pub fn normalize_or(self, or: Self) -> Self {
+            pub fn normalize_or(self, or: Self) -> Self  where
+                T: Add<Output = T> + Mul<Output = T> + ApproxZero<T> + Rsqrt
+            {
                 if self.is_zero() {
                     or
                 } else {
@@ -196,62 +185,39 @@ macro_rules! generic_vec {
             }
 
             /// Check if the vector is close to being normalized, using a given epsilon, which defines the max difference `len` can be relative to 1
-            pub fn is_close_to_normalized(self, epsilon: T) -> bool {
+            pub fn is_close_to_normalized(self, epsilon: T) -> bool where
+                T: Add<Output = T> + Mul<Output = T> + One + ApproxEq
+            {
                 self.len_sq().is_close_to(T::one(), epsilon)
             }
 
             /// Ckeck if the vector is normalized, using the machine epsilon
-            pub fn is_normalized(self) -> bool {
+            pub fn is_normalized(self) -> bool where
+                T: Add<Output = T> + Mul<Output = T> + One + ApproxEq
+            {
                 self.len_sq().is_approx_eq(T::one())
             }
 
             /// Get the direction and length of the vector
-            pub fn dir_and_len(self) -> (Self, T) {
+            pub fn dir_and_len(self) -> (Self, T) where
+                T: Add<Output = T> + Mul<Output = T> + Sqrt + Recip
+            {
                 let len = self.len();
-                (self * len.rcp(), len)
+                (self * len.recip(), len)
             }
 
-            /// Get a vector the component-wise absolute values
-            #[inline]
-            pub fn abs(self) -> Self {
-                Self{ $($field: self.$field.abs()),+ }
-            }
-
-            /// Get a vector the component-wise signs
-            #[inline]
-            pub fn sign(self) -> Self {
-                Self{ $($field: self.$field.sign()),+ }
-            }
-
+            generic_vec!{ @first $($comp),* }
         }
 
         impl<T: Real> $name<T> {
-            /// Get a vector the component-wise ceiled values
-            #[inline]
-            pub fn ceil(self) -> Self {
-                Self{ $($field: self.$field.ceil()),+ }
-            }
-
-            /// Get a vector the component-wise floored values
-            #[inline]
-            pub fn floor(self) -> Self {
-                Self{ $($field: self.$field.floor()),+ }
-            }
-
-            /// Get a vector the component-wise round values
-            #[inline]
-            pub fn round(self) -> Self {
-                Self{ $($field: self.$field.round()),+ }
-            }
-
             /// Get a vector the component-wise fractional parts
             #[inline]
             pub fn fract(self) -> Self {
-                Self{ $($field: self.$field.fract()),+ }
+                Self{ $($comp: self.$comp.fract()),+ }
             }
         }
 
-        impl<T: Numeric> Index<usize> for $name<T> {
+        impl<T: Copy> Index<usize> for $name<T> {
             type Output = T;
         
             #[inline(always)]
@@ -261,7 +227,7 @@ macro_rules! generic_vec {
             }
         }
         
-        impl<T: Numeric> IndexMut<usize> for $name<T> {
+        impl<T: Copy> IndexMut<usize> for $name<T> {
             #[inline(always)]
             fn index_mut(&mut self, index: usize) -> &mut Self::Output {
                 debug_assert!(index < $elem_cnt);
@@ -269,423 +235,570 @@ macro_rules! generic_vec {
             }
         }
 
-        impl<T: Numeric> Zero for $name<T> {
+        impl<T: Zero> Zero for $name<T> {
             fn zero() -> Self {
-                Self{ $($field: T::zero()),+ }
+                Self{ $($comp: T::zero()),+ }
             }
         }
 
-        impl<T: Numeric> One for $name<T> {
+        impl<T: One> One for $name<T> {
             fn one() -> Self {
-                Self{ $($field: T::one()),+ }
+                Self{ $($comp: T::one()),+ }
             }
         }
 
         //------------------------------------------------------------------------------------------------------------------------------
 
-        impl<T: Numeric> Add for $name<T> {
+        impl<T: Copy + Add<Output = T>> Add for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn add(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field + rhs.$field),+ }
+                Self{ $($comp: self.$comp + rhs.$comp),+ }
             }
         }
 
-        impl<T: Numeric> AddAssign for $name<T> {
+        impl<T: Copy + AddAssign> AddAssign for $name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
-                $(self.$field += rhs.$field);+
+                $(self.$comp += rhs.$comp);+
             }
         }
 
-        impl<T: Numeric> Add<T> for $name<T> {
+        impl<T: Copy + Add<Output = T>> Add<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn add(self, rhs: T) -> Self {
-                Self{ $($field: self.$field + rhs),+ }
+                Self{ $($comp: self.$comp + rhs),+ }
             }
         }
 
-        impl<T: Numeric> AddAssign<T> for $name<T> {
+        impl<T: Copy + AddAssign> AddAssign<T> for $name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: T) {
-                $(self.$field += rhs);+
+                $(self.$comp += rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Numeric> Sub for $name<T> {
+        impl<T: Copy + Sub<Output = T>> Sub for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field - rhs.$field),+ }
+                Self{ $($comp: self.$comp - rhs.$comp),+ }
             }
         }
 
-        impl<T: Numeric> SubAssign for $name<T> {
+        impl<T: Copy + SubAssign> SubAssign for $name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
-                $(self.$field -= rhs.$field);+
+                $(self.$comp -= rhs.$comp);+
             }
         }
 
-        impl<T: Numeric> Sub<T> for $name<T> {
+        impl<T: Copy + Sub<Output = T>> Sub<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn sub(self, rhs: T) -> Self {
-                Self{ $($field: self.$field - rhs),+ }
+                Self{ $($comp: self.$comp - rhs),+ }
             }
         }
 
-        impl<T: Numeric> SubAssign<T> for $name<T> {
+        impl<T: Copy + SubAssign> SubAssign<T> for $name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: T) {
-                $(self.$field -= rhs);+
+                $(self.$comp -= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Numeric> Mul for $name<T> {
+        impl<T: Copy + Mul<Output = T>> Mul for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field * rhs.$field),+ }
+                Self{ $($comp: self.$comp * rhs.$comp),+ }
             }
         }
 
-        impl<T: Numeric> MulAssign for $name<T> {
+        impl<T: Copy + MulAssign> MulAssign for $name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
-                $(self.$field *= rhs.$field);+
+                $(self.$comp *= rhs.$comp);+
             }
         }
 
-        impl<T: Numeric> Mul<T> for $name<T> {
+        impl<T: Copy + Mul<Output = T>> Mul<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn mul(self, rhs: T) -> Self {
-                Self{ $($field: self.$field * rhs),+ }
+                Self{ $($comp: self.$comp * rhs),+ }
             }
         }
 
-        impl<T: Numeric> MulAssign<T> for $name<T> {
+        impl<T: Copy + MulAssign> MulAssign<T> for $name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: T) {
-                $(self.$field *= rhs);+
+                $(self.$comp *= rhs);+
             }
         }
 
-        impl Mul<$name<f32>> for f32 {
-            type Output = $name<f32>;
-        
-            fn mul(self, rhs: $name<f32>) -> Self::Output {
-                $name{ $($field: self * rhs.$field),+ }
-            }
-        }
-
-        impl Mul<$name<f64>> for f64 {
-            type Output = $name<f64>;
-        
-            fn mul(self, rhs: $name<f64>) -> Self::Output {
-                $name{ $($field: self * rhs.$field),+ }
-            }
-        }
+        // We can't implement pre-multipy genericly here, so `impl_vec_premul` is used instead
 
         //--------------------------------------------------------------
 
-        impl<T: Numeric> Div for $name<T> {
+        impl<T: Copy + Div<Output = T>> Div for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn div(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field / rhs.$field),+ }
+                Self{ $($comp: self.$comp / rhs.$comp),+ }
             }
         }
 
-        impl<T: Numeric> DivAssign for $name<T> {
+        impl<T: Copy + DivAssign> DivAssign for $name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
-                $(self.$field /= rhs.$field);+
+                $(self.$comp /= rhs.$comp);+
             }
         }
 
-        impl<T: Numeric> Div<T> for $name<T> {
+        impl<T: Copy + Div<Output = T>> Div<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn div(self, rhs: T) -> Self {
-                Self{ $($field: self.$field / rhs),+ }
+                Self{ $($comp: self.$comp / rhs),+ }
             }
         }
 
-        impl<T: Numeric> DivAssign<T> for $name<T> {
+        impl<T: Copy + DivAssign> DivAssign<T> for $name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: T) {
-                $(self.$field /= rhs);+
+                $(self.$comp /= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Numeric> Rem for $name<T> {
+        impl<T: Copy + Rem<Output = T>> Rem for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn rem(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field % rhs.$field),+ }
+                Self{ $($comp: self.$comp % rhs.$comp),+ }
             }
         }
 
-        impl<T: Numeric> RemAssign for $name<T> {
+        impl<T: Copy + RemAssign> RemAssign for $name<T> {
             #[inline(always)]
             fn rem_assign(&mut self, rhs: Self) {
-                $(self.$field %= rhs.$field);+
+                $(self.$comp %= rhs.$comp);+
             }
         }
 
-        impl<T: Numeric> Rem<T> for $name<T> {
+        impl<T: Copy + Rem<Output = T>> Rem<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn rem(self, rhs: T) -> Self {
-                Self{ $($field: self.$field % rhs),+ }
+                Self{ $($comp: self.$comp % rhs),+ }
             }
         }
 
-        impl<T: Numeric> RemAssign<T> for $name<T> {
+        impl<T: Copy + RemAssign> RemAssign<T> for $name<T> {
             #[inline(always)]
             fn rem_assign(&mut self, rhs: T) {
-                $(self.$field %= rhs);+
+                $(self.$comp %= rhs);+
             }
         }
 
         //------------------------------------------------------------------------------------------------------------------------------
 
-        impl<T: Numeric + Neg<Output = T>> Neg for $name<T> {
+        impl<T: Copy + Neg<Output = T>> Neg for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn neg(self) -> Self {
-                Self{ $($field: -self.$field),+ }
+                Self{ $($comp: -self.$comp),+ }
             }
         }
 
-        impl<T: Integral> Not for $name<T> {
+        impl<T: Copy + Not<Output = T>> Not for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn not(self) -> Self {
-                Self{ $($field: !self.$field),+ }
+                Self{ $($comp: !self.$comp),+ }
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Integral> BitAnd for $name<T> {
+        impl<T: Copy + BitAnd<Output = T>> BitAnd for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitand(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field & rhs.$field),+ }
+                Self{ $($comp: self.$comp & rhs.$comp),+ }
             }
         }
 
-        impl<T: Integral> BitAndAssign for $name<T> {
+        impl<T: Copy + BitAndAssign> BitAndAssign for $name<T> {
             #[inline(always)]
             fn bitand_assign(&mut self, rhs: Self) {
-                $(self.$field &= rhs.$field);+
+                $(self.$comp &= rhs.$comp);+
             }
         }
 
-        impl<T: Integral> BitAnd<T> for $name<T> {
+        impl<T: Copy + BitAnd<Output = T>> BitAnd<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitand(self, rhs: T) -> Self {
-                Self{ $($field: self.$field & rhs),+ }
+                Self{ $($comp: self.$comp & rhs),+ }
             }
         }
 
-        impl<T: Integral> BitAndAssign<T> for $name<T> {
+        impl<T: Copy + BitAndAssign> BitAndAssign<T> for $name<T> {
             #[inline(always)]
             fn bitand_assign(&mut self, rhs: T) {
-                $(self.$field &= rhs);+
+                $(self.$comp &= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Integral> BitXor for $name<T> {
+        impl<T: Copy + BitXor<Output = T>> BitXor for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitxor(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field ^ rhs.$field),+ }
+                Self{ $($comp: self.$comp ^ rhs.$comp),+ }
             }
         }
 
-        impl<T: Integral> BitXorAssign for $name<T> {
+        impl<T: Copy + BitXorAssign> BitXorAssign for $name<T> {
             #[inline(always)]
             fn bitxor_assign(&mut self, rhs: Self) {
-                $(self.$field ^= rhs.$field);+
+                $(self.$comp ^= rhs.$comp);+
             }
         }
 
-        impl<T: Integral> BitXor<T> for $name<T> {
+        impl<T: Copy + BitXor<Output = T>> BitXor<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitxor(self, rhs: T) -> Self {
-                Self{ $($field: self.$field ^ rhs),+ }
+                Self{ $($comp: self.$comp ^ rhs),+ }
             }
         }
 
-        impl<T: Integral> BitXorAssign<T> for $name<T> {
+        impl<T: Copy + BitXorAssign> BitXorAssign<T> for $name<T> {
             #[inline(always)]
             fn bitxor_assign(&mut self, rhs: T) {
-                $(self.$field ^= rhs);+
+                $(self.$comp ^= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Integral> BitOr for $name<T> {
+        impl<T: Copy + BitOr<Output = T>> BitOr for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitor(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field | rhs.$field),+ }
+                Self{ $($comp: self.$comp | rhs.$comp),+ }
             }
         }
 
-        impl<T: Integral> BitOrAssign for $name<T> {
+        impl<T: Copy + BitOrAssign> BitOrAssign for $name<T> {
             #[inline(always)]
             fn bitor_assign(&mut self, rhs: Self) {
-                $(self.$field |= rhs.$field);+
+                $(self.$comp |= rhs.$comp);+
             }
         }
 
-        impl<T: Integral> BitOr<T> for $name<T> {
+        impl<T: Copy + BitOr<Output = T>> BitOr<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn bitor(self, rhs: T) -> Self {
-                Self{ $($field: self.$field | rhs),+ }
+                Self{ $($comp: self.$comp | rhs),+ }
             }
         }
 
-        impl<T: Integral> BitOrAssign<T> for $name<T> {
+        impl<T: Copy + BitOrAssign> BitOrAssign<T> for $name<T> {
             #[inline(always)]
             fn bitor_assign(&mut self, rhs: T) {
-                $(self.$field |= rhs);+
+                $(self.$comp |= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Integral> Shl for $name<T> {
+        impl<T: Copy + Shl<Output = T>> Shl for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn shl(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field << rhs.$field),+ }
+                Self{ $($comp: self.$comp << rhs.$comp),+ }
             }
         }
 
-        impl<T: Integral> ShlAssign for $name<T> {
+        impl<T: Copy + ShlAssign> ShlAssign for $name<T> {
             #[inline(always)]
             fn shl_assign(&mut self, rhs: Self) {
-                $(self.$field <<= rhs.$field);+
+                $(self.$comp <<= rhs.$comp);+
             }
         }
 
-        impl<T: Integral> Shl<T> for $name<T> {
+        impl<T: Copy + Shl<Output = T>> Shl<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn shl(self, rhs: T) -> Self {
-                Self{ $($field: self.$field << rhs),+ }
+                Self{ $($comp: self.$comp << rhs),+ }
             }
         }
 
-        impl<T: Integral> ShlAssign<T> for $name<T> {
+        impl<T: Copy + ShlAssign> ShlAssign<T> for $name<T> {
             #[inline(always)]
             fn shl_assign(&mut self, rhs: T) {
-                $(self.$field <<= rhs);+
+                $(self.$comp <<= rhs);+
             }
         }
 
         //--------------------------------------------------------------
 
-        impl<T: Integral> Shr for $name<T> {
+        impl<T: Copy + Shr<Output = T>> Shr for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn shr(self, rhs: Self) -> Self {
-                Self{ $($field: self.$field >> rhs.$field),+ }
+                Self{ $($comp: self.$comp >> rhs.$comp),+ }
             }
         }
 
-        impl<T: Integral> ShrAssign for $name<T> {
+        impl<T: Copy + ShrAssign> ShrAssign for $name<T> {
             #[inline(always)]
             fn shr_assign(&mut self, rhs: Self) {
-                $(self.$field >>= rhs.$field);+
+                $(self.$comp >>= rhs.$comp);+
             }
         }
 
-        impl<T: Integral> Shr<T> for $name<T> {
+        impl<T: Copy + Shr<Output = T>> Shr<T> for $name<T> {
             type Output = Self;
 
             #[inline(always)]
             fn shr(self, rhs: T) -> Self {
-                Self{ $($field: self.$field >> rhs),+ }
+                Self{ $($comp: self.$comp >> rhs),+ }
             }
         }
 
-        impl<T: Integral> ShrAssign<T> for $name<T> {
+        impl<T: Copy + ShrAssign> ShrAssign<T> for $name<T> {
             #[inline(always)]
             fn shr_assign(&mut self, rhs: T) {
-                $(self.$field >>= rhs);+
+                $(self.$comp >>= rhs);+
             }
         }
 
         //------------------------------------------------------------------------------------------------------------------------------
 
-        impl<T: Numeric> ApproxEq for $name<T> {
-            type Epsilon = T;
+        impl<T: MinMax> MinMax for $name<T> {
+            fn min(self, rhs: Self) -> Self {
+                Self { $($comp: self.$comp.min(rhs.$comp)),* }
+            }
 
-            fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
-                $(self.$field.is_close_to(rhs.$field, epsilon))||+
+            fn max(self, rhs: Self) -> Self {
+                Self { $($comp: self.$comp.max(rhs.$comp)),* }
+            }
+
+            fn clamp(self, min: Self, max: Self) -> Self {
+                Self { $($comp: self.$comp.clamp(min.$comp, max.$comp)),* }
+            }
+        }
+
+        impl<T: Saturate> Saturate for $name<T> {
+            fn saturate(self) -> Self {
+                Self { $($comp: self.$comp.saturate()),* }
+            }
+        }
+
+        impl<T: Abs> Abs for $name<T> {
+            fn abs(self) -> Self {
+                Self { $($comp: self.$comp.abs()),* }
             }
         }
         
+        impl<T: AbsDiff> AbsDiff for $name<T> {
+            type Output = $name<<T as AbsDiff>::Output>;
+
+            fn abs_diff(self, rhs: Self) -> Self::Output {
+                $name { $($comp: self.$comp.abs_diff(rhs.$comp)),* }
+            }
+        }
+
+        impl<T: Sign> Sign for $name<T> {
+            fn sign(self) -> Self {
+                Self { $($comp: self.$comp.sign()),* }
+            }
+        }
+
+        impl<T: Sqrt> Sqrt for $name<T> {
+            fn sqrt(self) -> Self {
+                Self { $($comp: self.$comp.sqrt()),* }
+            }
+        }
+
+        impl<T: Rsqrt> Rsqrt for $name<T> {
+            fn rsqrt(self) -> Self {
+                Self { $($comp: self.$comp.rsqrt()),* }
+            }
+        }
+
+        impl<T: Recip> Recip for $name<T> {
+            fn recip(self) -> Self {
+                Self { $($comp: self.$comp.recip()),* }
+            }
+        }
+
+        impl<T: Snap> Snap<T> for $name<T> {
+            fn snap(self, step: T) -> Self {
+                Self { $($comp: self.$comp.snap(step)),* }
+            }
+        }
+
+        impl<T: Lerp> Lerp<T> for $name<T> {
+            fn lerp(self, other: Self, interp: T) -> Self {
+                Self { $($comp: self.$comp.lerp(other.$comp, interp)),* }
+            }
+        }
+
+        impl<T: Round> Round for $name<T> {
+            fn round(self) -> Self {
+                Self { $($comp: self.$comp.round()),* }
+            }
+            
+            fn ceil(self) -> Self {
+                Self { $($comp: self.$comp.ceil()),* }
+            }
+            
+            fn floor(self) -> Self {
+                Self { $($comp: self.$comp.floor()),* }
+            }
+        }
+
+        impl<T: Fract> Fract for $name<T> {
+            fn fract(self) -> Self {
+                Self { $($comp: self.$comp.fract()),* }
+            }
+        }
+
+        impl<T: Trig> Trig for $name<T> {
+            type Output = $name<<T as Trig>::Output>;
+
+            fn sin(self) -> Self::Output {
+                $name { $($comp: self.$comp.sin()),* }
+            }
+
+            fn cos(self) -> Self::Output {
+                $name { $($comp: self.$comp.cos()),* }
+            }
+
+            fn sin_cos(self) -> (Self::Output, Self::Output) {
+                $(
+                    let $comp = self.$comp.sin_cos();
+                )*
+                (
+                    $name { $($comp: $comp.0),* },
+                    $name { $($comp: $comp.1),* }
+                )
+            }
+
+            fn tan(self) -> Self::Output  {
+                $name { $($comp: self.$comp.tan()),* }
+            }
+
+            fn sinh(self) -> Self::Output {
+                $name { $($comp: self.$comp.sinh()),* }
+            }
+
+            fn cosh(self) -> Self::Output {
+                $name { $($comp: self.$comp.cosh()),* }
+            }
+
+            fn tanh(self) -> Self::Output {
+                $name { $($comp: self.$comp.tanh()),* }
+            }
+        }
+
+        
+        impl<T: InvTrig<U>, U: Copy> InvTrig<$name<U>> for $name<T> {
+            fn asin(val: $name<U>) -> Self{
+                Self { $($comp: T::asin(val.$comp)),* }
+            }
+
+            fn acos(val: $name<U>) -> Self{
+                Self { $($comp: T::acos(val.$comp)),* }
+            }
+
+            fn atan(val: $name<U>) -> Self{
+                Self { $($comp: T::atan(val.$comp)),* }
+            }
+
+            fn atan2(y: $name<U>, x: $name<U>) -> Self{
+                Self { $($comp: T::atan2(y.$comp, x.$comp)),* }
+            }
+
+            fn asinh(val: $name<U>) -> Self{
+                Self { $($comp: T::asinh(val.$comp)),* }
+            }
+
+            fn acosh(val: $name<U>) -> Self{
+                Self { $($comp: T::acosh(val.$comp)),* }
+            }
+
+            fn atanh(val: $name<U>) -> Self{
+                Self { $($comp: T::atanh(val.$comp)),* }
+            }
+
+        }
+
         //--------------------------------------------------------------
 
-        impl<T: Numeric> ApproxZero for $name<T> {
-            type Epsilon = T;
 
-            fn is_close_to_zero(self, epsilon: Self::Epsilon) -> bool {
-                $(self.$field.is_close_to_zero(epsilon))||+
+        impl<T: ApproxEq> ApproxEq<T> for $name<T> {
+            const EPSILON: T = T::EPSILON;
+        
+            fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
+                $(self.$comp.is_close_to(rhs.$comp, epsilon))||+
+            }
+        }
+        
+        impl<T: ApproxZero> ApproxZero<T> for $name<T> {
+            const ZERO_EPSILON: T = T::ZERO_EPSILON;
+        
+            fn is_close_to_zero(self, epsilon: T) -> bool {
+                $(self.$comp.is_close_to_zero(epsilon))||+
             }
         }
         
         //------------------------------------------------------------------------------------------------------------------------------
 
-        impl<T: Numeric> From<[T; $elem_cnt]> for $name<T> {
+        impl<T: Copy> From<[T; $elem_cnt]> for $name<T> {
             fn from(arr: [T; $elem_cnt]) -> Self {
                 Self::from_array(arr)
             }
         }
 
-        impl<T: Numeric> From<$name<T>> for [T; $elem_cnt] {
+        impl<T: Copy> From<$name<T>> for [T; $elem_cnt] {
             fn from(v: $name<T>) -> Self {
                 v.to_array()
             }
@@ -693,19 +806,82 @@ macro_rules! generic_vec {
         
         //------------------------------------------------------------------------------------------------------------------------------
 
-        impl<T: Numeric, U: Numeric> NumericCast<$name<U>> for $name<T>
+        impl<T: NumericCast<U>, U: Copy> NumericCast<$name<U>> for $name<T>
         where
             T : NumericCast<U>
         {
             fn cast(self) -> $name<U> {
-                $name{ $($field: self.$field.cast()),+ }
+                $name{ $($comp: self.$comp.cast()),+ }
             }
         }
+
+        //------------------------------------------------------------------------------------------------------------------------------
+
+        $(
+            #[allow(non_camel_case_types)]
+            pub type $alias_ty = $name<$base_ty>;
+        )*
+    };
+    (@first $comp0:ident, $($comp:ident),*) => {
+        /// Check if all elements are approximately equal, given an epsilon
+        pub fn is_uniform(self, epsilon: T) -> bool where
+            T: ApproxEq
+        {
+            $(self.$comp0.is_close_to(self.$comp, epsilon))||*
+        }
+
+        /// Get the minimum component of the vector
+        pub fn min_component(self) -> T where
+            T: MinMax
+        {
+            self.$comp0$(.min(self.$comp))*
+        }
+
+        /// Get the minimum absolute component of the vector
+        pub fn min_abs_component(self) -> T where
+            T: MinMax + Abs
+        {
+            self.x.abs().min(self.y.abs())
+        }
+
+        /// Get the maximum component of the vector
+        pub fn max_component(self) -> T where
+            T: MinMax
+        {
+            self.x.max(self.y)
+        }
+
+        /// Get the maximum absolute component of the vector
+        pub fn max_abs_component(self) -> T where
+            T: MinMax + Abs
+        {
+            self.x.abs().max(self.y.abs())
+        }
+    }
+}
+pub(crate) use generic_vec;
+
+
+generic_vec!{ doc = "3D Vector (row-major order)"; Vec3, 3, x, y, z; }
+generic_vec!{ doc = "4D Vector (row-major order)"; Vec4, 4, x, y, z, w; }
+
+#[macro_export]
+macro_rules! impl_vec_premul {
+    ($iden:ident, $($ty:ty)*) => {
+        $(
+            impl Mul<$iden<$ty>> for $ty {
+                type Output = $iden<$ty>;
+
+                fn mul(self, rhs: $iden<$ty>) -> $iden<$ty> {
+                    rhs * self
+                }
+            }
+        )*
     };
 }
-generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, x, y }
-generic_vec!{ doc = "3D Vector (row-major order)"; Vec3, 3, x, y, z }
-generic_vec!{ doc = "4D Vector (row-major order)"; Vec4, 4, x, y, z, w }
+impl_vec_premul!{ Vec2, i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
+impl_vec_premul!{ Vec3, i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
+impl_vec_premul!{ Vec4, i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
 
 pub const SWIZZLE_X : u8 = 0;
 pub const SWIZZLE_Y : u8 = 1;

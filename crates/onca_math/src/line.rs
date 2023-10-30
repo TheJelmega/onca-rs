@@ -72,10 +72,10 @@ impl<T: Real> Line<T> {
     }
 }
 
-impl<T: Real> ApproxEq for Line<T> {
-    type Epsilon = T;
+impl<T: Real> ApproxEq<T> for Line<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.orig.is_close_to(rhs.orig, epsilon) &&
         self.dir.is_close_to(rhs.dir, epsilon)
     }
@@ -151,10 +151,10 @@ impl<T: Real> LineSegment<T> {
     }
 }
 
-impl<T: Numeric> ApproxEq for LineSegment<T> {
-    type Epsilon = T;
+impl<T: Numeric> ApproxEq<T> for LineSegment<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.begin.is_close_to(rhs.begin, epsilon) &&
         self.end.is_close_to(rhs.end, epsilon)
     }
@@ -239,10 +239,10 @@ impl<T: Real> Line2D<T> {
     }
 }
 
-impl<T: Real> ApproxEq for Line2D<T> {
-    type Epsilon = T;
+impl<T: Real> ApproxEq<T> for Line2D<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.orig.is_close_to(rhs.orig, epsilon) &&
         self.dir.is_close_to(rhs.dir, epsilon)
     }
@@ -318,10 +318,10 @@ impl<T: Real> LineSegment2D<T> {
     }
 }
 
-impl<T: Numeric> ApproxEq for LineSegment2D<T> {
-    type Epsilon = T;
+impl<T: Numeric> ApproxEq<T> for LineSegment2D<T> {
+    const EPSILON: T = T::EPSILON;
 
-    fn is_close_to(self, rhs: Self, epsilon: Self::Epsilon) -> bool {
+    fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
         self.begin.is_close_to(rhs.begin, epsilon) &&
         self.end.is_close_to(rhs.end, epsilon)
     }
