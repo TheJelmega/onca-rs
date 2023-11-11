@@ -746,51 +746,6 @@ pub fn get_read_and_typeless_for_depth_stencil_formats(format: ral::Format) -> O
     }
 }
 
-pub fn get_sampler_filter(min_filter: ral::Filter, mag_filter: ral::Filter, mip_mode: ral::MipmapMode, reduction: ral::FilterReductionMode, anisotropy: bool, comparion: bool) -> D3D12_FILTER {
-    if anisotropy {
-        if comparion {
-            return D3D12_FILTER_COMPARISON_ANISOTROPIC;
-        }
-
-        return match reduction {
-            ral::FilterReductionMode::WeightedAverage => D3D12_FILTER_ANISOTROPIC,
-            ral::FilterReductionMode::Minimum         => D3D12_FILTER_MINIMUM_ANISOTROPIC,
-            ral::FilterReductionMode::Maximum         => D3D12_FILTER_MAXIMUM_ANISOTROPIC,
-        };
-    }
-
-    const MIP_LINEAR_FLAG: i32 = 0x001;
-    const MIN_LINEAR_FLAG: i32 = 0x004;
-    const MAG_LINEAR_FLAG: i32 = 0x010;
-    const COMPARISON_FLAG: i32 = 0x080;
-    const MINIMUM_FLAG:    i32 = 0x100;
-    const MAXIMUM_FLAG:    i32 = 0x180;
-
-    let mut filter = 0;
-    match min_filter {
-        ral::Filter::Point  => {},
-        ral::Filter::Linear => filter |= MIN_LINEAR_FLAG,
-    }
-    match mag_filter {
-        ral::Filter::Point  => {},
-        ral::Filter::Linear => filter |= MAG_LINEAR_FLAG,
-    }
-    match mip_mode {
-        ral::MipmapMode::Point  => {},
-        ral::MipmapMode::Linear => filter |= MIP_LINEAR_FLAG,
-    }
-    if comparion {
-        filter |= COMPARISON_FLAG;
-    } else {
-        match reduction {
-            ral::FilterReductionMode::WeightedAverage => {},
-            ral::FilterReductionMode::Minimum         => filter |= MINIMUM_FLAG,
-            ral::FilterReductionMode::Maximum         => filter |= MAXIMUM_FLAG,
-        }
-    }
-    D3D12_FILTER(filter)
-}
-
 pub fn get_descriptor_range_type(descriptor_type: ral::DescriptorType) -> D3D12_DESCRIPTOR_RANGE_TYPE {
     match descriptor_type {
         ral::DescriptorType::SampledTexture      => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,

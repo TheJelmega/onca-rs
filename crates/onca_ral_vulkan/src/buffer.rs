@@ -1,8 +1,7 @@
 use std::sync::{Arc, Weak};
 
-use onca_common::prelude::*;
 use onca_ral as ral;
-use ash::vk::{self, Handle};
+use ash::vk;
 use ral::{HandleImpl, GpuAddress};
 
 use crate::{vulkan::AllocationCallbacks, device::Device, utils::ToRalError, memory::{create_api_memory_request, MemoryHeap}};

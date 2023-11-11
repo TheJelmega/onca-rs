@@ -1,11 +1,11 @@
 use core::{sync::atomic::{AtomicU16, Ordering}, cell::Cell};
 
-use onca_common::prelude::*;
+
 use onca_ral as ral;
 use ral::HandleImpl;
 use windows::Win32::Graphics::{Direct3D12::*, Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R32_TYPELESS}};
 
-use crate::{utils::*, device::{Device, self}, sampler::Sampler, texture::{Texture, SampledTextureView, StorageTextureView}, buffer::Buffer};
+use crate::{utils::*, device::Device, sampler::Sampler, texture::{Texture, SampledTextureView, StorageTextureView}, buffer::Buffer};
 
 #[derive(Clone)]
 pub struct RTVAndDSVEntry {
@@ -269,7 +269,11 @@ impl DescriptorHeap {
         let device = self.device();
         let cpu_desciptor = self.cpu_descriptor(index);
 
-        device.CreateUnorderedAccessView(resource, None, Some(desc), cpu_desciptor);
+        match counter_resource {
+            Some(counter_resource) => device.CreateUnorderedAccessView(resource, counter_resource, Some(desc), cpu_desciptor),
+            None => device.CreateUnorderedAccessView(resource, None, Some(desc), cpu_desciptor),
+        }
+        
     }
 }
 

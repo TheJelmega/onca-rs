@@ -241,7 +241,7 @@ fn get_device(factory: &IDXGIFactory7, adapter: IDXGIAdapter4) -> ral::Result<ra
     };
 
     
-    let description = unsafe { String::from_null_terminated_utf16_lossy(desc.Description.as_slice()) };
+    let description = String::from_null_terminated_utf16_lossy(desc.Description.as_slice());
     let properties = ral_phys_dev::Properties {
         description,
         api_version: Version::from_feature_level(feature_levels.MaxSupportedFeatureLevel),

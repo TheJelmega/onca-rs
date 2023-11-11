@@ -5,7 +5,7 @@ use onca_ral as ral;
 use ral::{FenceInterface, HandleImpl};
 use windows::{Win32::{Graphics::Dxgi::{*, Common::DXGI_SAMPLE_DESC}, Foundation::{RECT, POINT, FALSE}}, core::ComInterface};
 
-use crate::{utils::*, device::Device, physical_device::PhysicalDevice, texture::{Texture, RenderTargetView}, fence::Fence, command_queue::CommandQueue};
+use crate::{utils::*, device::Device, physical_device::PhysicalDevice, texture::Texture, fence::Fence, command_queue::CommandQueue};
 
 pub struct SwapchainDynamic {
     pub frame_values: Vec<u64>,
@@ -176,7 +176,7 @@ impl ral::SwapChainInterface for SwapChain {
         Err(ral::Error::NotImplemented("DX12 doesn't need any recreation of a swapchain, therefore this function should never be able to be called"))
     }
     
-    unsafe fn resize(&self, device: &ral::DeviceHandle, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
+    unsafe fn resize(&self, _device: &ral::DeviceHandle, params: ral::api::SwapChainChangeParams) -> ral::Result<ral::api::SwapChainResizeResultInfo> {
         let mut dynamic = self.dynamic.lock();
         // Set wait value for all backbuffers
         let cur_fence_value = *dynamic.frame_values.iter().reduce(|a, b| a.max(b)).unwrap();
@@ -185,8 +185,6 @@ impl ral::SwapChainInterface for SwapChain {
         }
 
         self.swap_chain.ResizeBuffers(params.num_backbuffers as u32, params.width as u32, params.height as u32, params.format.to_dx(), Self::FLAGS).map_err(|err| err.to_ral_error())?;
-
-        let dx_device = device.interface().as_concrete_type::<Device>();
 
         let mut backbuffers = Vec::with_capacity(params.num_backbuffers as usize);
         for i in 0..params.num_backbuffers as u32 {

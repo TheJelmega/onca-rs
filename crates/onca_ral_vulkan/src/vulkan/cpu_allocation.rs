@@ -1,5 +1,11 @@
-use core::{ptr::null_mut, ffi::c_void, mem::ManuallyDrop};
-use std::{collections::HashMap, sync::Arc, alloc::Layout, ptr::NonNull};
+use std::{
+    ptr::null_mut,
+    ffi::c_void,
+    collections::HashMap,
+    sync::Arc,
+    alloc::Layout,
+    ptr::NonNull
+};
 
 use onca_common::{
     prelude::*,

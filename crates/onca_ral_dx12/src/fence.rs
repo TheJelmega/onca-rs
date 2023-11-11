@@ -6,7 +6,7 @@ use windows::Win32::{
     Graphics::Direct3D12::{ID3D12Fence, ID3D12Device10, D3D12_FENCE_FLAG_NONE}, System::Threading::{WaitForSingleObject, WaitForMultipleObjects, CreateEventA},
 };
 
-use crate::utils::{ToRalError, hresult_to_ral_result};
+use crate::utils::ToRalError;
 
 pub struct Fence {
     pub fence: ID3D12Fence,
