@@ -38,14 +38,10 @@ pub trait MinMax: Copy {
     fn min(self, rhs: Self) -> Self;
     /// Get the maximum of 2 values
     fn max(self, rhs: Self) -> Self;
-    /// Clamp a value between a minimum and a maximum
-    fn clamp(self, min: Self, max: Self) -> Self {
-        self.min(min).max(max)
-    }
 }
 
 macro_rules! impl_min_max {
-    (@integer $($ty:ty)*) => {
+    (integer $($ty:ty)*) => {
         $(
             impl MinMax for $ty {
                 fn min(self, rhs: Self) -> Self {
@@ -58,7 +54,7 @@ macro_rules! impl_min_max {
             }
         )*
     };
-    (@fp $($ty:ty)*) => {
+    (fp $($ty:ty)*) => {
         $(
             impl MinMax for $ty {
                 fn min(self, rhs: Self) -> Self {
@@ -68,7 +64,31 @@ macro_rules! impl_min_max {
                 fn max(self, rhs: Self) -> Self {
                     self.max(rhs)
                 }
+            }
+        )*
+    };
+}
+impl_min_max!{ integer i8 i16 i32 i64 u8 u16 u32 u64 }
+impl_min_max!{ fp f32 f64 }
 
+/// A trait for clamping a given value between a lower and upper bound
+pub trait Clamp<T: Copy = Self>: Copy {
+    fn clamp(self, min: T, max: T) -> Self;
+}
+
+macro_rules! impl_clamp {
+    (integer $($ty:ty)*) => {
+        $(
+            impl Clamp for $ty {
+                fn clamp(self, min: Self, max: Self) -> Self {
+                    <$ty as MinMax>::min(<$ty as MinMax>::max(self, min), max)
+                }
+            }
+        )*
+    };
+    (fp $($ty:ty)*) => {
+        $(
+            impl Clamp for $ty {
                 fn clamp(self, min: Self, max: Self) -> Self {
                     self.clamp(min, max)
                 }
@@ -76,8 +96,10 @@ macro_rules! impl_min_max {
         )*
     };
 }
-impl_min_max!{ @integer i8 i16 i32 i64 u8 u16 u32 u64 }
-impl_min_max!{ @fp f32 f64 }
+impl_clamp!{ integer i8 i16 i32 i64 u8 u16 u32 u64 }
+impl_clamp!{ fp f32 f64 }
+
+
 
 //--------------------------------------------------------------
 
@@ -92,7 +114,7 @@ macro_rules! impl_saturate {
         $(
             impl Saturate for $ty {
                 fn saturate(self) -> Self {
-                    <Self as MinMax>::clamp(self, 0 as $ty, 1 as $ty)
+                    <Self as Clamp>::clamp(self, 0 as $ty, 1 as $ty)
                 }
             }
         )*
@@ -109,7 +131,7 @@ pub trait Abs: Copy {
 }
 
 macro_rules! impl_abs {
-    (@signed $($ty:ty)*) => {
+    (signed $($ty:ty)*) => {
         $(
             impl Abs for $ty {
                 fn abs(self) -> Self {
@@ -118,7 +140,7 @@ macro_rules! impl_abs {
             }
         )*
     };
-    (@unsigned $($ty:ty)*) => {
+    (unsigned $($ty:ty)*) => {
         $(
             impl Abs for $ty {
                 fn abs(self) -> Self {
@@ -128,8 +150,8 @@ macro_rules! impl_abs {
         )*
     };
 }
-impl_abs!{ @signed i8 i16 i32 i64 f32 f64 }
-impl_abs!{ @unsigned u8 u16 u32 u64 }
+impl_abs!{ signed i8 i16 i32 i64 f32 f64 }
+impl_abs!{ unsigned u8 u16 u32 u64 }
 
 //--------------------------------------------------------------
 
@@ -142,7 +164,7 @@ pub trait AbsDiff: Copy {
 }
 
 macro_rules! impl_abs_diff {
-    (@integer $($ty:ty => $ret:ty)*) => {
+    (integer $($ty:ty => $ret:ty)*) => {
         $(
             impl AbsDiff for $ty {
                 type Output = $ret;
@@ -153,7 +175,7 @@ macro_rules! impl_abs_diff {
             }
         )*
     };
-    (@fp $($ty:ty)*) => {
+    (fp $($ty:ty)*) => {
         $(
             impl AbsDiff for $ty {
                 type Output = $ty;
@@ -166,7 +188,7 @@ macro_rules! impl_abs_diff {
     };
 }
 impl_abs_diff!{
-    @integer
+    integer
     i8  => u8
     i16 => u16
     i32 => u32
@@ -176,7 +198,7 @@ impl_abs_diff!{
     u32 => u32
     u64 => u64
 }
-impl_abs_diff!{ @fp f32 f64 }
+impl_abs_diff!{ fp f32 f64 }
 
 //--------------------------------------------------------------
 
@@ -184,30 +206,55 @@ impl_abs_diff!{ @fp f32 f64 }
 pub trait Sign: Copy {
     /// Get the sign of a value, or `0` if the value is `0`
     fn sign(self) -> Self;
+
+    /// Get a value with the sign of `sign` and the magnitude of `self`
+    fn copy_sign(self, sign: Self) -> Self;
 }
 
 macro_rules! impl_sign {
-    (@signed $($ty:ty)*) => {
+    (signed $($ty:ty)*) => {
         $(
             impl Sign for $ty {
                 fn sign(self) -> Self {
                     self.signum()
                 }
+
+                fn copy_sign(self, sign: Self) -> Self {
+                    if sign >= 0 { self.abs() } else { -self.abs() }
+                }
             }
         )*
     };
-    (@unsigned $($ty:ty)*) => {
+    (unsigned $($ty:ty)*) => {
         $(
             impl Sign for $ty {
                 fn sign(self) -> Self {
                     if self == 0 { 0 } else { 1 }
                 }
+
+                fn copy_sign(self, _: Self) -> Self {
+                    self
+                }
+            }
+        )*
+    };
+    (fp $($ty:ty)*) => {
+        $(
+            impl Sign for $ty {
+                fn sign(self) -> Self {
+                    self.signum()
+                }
+
+                fn copy_sign(self, sign: Self) -> Self {
+                    self.copysign(sign)
+                }
             }
         )*
     };
 }
-impl_sign!{ @signed i8 i16 i32 i64 f32 f64 }
-impl_sign!{ @unsigned u8 u16 u32 u64 }
+impl_sign!{ signed i8 i16 i32 i64 }
+impl_sign!{ unsigned u8 u16 u32 u64 }
+impl_sign!{ fp f32 f64 }
 
 //--------------------------------------------------------------
 
@@ -323,6 +370,25 @@ impl_recip!{ @fp f32 f64 }
 
 //--------------------------------------------------------------
 
+pub trait Sqr {
+    fn sqr(self) -> Self;
+}
+
+macro_rules! impl_sqr {
+    ($($ty:ty)*) => {
+        $(
+            impl Sqr for $ty {
+                fn sqr(self) -> Self {
+                    self * self
+                }
+            }
+        )*
+    };
+}
+impl_sqr!{ i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
+
+//--------------------------------------------------------------
+
 /// A trait to snap a value to a multiple of a given `step`
 pub trait Snap<T = Self>: Copy {
     /// Snap to the closest multiple of `step`
@@ -376,7 +442,7 @@ macro_rules! impl_lerp {
     ($($ty:ty)*) => {
         $(
             impl Lerp for $ty {
-                fn lerp(self, to: Self, interp: $ty) -> Self {
+                fn lerp(self, to: Self, interp: $ty)  -> Self {
                     self + interp * (to - self)
                 }
             }
@@ -384,6 +450,32 @@ macro_rules! impl_lerp {
     };
 }
 impl_lerp!{ u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 }
+
+/// A trait to smoothstep between 2 edges
+pub trait SmoothStep: Copy {
+    /// Calculate the smooth hermite interpolation between 2 edges
+    fn smooth_step(self, edge0: Self, edge1: Self) -> Self;
+}
+
+macro_rules! impl_smooth_step {
+    ($($ty:ty)*) => {
+        $(
+            impl SmoothStep for $ty {
+                fn smooth_step(self, edge0: Self, edge1: Self) -> Self {
+                    let t = ((self - edge0) / (edge1 - edge0));
+                    if t <= 0 as $ty {
+                        0 as $ty
+                    } else if t >= 1 as $ty {
+                        1 as $ty
+                    } else {
+                        t * t * (3 as $ty - (2 as $ty) * t)
+                    }
+                }
+            }
+        )*
+    };
+}
+impl_smooth_step!{ u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 }
 
 //--------------------------------------------------------------
 
@@ -468,135 +560,73 @@ impl_fract!{ @fp f32 f64 }
 
 //--------------------------------------------------------------
 
-/// A trait to perform triginometric calculations on a value
-pub trait Trig: Copy {
-    type Output: Copy;
-
-    /// Get the sine of a value
-    fn sin(self) -> Self::Output;
-    /// Get the cosine of a value
-    fn cos(self) -> Self::Output;
-    /// Get the sine and cosine of a value
-    /// 
-    /// # Note
-    /// 
-    /// Depending on the implementation, this may be faster than getting the sine and cosine separately
-    fn sin_cos(self) -> (Self::Output, Self::Output);
-    /// Get the tangent of a value
-    fn tan(self) -> Self::Output;
-
-    // Get the hyperbolic sine of a value
-    fn sinh(self) -> Self::Output;
-    /// Get the hyperbolic cosine of a value
-    fn cosh(self) -> Self::Output;
-    /// Get the hyperbolic tangent of a value
-    fn tanh(self) -> Self::Output;
+/// A trait to truncate the value
+pub trait Trunc: Copy {
+    fn trunc(self) -> Self;
 }
 
-/// A trait to perform inverted triginometric calculations on a value
-pub trait InvTrig<T: Copy>: Copy {
-    /// Get the arcsine of a value
-    fn asin(val: T) -> Self;
-    /// Get the arccosine of a value
-    fn acos(val: T) -> Self;
-    /// Get the arctangent of a value
-    fn atan(val: T) -> Self;
-    /// Get the arctangent of a value
-    /// 
-    /// `self` represents the `y` value
-    fn atan2(y: T, x: T) -> Self;
-
-    /// Get the hyperbolic arcsine of a value
-    fn asinh(val: T) -> Self;
-    /// Get the hyperbolic arccosine of a value
-    fn acosh(val: T) -> Self;
-    /// Get the hyperbolic arctangent of a value
-    fn atanh(val: T) -> Self;
-}
-
-macro_rules! impl_trig {
-    ($($ty:ty)*) => {
+macro_rules! impl_fract {
+    (@integer $($ty:ty)*) => {
         $(
-            impl Trig for $ty {
-                type Output = Self;
-
-                fn sin(self) -> Self {
-                    self.sin()
+            impl Trunc for $ty {
+                fn trunc(self) -> Self {
+                    self
                 }
-
-                fn cos(self) -> Self {
-                    self.cos()
-                }
-
-                fn sin_cos(self) -> (Self, Self) {
-                    self.sin_cos()
-                }
-                
-                fn tan(self) -> Self {
-                    self.tan()
-                }
-
-                fn sinh(self) -> Self {
-                    self.sinh()
-                }
-
-                fn cosh(self) -> Self {
-                    self.cosh()
-                }
-
-                fn tanh(self) -> Self {
-                    self.tanh()
-                }
-
             }
-
-            impl InvTrig<$ty> for $ty {
-                fn asin(val: $ty) -> Self {
-                    val.asin()
-                }
-
-                fn acos(val: $ty) -> Self {
-                    val.acos()
-                }
-
-                fn atan(val: $ty) -> Self {
-                    val.atan()
-                }
-
-                fn atan2(y: $ty, x: $ty) -> Self {
-                    y.atan2(x)
-                }
-
-                fn asinh(val: $ty) -> Self {
-                    val.asinh()
-                }
-
-                fn acosh(val: $ty) -> Self {
-                    val.acosh()
-                }
-
-                fn atanh(val: $ty) -> Self {
-                    val.atanh()
+        )*
+    };
+    (@fp $($ty:ty)*) => {
+        $(
+            impl Trunc for $ty {
+                fn trunc(self) -> Self {
+                    self.trunc()
                 }
             }
         )*
     };
 }
-impl_trig!{ f32 f64 }
+impl_fract!{ @integer i8 i16 i32 i64 u8 u16 u32 u64 }
+impl_fract!{ @fp f32 f64 }
 
 //--------------------------------------------------------------
 
-//--------------------------------------------------------------
+/// A trait to perform fused multiply add (a * b + c)
+pub trait FMulAdd: Copy {
+    fn fma(self, b: Self, c: Self) -> Self;
+}
+
+macro_rules! impl_fma {
+    (integer $($ty:ty)*) => {
+        $(
+            impl FMulAdd for $ty {
+                fn fma(self, b: Self, c: Self) -> Self {
+                    self * b + c
+                }
+            }
+        )*
+    };
+    (fp $($ty:ty)*) => {
+        $(
+            impl FMulAdd for $ty {
+                fn fma(self, b: Self, c: Self) -> Self {
+                    self.mul_add(b, c)
+                }
+            }
+        )*
+    };
+}
+impl_fma!{ integer i8 i16 i32 i64 u8 u16 u32 u64 }
+impl_fma!{ fp f32 f64 }
 
 //--------------------------------------------------------------
 
 /// A trait to check if 2 values are approximately equal
-pub trait ApproxEq<Epsilon = Self>: Copy {
+pub trait ApproxEq<E = Self>: Copy {
     /// Epsilon used to check if 2 values are approximately the same
-    const EPSILON: Epsilon;
+    const EPSILON: E;
 
     /// Check if `self` is approximately equal to another value, given an `epsilon`
-    fn is_close_to(self, rhs: Self, epsilon: Epsilon) -> bool;
+    fn is_close_to(self, rhs: Self, epsilon: E) -> bool;
 
     /// Check if `self` is approximately equal to another, using the machine epsilon
     fn is_approx_eq(self, rhs: Self) -> bool {
@@ -631,15 +661,13 @@ impl_approx_eq!{
 }
 
 /// A trait to check if a value is approximately equal to its zero identity
-pub trait ApproxZero<Epsilon = Self>: Copy {
-    const ZERO_EPSILON: Epsilon;
-
+pub trait ApproxZero<E = Self>: ApproxEq<E> {
     /// Check if `self` is approximately equal to 0, given an `epsilon`
-    fn is_close_to_zero(self, epsilon: Epsilon) -> bool;
+    fn is_close_to_zero(self, epsilon: E) -> bool;
 
     /// Check if `self` is approximately equal to 0, using the machine epsilon
     fn is_zero(self) -> bool {
-        self.is_close_to_zero(Self::ZERO_EPSILON)
+        self.is_close_to_zero(Self::EPSILON)
     }
 }
 
@@ -647,8 +675,6 @@ macro_rules! impl_approx_zero {
     {$($ty:ty, $epsilon:expr)*} => {
         $(
             impl ApproxZero for $ty {
-                const ZERO_EPSILON: Self = $epsilon;
-
                 fn is_close_to_zero(self, epsilon: Self) -> bool {
                     self.abs_diff(0 as $ty) as $ty <= epsilon
                 }
@@ -699,38 +725,42 @@ impl_cast!{ f64 => i8 , i16, i32, i64, u8 , u16, u32, u64, f32, f64 }
 //--------------------------------------------------------------
 
 /// A trait representing a numeric type
-pub trait Numeric: One + Zero + PartialEq + PartialOrd + 
+pub trait Numeric: One + Zero + PartialEq + PartialOrd + ApproxEq + ApproxZero +
     Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Rem<Output = Self> +
     AddAssign + SubAssign + MulAssign + DivAssign + RemAssign +
-    MinMax + Abs + AbsDiff + Sign + Sqrt + Rsqrt + Recip + Snap + Lerp + ApproxEq + ApproxZero + MathConsts
+    MinMax + Clamp + Saturate + Abs + AbsDiff + Sign + Sqrt + Sqr + Snap + Lerp + SmoothStep + MathConsts + FMulAdd
 {
+    fn from_i32(val: i32) -> Self;
 }
 
-impl Numeric for i8 {}
-impl Numeric for i16 {}
-impl Numeric for i32 {}
-impl Numeric for i64 {}
-impl Numeric for u8 {}
-impl Numeric for u16 {}
-impl Numeric for u32 {}
-impl Numeric for u64 {}
-impl Numeric for f32 {}
-impl Numeric for f64 {}
+macro_rules! impl_numeric {
+    ($($ty:ty)*) => {
+        $(
+            impl Numeric for $ty {
+                fn from_i32(val: i32) -> Self {
+                    val as $ty
+                }
+            }
+        )*
+    };
+}
 
-/// A trait defining an integral numeric type
-pub trait Integral: Numeric + 
+impl_numeric!{ i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 }
+
+/// A trait defining an integer numeric type
+pub trait Integer: Numeric + 
                     Not<Output = Self> + BitAnd<Output = Self> + BitXor<Output = Self> + BitOr<Output = Self> + Shl<Output = Self> + Shr<Output = Self> +
                     BitAndAssign + BitXorAssign + BitOrAssign + ShlAssign + ShrAssign
 {}
 
-impl Integral for i8  {}
-impl Integral for i16 {}
-impl Integral for i32 {}
-impl Integral for i64 {}
-impl Integral for u8  {}
-impl Integral for u16 {}
-impl Integral for u32 {}
-impl Integral for u64 {}
+impl Integer for i8  {}
+impl Integer for i16 {}
+impl Integer for i32 {}
+impl Integer for i64 {}
+impl Integer for u8  {}
+impl Integer for u16 {}
+impl Integer for u32 {}
+impl Integer for u64 {}
 
 /// A trait defining a signed numeric type
 pub trait Signed: Numeric + Neg<Output = Self>
@@ -743,17 +773,29 @@ impl Signed for i64 {}
 impl Signed for f32 {}
 impl Signed for f64 {}
 
-pub trait SignedIntegral: Integral + Signed {
+pub trait SignedInteger: Integer + Signed {
 }
 
-impl SignedIntegral for i8  {}
-impl SignedIntegral for i16 {}
-impl SignedIntegral for i32 {}
-impl SignedIntegral for i64 {}
+impl SignedInteger for i8  {}
+impl SignedInteger for i16 {}
+impl SignedInteger for i32 {}
+impl SignedInteger for i64 {}
 
 /// A trait defining a real numeric type
-pub trait Real : Signed + MathRealConsts + Round + Fract + Trig {
+pub trait Real: Signed + Rsqrt + Recip + MathRealConsts + Round + Fract + Trunc {
+    fn from_f32(val: f32) -> Self;
 }
 
-impl Real for f32 {}
-impl Real for f64 {}
+macro_rules! impl_real {
+    ($($ty:ty)*) => {
+        $(
+            impl Real for $ty {
+                fn from_f32(val: f32) -> Self {
+                    val as $ty
+                }
+            }
+        )*
+    };
+}
+
+impl_real!{ f32 f64 }

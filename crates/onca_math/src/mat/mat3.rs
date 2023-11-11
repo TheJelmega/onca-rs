@@ -215,9 +215,7 @@ impl<T: Real> Mat3<T> {
     }
 
     /// Decompose the matrix into a scale, rotation
-    fn decompose(self) -> (Vec3<T>, Quat<T>) where
-        i32: NumericCast<T>
-    {
+    fn decompose(self) -> (Vec3<T>, Quat<T>) {
         let scale = Vec3 {
             x: self.column(0).len(),
             y: self.column(1).len(),
@@ -331,9 +329,7 @@ impl<T: Real> Mat3<T> {
 
     // TODO
     /// Create a 3d rotation matrix
-    pub fn create_rotation(rot: Quat<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_rotation(rot: Quat<T>) -> Self {
         debug_assert!(rot.is_normalized());
 
         let xx = rot.x * rot.x;
@@ -349,7 +345,7 @@ impl<T: Real> Mat3<T> {
         let yz = rot.y * rot.z;
 
         let one = T::one();
-        let two: T = 2.cast();
+        let two: T = T::from_i32(2);
 
         Self { vals: [(one - two * (yy + zz)), (      two * (xy - zw)), (      two * (xz + yw)),
                       (      two * (xy + zw)), (one - two * (xx + zz)), (      two * (yz - zw)),
@@ -358,9 +354,7 @@ impl<T: Real> Mat3<T> {
 
     // TODO
     /// Create a 3d transformation matrix
-    pub fn create_transform(scale: Vec3<T>, rot: Quat<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_transform(scale: Vec3<T>, rot: Quat<T>) -> Self {
         debug_assert!(rot.is_normalized());
 
         let xx = rot.x * rot.x;
@@ -376,7 +370,7 @@ impl<T: Real> Mat3<T> {
         let yz = rot.y * rot.z;
 
         let one = T::one();
-        let two: T = 2.cast();
+        let two: T = T::from_i32(2);
 
         Self { vals: [scale.x * (one - two * (yy + zz)), scale.y * (      two * (xy - zw)), scale.z * (      two * (xz + yw)),
                       scale.x * (      two * (xy + zw)), scale.y * (one - two * (xx + zz)), scale.z * (      two * (yz - zw)),

@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-use crate::{Real, Numeric, ApproxEq, Vec2, Vec3, Ray, Ray2D};
+use crate::*;
 
 /// 3D line
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Line<T: Real> {
-    pub orig : Vec3<T>,
+    pub orig : Point3<T>,
     pub dir  : Vec3<T>,
 }
 
@@ -13,14 +13,14 @@ impl<T: Real> Line<T> {
     /// Create a line
     #[inline]
     #[must_use]
-    pub fn new(orig: Vec3<T>, dir: Vec3<T>) -> Self {
+    pub fn new(orig: Point3<T>, dir: Vec3<T>) -> Self {
         Self { orig, dir }
     }
 
     /// Create a line going through 2 points
     #[inline]
     #[must_use]
-    pub fn from_points(a: Vec3<T>, b: Vec3<T>) -> Self {
+    pub fn from_points(a: Point3<T>, b: Point3<T>) -> Self {
         let dir = (b - a).normalize();
         Self { orig: a, dir }
     }
@@ -43,22 +43,21 @@ impl<T: Real> Line<T> {
     /// Get a point on the line at the given distance from the origin
     #[inline]
     #[must_use]
-    pub fn get_point_at(self, dist: T) -> Vec3<T> {
+    pub fn get_point_at(self, dist: T) -> Point3<T> {
         self.orig + self.dir * dist
     }
 
     /// Get the closest point on the line to the given point
     #[must_use]
-    pub fn get_closest_point_to(self, point: Vec3<T>) -> Vec3<T> {
-        let to_point = point - self.orig;
-        let dot = self.dir.dot(to_point);
-        self.get_point_at(dot)
+    pub fn get_closest_point_to(self, point: Point3<T>) -> Point3<T> {
+        let dist = self.dist(point);
+        self.get_point_at(dist)
     }
 
     /// Check if a point is on the line
     #[inline]
     #[must_use]
-    pub fn is_on_line(self, point: Vec3<T>) -> bool {
+    pub fn is_on_line(self, point: Point3<T>) -> bool {
         let closest_point = self.get_closest_point_to(point);
         (point - closest_point).len_sq().is_zero()
     }
@@ -66,7 +65,7 @@ impl<T: Real> Line<T> {
     /// Calculate the distance of the point on the line
     #[inline]
     #[must_use]
-    pub fn dist(self, point: Vec3<T>) -> T {
+    pub fn dist(self, point: Point3<T>) -> T {
         let to_point = point - self.orig;
         self.dir.dot(to_point)
     }
@@ -102,13 +101,13 @@ impl<T: Real> From<Ray<T>> for Line<T> {
 /// 3D line segment
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct LineSegment<T: Numeric> {
-    pub begin : Vec3<T>,
-    pub end   : Vec3<T>
+    pub begin : Point3<T>,
+    pub end   : Point3<T>
 }
 
 impl<T: Numeric> LineSegment<T> {
     /// Create a new line segment
-    pub fn new(begin: Vec3<T>, end: Vec3<T>) -> Self {
+    pub fn new(begin: Point3<T>, end: Point3<T>) -> Self {
         Self { begin, end }
     }
 }
@@ -123,7 +122,7 @@ impl<T: Real> LineSegment<T> {
 
     /// Get the closest point on the line to the given point
     #[inline]
-    pub fn get_closest_point_to(self, point: Vec3<T>) -> Vec3<T> {
+    pub fn get_closest_point_to(self, point: Point3<T>) -> Point3<T> {
         let dir = self.end - self.begin;
         let len = dir.len();
         let dir = dir / len;
@@ -138,7 +137,7 @@ impl<T: Real> LineSegment<T> {
     /// Check if a point is on the line segment
     #[inline]
     #[must_use]
-    pub fn is_on_line(self, point: Vec3<T>) -> bool {
+    pub fn is_on_line(self, point: Point3<T>) -> bool {
         let closest_point = self.get_closest_point_to(point);
         (point - closest_point).len_sq().is_zero()
     }
@@ -171,7 +170,7 @@ impl<T: Real + Display> Display for LineSegment<T> {
 /// 2D line
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Line2D<T: Real> {
-    pub orig : Vec2<T>,
+    pub orig : Point2<T>,
     pub dir  : Vec2<T>,
 }
 
@@ -179,14 +178,14 @@ impl<T: Real> Line2D<T> {
     /// Create a line
     #[inline]
     #[must_use]
-    pub fn new(orig: Vec2<T>, dir: Vec2<T>) -> Self {
+    pub fn new(orig: Point2<T>, dir: Vec2<T>) -> Self {
         Self { orig, dir }
     }
 
     /// Create a line going through 2 points
     #[inline]
     #[must_use]
-    pub fn from_points(a: Vec2<T>, b: Vec2<T>) -> Self {
+    pub fn from_points(a: Point2<T>, b: Point2<T>) -> Self {
         let dir = (b - a).normalize();
         Self { orig: a, dir }
     }
@@ -209,14 +208,14 @@ impl<T: Real> Line2D<T> {
     /// Get a point on the line at the given distance from the origin
     #[inline]
     #[must_use]
-    pub fn get_point_at(self, dist: T) -> Vec2<T> {
+    pub fn get_point_at(self, dist: T) -> Point2<T> {
         self.orig + self.dir * dist
     }
 
     /// Get the closest point on the line to the given point
     #[inline]
     #[must_use]
-    pub fn get_closest_point_to(self, point: Vec2<T>) -> Vec2<T> {
+    pub fn get_closest_point_to(self, point: Point2<T>) -> Point2<T> {
         let to_point = point - self.orig;
         let dot = self.dir.dot(to_point);
         self.get_point_at(dot)
@@ -225,7 +224,7 @@ impl<T: Real> Line2D<T> {
     // Check if a point is on the line
     #[inline]
     #[must_use]
-    pub fn is_on_line(self, point: Vec2<T>) -> bool {
+    pub fn is_on_line(self, point: Point2<T>) -> bool {
         let closest_point = self.get_closest_point_to(point);
         (point - closest_point).len_sq().is_zero()
     }
@@ -233,7 +232,7 @@ impl<T: Real> Line2D<T> {
     /// Calculate the distance of the point on the line
     #[inline]
     #[must_use]
-    pub fn dist(self, point: Vec2<T>) -> T {
+    pub fn dist(self, point: Point2<T>) -> T {
         let to_point = point - self.orig;
         self.dir.dot(to_point)
     }
@@ -269,13 +268,13 @@ impl<T: Real> From<Ray2D<T>> for Line2D<T> {
 /// 2D line segment
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct LineSegment2D<T: Numeric> {
-    pub begin : Vec2<T>,
-    pub end   : Vec2<T>
+    pub begin : Point2<T>,
+    pub end   : Point2<T>
 }
 
 impl<T: Numeric> LineSegment2D<T> {
     /// Create a new line segment
-    pub fn new(begin: Vec2<T>, end: Vec2<T>) -> Self {
+    pub fn new(begin: Point2<T>, end: Point2<T>) -> Self {
         Self { begin, end }
     }
 }
@@ -290,7 +289,7 @@ impl<T: Real> LineSegment2D<T> {
 
     /// Get the closest point on the line to the given point
     #[must_use]
-    pub fn get_closest_point_to(self, point: Vec2<T>) -> Vec2<T> {
+    pub fn get_closest_point_to(self, point: Point2<T>) -> Point2<T> {
         let dir = self.end - self.begin;
         let len = dir.len();
         let dir = dir / len;
@@ -305,7 +304,7 @@ impl<T: Real> LineSegment2D<T> {
     // Check if a point is on the line segment
     #[inline]
     #[must_use]
-    pub fn is_on_line(self, point: Vec2<T>) -> bool {
+    pub fn is_on_line(self, point: Point2<T>) -> bool {
         let closest_point = self.get_closest_point_to(point);
         (point - closest_point).len_sq().is_zero()
     }

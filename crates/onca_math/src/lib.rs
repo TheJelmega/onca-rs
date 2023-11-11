@@ -11,6 +11,9 @@
 
 #![allow(dead_code)]
 
+pub(crate) mod common;
+pub use common::*;
+
 mod numeric;
 pub use numeric::*;
 
@@ -26,11 +29,23 @@ pub use angle::*;
 mod vec;
 pub use vec::*;
 
+mod point;
+pub use point::*;
+
+mod normal;
+pub use normal::*;
+
 mod mat;
 pub use mat::*;
 
 mod quat;
 pub use quat::*;
+
+mod ray;
+pub use ray::*;
+
+mod bounded_ray;
+pub use bounded_ray::*;
 
 mod plane;
 pub use plane::*;
@@ -47,13 +62,13 @@ pub use aabb::*;
 mod sphere;
 pub use sphere::*;
 
-mod ray;
-pub use ray::*;
-
 mod line;
 pub use line::*;
 
 mod intersections;
 pub use intersections::*;
+
+mod local_system;
+pub use local_system::*;
 
 pub mod pixel;

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Vec3, ApproxEq, Real};
+use crate::*;
 
 /// Representation of a plane, represented by its normal and its distance from the origin
 #[derive(Clone, Copy, PartialEq, Debug)]

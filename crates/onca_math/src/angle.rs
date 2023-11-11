@@ -1,10 +1,202 @@
-use crate::{Real, ApproxEq, ApproxZero, Zero, NumericCast, Trig, InvTrig, MathConsts};
-use core::ops::*;
-use std::fmt::Display;
+use crate::*;
+use std::{
+    ops::*,
+    fmt::Display,
+};
+
+
+/// A trait to perform triginometric calculations on a value
+pub trait Trig: Copy {
+    type Output: Copy;
+
+    /// Get the sine of a value
+    fn sin(self) -> Self::Output;
+    /// Get the cosine of a value
+    fn cos(self) -> Self::Output;
+    /// Get the sine and cosine of a value
+    /// 
+    /// # Note
+    /// 
+    /// Depending on the implementation, this may be faster than getting the sine and cosine separately
+    fn sin_cos(self) -> (Self::Output, Self::Output);
+    /// Get the tangent of a value
+    fn tan(self) -> Self::Output;
+    /// Get the secant of a value
+    fn sec(self) -> Self::Output;
+    /// Get the cosecant of a value
+    fn csc(self) -> Self::Output;
+    // Get the cotangent of a value
+    fn cot(self) -> Self::Output;
+}
+
+/// A trait to perform hyperbolic triginometric calculations on a value
+pub trait TrigH: Copy {
+    type Output: Copy;
+
+    // Get the hyperbolic sine of a value
+    fn sinh(self) -> Self::Output;
+    /// Get the hyperbolic cosine of a value
+    fn cosh(self) -> Self::Output;
+    /// Get the hyperbolic tangent of a value
+    fn tanh(self) -> Self::Output;
+}
+
+/// A trait to perform inverted triginometric calculations on a value
+pub trait InvTrig<T: Copy>: Copy {
+    /// Get the arcsine of a value
+    fn asin(val: T) -> Self;
+    /// Get the arccosine of a value
+    fn acos(val: T) -> Self;
+    /// Get the arctangent of a value
+    fn atan(val: T) -> Self;
+    /// Get the arctangent of a value
+    /// 
+    /// `self` represents the `y` value
+    fn atan2(y: T, x: T) -> Self;
+    /// Get the arccosine of a value
+    fn acsc(val: T) -> Self;
+    /// Get the arcsine of a value
+    fn asec(val: T) -> Self;
+    /// Get the arctangent of a value
+    fn acot(val: T) -> Self;
+}
+
+/// A trait that is similar close to identical to `InvTrig`, but clamps the passed value to that is does not go out of bound by inaccuracies caused by rounding errors
+pub trait SafeInvTrig<T: Clamp>: Copy {
+    /// Get the arcsine of a value (value is clamped to [-1;1])
+    fn safe_asin(val:T) -> Self;
+    /// Get the arccosine of a value (value is clamped to [-1;1])
+    fn safe_acos(val:T) -> Self;
+}
+
+/// A trait to perform inverted hyperbolic triginometric calculations on a value
+pub trait InvTrigH<T: Copy>: Copy {
+    /// Get the hyperbolic arcsine of a value
+    fn asinh(val: T) -> Self;
+    /// Get the hyperbolic arccosine of a value
+    fn acosh(val: T) -> Self;
+    /// Get the hyperbolic arctangent of a value
+    fn atanh(val: T) -> Self;
+}
+
+macro_rules! impl_trig {
+    ($($ty:ty)*) => {
+        $(
+            impl Trig for $ty {
+                type Output = Self;
+
+                fn sin(self) -> Self {
+                    self.sin()
+                }
+
+                fn cos(self) -> Self {
+                    self.cos()
+                }
+
+                fn sin_cos(self) -> (Self, Self) {
+                    self.sin_cos()
+                }
+                
+                fn tan(self) -> Self {
+                    self.tan()
+                }
+
+                fn csc(self) -> Self {
+                    (1.0 as $ty) / self.cos()
+                }
+
+                fn sec(self) -> Self {
+                    (1.0 as $ty) / self.sin()
+                }
+
+                fn cot(self) -> Self {
+                    (1.0 as $ty) / self.tan()
+                }
+            }
+
+            impl TrigH for $ty {
+                type Output = Self;
+
+                fn sinh(self) -> Self {
+                    self.sinh()
+                }
+
+                fn cosh(self) -> Self {
+                    self.cosh()
+                }
+
+                fn tanh(self) -> Self {
+                    self.tanh()
+                }
+            }
+
+            impl InvTrig<$ty> for $ty {
+                fn asin(val: $ty) -> Self {
+                    val.asin()
+                }
+
+                fn acos(val: $ty) -> Self {
+                    val.acos()
+                }
+
+                fn atan(val: $ty) -> Self {
+                    val.atan()
+                }
+
+                fn atan2(y: $ty, x: $ty) -> Self {
+                    y.atan2(x)
+                }
+
+                fn acsc(val: $ty) -> Self {
+                    ((1.0 as $ty) / val).asin()
+                }
+
+                fn asec(val: $ty) -> Self {
+                    ((1.0 as $ty) / val).acos()
+                }
+
+                fn acot(val: $ty) -> Self {
+                    ((1.0 as $ty) / val).atan()
+                }
+            }
+
+            impl InvTrigH<$ty> for $ty {
+                fn asinh(val: $ty) -> Self {
+                    val.asinh()
+                }
+
+                fn acosh(val: $ty) -> Self {
+                    val.acosh()
+                }
+
+                fn atanh(val: $ty) -> Self {
+                    val.atanh()
+                }
+            }
+        )*
+    };
+}
+impl_trig!{ f32 f64 }
+
+impl<T, U> SafeInvTrig<U> for T where
+    T: InvTrig<U>,
+    U: One + Clamp + Neg<Output = U>
+{
+    fn safe_asin(val: U) -> Self {
+        T::asin(val.clamp(-U::one(), U::one()))
+    }
+
+    fn safe_acos(val: U) -> Self {
+        T::acos(val.clamp(-U::one(), U::one()))
+    }
+}
+
+//--------------------------------------------------------------
+
 
 macro_rules! angle_common {
-    {$name:ident} => {
-        impl<T: Copy + Add<Output = T>> Add for $name<T> {
+    {$iden:ident} => {
+        impl<T: Copy + Add<Output = T>> Add for $iden<T> {
             type Output = Self;
         
             fn add(self, rhs: Self) -> Self::Output {
@@ -12,13 +204,13 @@ macro_rules! angle_common {
             }
         }
 
-        impl<T: Copy + AddAssign> AddAssign for $name<T> {
+        impl<T: Copy + AddAssign> AddAssign for $iden<T> {
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: Copy + Sub<Output = T>> Sub for $name<T> {
+        impl<T: Copy + Sub<Output = T>> Sub for $iden<T> {
             type Output = Self;
         
             fn sub(self, rhs: Self) -> Self::Output {
@@ -26,7 +218,7 @@ macro_rules! angle_common {
             }
         }
 
-        impl<T: Copy + SubAssign> SubAssign for $name<T> {
+        impl<T: Copy + SubAssign> SubAssign for $iden<T> {
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
@@ -34,7 +226,7 @@ macro_rules! angle_common {
 
         //--------------------------------------------------------------
 
-        impl<T: Copy + Mul<Output = T>> Mul<T> for $name<T> {
+        impl<T: Copy + Mul<Output = T>> Mul<T> for $iden<T> {
             type Output = Self;
         
             fn mul(self, rhs: T) -> Self::Output {
@@ -42,13 +234,13 @@ macro_rules! angle_common {
             }
         }
 
-        impl<T: Copy + MulAssign> MulAssign<T> for $name<T> {
+        impl<T: Copy + MulAssign> MulAssign<T> for $iden<T> {
             fn mul_assign(&mut self, rhs: T) {
                 self.0 *= rhs;
             }
         }
 
-        impl<T: Copy + Div<Output = T>> Div<T> for $name<T> {
+        impl<T: Copy + Div<Output = T>> Div<T> for $iden<T> {
             type Output = Self;
         
             fn div(self, rhs: T) -> Self::Output {
@@ -56,7 +248,7 @@ macro_rules! angle_common {
             }
         }
 
-        impl<T: Copy + DivAssign> DivAssign<T> for $name<T> {
+        impl<T: Copy + DivAssign> DivAssign<T> for $iden<T> {
             fn div_assign(&mut self, rhs: T) {
                 self.0 /= rhs;
             }
@@ -64,7 +256,7 @@ macro_rules! angle_common {
 
         //--------------------------------------------------------------
 
-        impl<T: Copy + Neg<Output = T>> Neg for $name<T> {
+        impl<T: Copy + Neg<Output = T>> Neg for $iden<T> {
             type Output = Self;
 
             fn neg(self) -> Self::Output {
@@ -74,7 +266,7 @@ macro_rules! angle_common {
 
         //--------------------------------------------------------------
 
-        impl<T: Copy + ApproxEq> ApproxEq<T> for $name<T> {
+        impl<T: ApproxEq> ApproxEq<T> for $iden<T> {
             const EPSILON: T = T::EPSILON;
         
             fn is_close_to(self, rhs: Self, epsilon: T) -> bool {
@@ -82,11 +274,7 @@ macro_rules! angle_common {
             }
         }
         
-        //--------------------------------------------------------------
-
-        impl<T: ApproxZero> ApproxZero<T> for $name<T> {
-            const ZERO_EPSILON: T = T::ZERO_EPSILON;
-        
+        impl<T: ApproxZero> ApproxZero<T> for $iden<T> {
             fn is_close_to_zero(self, epsilon: T) -> bool {
                 self.0.is_close_to_zero(epsilon)
             }
@@ -94,22 +282,24 @@ macro_rules! angle_common {
         
         //--------------------------------------------------------------
 
-        impl<T: Zero> Zero for $name<T> {
+        impl<T: Zero> Zero for $iden<T> {
             fn zero() -> Self {
                 Self(T::zero())
             }
         }
+
+    
     };
 }
 
 macro_rules! angle_pre_multiplication {
-    {$name:ident, $($ty:ty),*} => {
+    {$iden:ident, $($ty:ty),*} => {
         $(
-            impl Mul<$name<$ty>> for $ty {
-                type Output = $name<$ty>;
+            impl Mul<$iden<$ty>> for $ty {
+                type Output = $iden<$ty>;
             
-                fn mul(self, rhs: $name<$ty>) -> Self::Output {
-                    $name(self * rhs.0)
+                fn mul(self, rhs: $iden<$ty>) -> Self::Output {
+                    $iden(self * rhs.0)
                 }
             }
         )*
@@ -151,10 +341,8 @@ impl<T: Real> Degrees<T> {
     /// Wrap the angle so it's in the range of [-360, 360]
     #[inline]
     #[must_use]
-    pub fn wrap(self) -> Self where
-        i32: NumericCast<T>
-    {
-        Self(self.0 % 360.cast())
+    pub fn wrap(self) -> Self {
+        Self(self.0 % T::from_i32(360))
     }
     
     /// Convert degrees to radians
@@ -185,6 +373,24 @@ impl<T: Trig> Trig for Degrees<T> where
     fn tan(self) -> Self::Output {
         self.to_radians().tan()
     }
+
+    fn sec(self) -> Self::Output {
+        self.to_radians().sec()
+    }
+
+    fn csc(self) -> Self::Output {
+        self.to_radians().csc()
+    }
+
+    fn cot(self) -> Self::Output {
+        self.to_radians().cot()
+    }
+}
+
+impl<T: TrigH> TrigH for Degrees<T> where
+    Self: ToRadians<T>
+{
+    type Output = <T as TrigH>::Output;
 
     fn sinh(self) -> Self::Output {
         self.to_radians().sinh()
@@ -220,6 +426,24 @@ impl<T, U> InvTrig<U> for Degrees<T> where
         Radians::atan2(y, x).to_degrees()
     }
 
+    fn acsc(val: U) -> Self {
+        Radians::acsc(val).to_degrees()
+    }
+
+    fn asec(val: U) -> Self {
+        Radians::asec(val).to_degrees()
+    }
+
+    fn acot(val: U) -> Self {
+        Radians::acot(val).to_degrees()
+    }
+}
+
+impl<T, U> InvTrigH<U> for Degrees<T> where
+    T: InvTrigH<U>,
+    U: Copy,
+    Radians<T>: ToDegrees<T>
+{
     fn asinh(val: U) -> Self {
         Radians::asinh(val).to_degrees()
     }
@@ -245,21 +469,20 @@ impl<T: Real> From<Radians<T>> for Degrees<T> {
     }
 }
 
-impl<T: Real + Display> Display for Degrees<T> where
-    i32: NumericCast<T>
-{
+impl<T: Real + Display> Display for Degrees<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
     {
         let deg_fract = self.0.fract();
         let degs = self.0 - deg_fract;
 
-        let minutes = deg_fract * 60.cast();
+        let sixty = T::from_i32(60);
+        let minutes = deg_fract * sixty;
         let minutes_fract = minutes.fract();
         let minutes = minutes - minutes_fract;
 
-        let seconds = minutes_fract * 60.cast();
+        let seconds = minutes_fract * sixty;
 
-        f.write_fmt(format_args!("{}°{}'{}\"", degs, minutes, seconds))
+        f.write_fmt(format_args!("{}°{}′{}″", degs, minutes, seconds))
     }
 }
 
@@ -306,6 +529,22 @@ impl<T: Trig> Trig for Radians<T> {
         self.0.tan()
     }
 
+    fn sec(self) -> Self::Output {
+        self.0.sec()
+    }
+
+    fn csc(self) -> Self::Output {
+        self.0.csc()
+    }
+
+    fn cot(self) -> Self::Output {
+        self.0.cot()
+    }
+}
+
+impl<T: TrigH> TrigH for Radians<T> {
+    type Output = <T as TrigH>::Output;
+
     fn sinh(self) -> Self::Output {
         self.0.sinh()
     }
@@ -336,6 +575,20 @@ impl<T: InvTrig<U>, U: Copy> InvTrig<U> for Radians<T> {
         Self(T::atan2(y, x))
     }
 
+    fn acsc(val: U) -> Self {
+        Self(T::acsc(val))
+    }
+
+    fn asec(val: U) -> Self {
+        Self(T::asec(val))
+    }
+
+    fn acot(val: U) -> Self {
+        Self(T::acot(val))
+    }
+}
+
+impl<T: InvTrigH<U>, U: Copy> InvTrigH<U> for Radians<T> {
     fn asinh(val: U) -> Self {
         Self(T::asinh(val))
     }

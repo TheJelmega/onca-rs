@@ -8,7 +8,7 @@ use onca_common::{
     event_listener::*,
 };
 use onca_common_macros::flags;
-use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z};
+use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z, Swizzle};
 
 use crate::{AxisValue, AxisType, User, InputProcessContext, InputAxisId};
 
@@ -37,14 +37,14 @@ pub enum AxisSwizzle {
 }
 
 impl AxisSwizzle {
-    fn to_swizzle_constants(self) -> (u8, u8, u8) {
+    fn to_swizzle_constants(self) -> (Swizzle, Swizzle, Swizzle) {
         match self {
-            AxisSwizzle::XYZ => (SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z),
-            AxisSwizzle::XZY => (SWIZZLE_X, SWIZZLE_Z, SWIZZLE_Y),
-            AxisSwizzle::YXZ => (SWIZZLE_Y, SWIZZLE_X, SWIZZLE_Z),
-            AxisSwizzle::YZX => (SWIZZLE_Y, SWIZZLE_Z, SWIZZLE_X),
-            AxisSwizzle::ZXY => (SWIZZLE_Z, SWIZZLE_X, SWIZZLE_Y),
-            AxisSwizzle::ZYX => (SWIZZLE_Z, SWIZZLE_Y, SWIZZLE_X),
+            AxisSwizzle::XYZ => (Swizzle::X, Swizzle::Y, Swizzle::Z),
+            AxisSwizzle::XZY => (Swizzle::X, Swizzle::Z, Swizzle::Y),
+            AxisSwizzle::YXZ => (Swizzle::Y, Swizzle::X, Swizzle::Z),
+            AxisSwizzle::YZX => (Swizzle::Y, Swizzle::Z, Swizzle::X),
+            AxisSwizzle::ZXY => (Swizzle::Z, Swizzle::X, Swizzle::Y),
+            AxisSwizzle::ZYX => (Swizzle::Z, Swizzle::Y, Swizzle::X),
         }
     }
 }
@@ -152,11 +152,11 @@ impl Modifier {
         let (x, y, z) = swizzle.to_swizzle_constants();
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
-            AxisValue::Axis(val) => AxisValue::Axis(if x == SWIZZLE_X { val } else { 0f32 }),
+            AxisValue::Axis(val) => AxisValue::Axis(if x == Swizzle::X { val } else { 0f32 }),
             AxisValue::Axis2D(val) => {
                 AxisValue::Axis2D(f32v2::new(
-                    if x == SWIZZLE_Z { 0f32 } else { val[x as usize] },
-                    if y == SWIZZLE_Z { 0f32 } else { val[y as usize] }
+                    if x == Swizzle::Z { 0f32 } else { val[x as usize] },
+                    if y == Swizzle::Z { 0f32 } else { val[y as usize] }
                 ))
             },
             AxisValue::Axis3D(val) => AxisValue::Axis3D(val.swizzle(x, y, z)),

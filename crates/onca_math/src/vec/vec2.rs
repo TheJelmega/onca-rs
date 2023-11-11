@@ -4,7 +4,7 @@ use std::{
 };
 use crate::*;
 
-generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, x, y;
+generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, (T, T), x => 0, y => 1;
     i8v2  => i8
     i16v2 => i16
     i32v2 => i32
@@ -17,7 +17,7 @@ generic_vec!{ doc = "2D Vector (row-major order)"; Vec2, 2, x, y;
     f64v2 => f64
 }
 
-impl<T: Copy> Vec2<T> {
+impl<T: Numeric> Vec2<T> {
     /// Extend a `Vec2` to a `Vec3`
     #[inline]
     #[must_use]
@@ -34,7 +34,7 @@ impl<T: Copy> Vec2<T> {
     }
 }
 
-impl<T: Copy + Neg<Output = T>> Vec2<T> {
+impl<T: Signed> Vec2<T> {
     /// Get a vector that's perpendicular to the vector, rotated clockwise
     #[inline]
     pub fn perpendicular_cw(self) -> Self {
@@ -78,8 +78,7 @@ impl<T: Real> Vec2<T> {
     pub fn angle_with(self, other: Self) -> Radians<T> where
         Radians<T>: InvTrig<T>
     {
-        let acos = self.dot(other) / (self.len() * other.len());
-        Radians::acos(acos)
+        Self::angle_with_normalized(self.normalize(), other.normalize())
     }
 
     /// Find the shortest angle with another vector, where the given vectors are normalized (avoid division by the product of the lengths)
@@ -88,18 +87,20 @@ impl<T: Real> Vec2<T> {
     {
         debug_assert!(self.is_normalized());
         debug_assert!(other.is_normalized());
-        let acos = self.dot(other);
-        Radians::acos(acos)
+
+        // More accurate version from `Physically Based Rendering 4th edition`
+        if self.dot(other) > T::zero() {
+            Radians::new(T::PI) - Radians::safe_asin(T::from_i32(2) * ((self + other).len() / T::from_i32(2)))
+        } else {
+            Radians::safe_asin(T::from_i32(2) * ((self + other).len() / T::from_i32(2)))
+        }
     }
 
     /// Find the angle with another vector, respecting the order of the vectors
     pub fn angle_with_full(self, other: Self) -> Radians<T> where
         Radians<T>: InvTrig<T>
     {
-        let acos = self.dot(other) / (self.len() * other.len());
-        let angle = Radians::acos(acos);
-        let cross = self.cross(other);
-        if cross < T::zero() { -angle } else { angle }
+        Self::angle_with_full_normalized(self.normalize(), other.normalize())
     }
 
     /// Find the angle with another vector, respecting the order of the vectors (avoid division by the product of the lengths)
@@ -108,35 +109,21 @@ impl<T: Real> Vec2<T> {
     {
         debug_assert!(self.is_normalized());
         debug_assert!(other.is_normalized());
-        let acos = self.dot(other);
-        let angle = Radians::acos(acos);
+        let angle = if self.dot(other) > T::zero() {
+            Radians::new(T::PI) - Radians::asin(T::from_i32(2) * ((self + other).len() / T::from_i32(2)))
+        } else {
+            Radians::asin(T::from_i32(2) * ((self + other).len() / T::from_i32(2)))
+        };
         let cross = self.cross(other);
         if cross < T::zero() { -angle } else { angle }
     }
 
-    /// Get or flip the vector, so it's pointing in the opposite direction of the incidence vector, relative to the normal
-    pub fn face_forward(self, incidence: Self, normal: Self) -> Self {
-        if incidence.dot(normal) < T::zero() { self } else { -self }
+    /// Convert the vector into one that is orthogonal to the `base` vector.
+    #[must_use]
+    pub fn gram_schmidt(self, base: Self) -> Self {
+        self - base * self.dot(base)
     }
 
-    /// Reflect a vector on a 'surface' with a normal
-    pub fn reflect(self, normal: Self) -> Self where
-        i32: NumericCast<T>
-    {
-        debug_assert!(normal.is_normalized());
-        self - normal * self.dot(normal) * 2.cast()
-    }
-
-    /// Refract the vector through a `surface` with a given `normal` and `eta` (ratio of indices of refraction at the surface interface (outgoing / ingoing))
-    pub fn refract(self, normal: Self, eta: T) -> Self {
-        debug_assert!(normal.is_normalized());
-
-        let cosi = self.dot(normal);
-        debug_assert!(cosi < T::zero(), "vector should move into hte surface (`self` and `normal` should point in opposite directions)");
-
-        let k = T::one() - eta * eta * (T::one() - cosi * cosi);
-        if k >= T::zero() { self * eta - normal * (eta * cosi + k.sqrt()) } else { Vec2::zero() }
-    }
 }
 
 impl<T: Real> Mul<Mat2<T>> for Vec2<T> {
@@ -157,23 +144,59 @@ impl<T: Real> MulAssign<Mat2<T>> for Vec2<T> {
 
 impl<T: Numeric + Display> Display for Vec2<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("({}, {})", self.x, self.y))
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 
 // Swizzles
 impl<T: Numeric> Vec2<T> {
     /// Swizzle the components of the vector
-    pub fn swizzle(self, x: u8, y: u8) -> Self {
-        debug_assert!(x < 2);
-        debug_assert!(y < 2);
+    pub fn swizzle(self, x: Swizzle, y: Swizzle) -> Self {
+        debug_assert!(x <= Swizzle::Y);
+        debug_assert!(y <= Swizzle::Y);
         Self { x: self[x as usize], y: self[y as usize] }
     }
 
-    create_swizzle!{@2d xx, x, x}
-    create_swizzle!{@2d xy, x, y}
-    create_swizzle!{@2d yx, y, x}
-    create_swizzle!{@2d yy, y, y}
+    /// Swizzle the components of the vector into a `Vec3`
+    pub fn sizzle3(self, x: Swizzle, y: Swizzle, z: Swizzle) -> Vec3<T> {
+        debug_assert!(x <= Swizzle::Y);
+        debug_assert!(y <= Swizzle::Y);
+        debug_assert!(z <= Swizzle::Y);
+        Vec3 { x: self[x as usize], y: self[y as usize], z: self[z as usize] }
+    }
+
+    /// Swizzle the components of the vector into a `Vec4`
+    pub fn sizzle4(self, x: Swizzle, y: Swizzle, z: Swizzle, w: Swizzle) -> Vec4<T> {
+        debug_assert!(x <= Swizzle::Y);
+        debug_assert!(y <= Swizzle::Y);
+        debug_assert!(z <= Swizzle::Y);
+        Vec4 { x: self[x as usize], y: self[y as usize], z: self[z as usize], w: self[w as usize] }
+    }
+
+    create_swizzle!{@2d 
+        xx => x, x   xy => x, y
+        yx => y, x   yy => y, y
+    }
+
+    create_swizzle!{@3d
+        xxx => x, x, x  xxy => x, x, y
+        xyx => x, y, x  xyy => x, y, y
+
+        yxx => y, x, x  yxy => y, x, y
+        yyx => y, y, x  yyy => y, y, y
+    }
+
+    create_swizzle!{@4d
+        xxxx => x, x, x, x  xxxy => x, x, x, y
+        xxyx => x, x, y, x  xxyy => x, x, y, y
+        xyxx => x, y, x, x  xyxy => x, y, x, y
+        xyyx => x, y, y, x  xyyy => x, y, y, y
+
+        yxxx => y, x, x, x  yxxy => y, x, x, y
+        yxyx => y, x, y, x  yxyy => y, x, y, y
+        yyxx => y, y, x, x  yyxy => y, y, x, y
+        yyyx => y, y, y, x  yyyy => y, y, y, y
+    }
 }
 
 // Constants
@@ -186,232 +209,13 @@ impl<T: Signed> Vec2<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Vec2, numeric::*};
-
-    macro_rules! op_test {
-        (@vec $arr0:expr, $arr1:expr, $op:tt) => {
-            let a : Vec2<_> = $arr0.into();
-            let b : Vec2<_> = $arr0.into();
-            let res = a $op b;
-
-            let expected_x = a.x $op b.x;
-            assert_eq!(res.x, expected_x, "vec: got x-coord of {}, expected {}", res.x, expected_x);
-            let expected_y = a.y $op b.y;
-            assert_eq!(res.y, expected_y, "vec: got y-coord of {}, expected {}", res.y, expected_y);
-        };
-        (@vec_assign $arr0:expr, $arr1:expr, $op:tt) => {
-            let a : Vec2<_> = $arr0.into();
-            let b : Vec2<_> = $arr0.into();
-            let mut res = a;
-            res $op b;
-
-            let mut expected_x = a.x;
-            expected_x $op b.x;
-            assert_eq!(res.x, expected_x, "vec assign: got x-coord of {}, expected {}", res.x, expected_x);
-            let mut expected_y = a.y;
-            expected_y $op b.y;
-            assert_eq!(res.y, expected_y, "vec assign: got y-coord of {}, expected {}", res.y, expected_y);
-        };
-        (@scalar $arr:expr, $scalar:expr, $op:tt) => {
-            let a : Vec2<_> = $arr.into();
-            let res = a $op $scalar;
-
-            let expected_x = a.x $op $scalar;
-            assert_eq!(res.x, expected_x, "scalar: got x-coord of {}, expected {}", res.x, expected_x);
-            let expected_y = a.y $op $scalar;
-            assert_eq!(res.y, expected_y, "scalar:got y-coord of {}, expected {}", res.y, expected_y);
-        };
-        (@scalar_assign $arr:expr, $scalar:expr, $op:tt) => {
-            let a : Vec2<_> = $arr.into();
-            let mut res = a;
-            res $op $scalar;
-
-            let mut expected_x = a.x;
-            expected_x $op $scalar;
-            assert_eq!(res.x, expected_x, "scalar assign:got x-coord of {}, expected {}", res.x, expected_x);
-            let mut expected_y = a.y;
-            expected_y $op $scalar;
-            assert_eq!(res.y, expected_y, "scalar assign:got y-coord of {}, expected {}", res.y, expected_y);
-        };
-        ($arr0:expr, $arr1:expr, $scalar:expr, $op:tt, $assign_op:tt) => {
-
-        }
-    }
-
-    #[test]
-    fn test_create_convert() {
-        let vec = Vec2{ x: 1, y: 2 };
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let vec = Vec2::new(1, 2);
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let vec = Vec2::set(1);
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 1);
-
-        let vec = Vec2::from_array([1, 2]);
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let mut arr = [1, 2];
-        let vec = Vec2::ref_from_array(&arr);
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let vec : Vec2<_> = arr.into();
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let vec = Vec2::mut_from_array(&mut arr);
-        assert_eq!(vec.x, 1);
-        assert_eq!(vec.y, 2);
-
-        let mut vec = Vec2::new(1, 2);
-        let arr = vec.to_array();
-        assert_eq!(arr[0], 1);
-        assert_eq!(arr[1], 2);
-
-        let arr : [_; 2] = vec.into();
-        assert_eq!(arr[0], 1);
-        assert_eq!(arr[1], 2);
-
-        let arr = (&vec).as_array();
-        assert_eq!(arr[0], 1);
-        assert_eq!(arr[1], 2);
-
-        let arr = (&mut vec).as_mut_array();
-        assert_eq!(arr[0], 1);
-        assert_eq!(arr[1], 2);
-    }
-
-    #[test]
-    fn test_ops() {
-        op_test!([1, 2], [3, 4], 2, + ,  +=);
-        op_test!([1, 2], [3, 4], 2, - ,  -=);
-        op_test!([1, 2], [3, 4], 2, * ,  *=);
-        op_test!([1, 2], [3, 4], 2, / ,  /=);
-        op_test!([1, 2], [3, 4], 2, % ,  %=);
-        op_test!([1, 2], [3, 4], 2, & ,  &=);
-        op_test!([1, 2], [3, 4], 2, ^ ,  ^=);
-        op_test!([1, 2], [3, 4], 2, | ,  |=);
-        op_test!([1, 2], [3, 4], 2, <<, <<=);
-        op_test!([1, 2], [3, 4], 2, >>, >>=);
-
-        let a = Vec2::new(1, 2);
-        let res = -a;
-        assert_eq!(res.x, -1);
-        assert_eq!(res.y, -2);
-
-        let res = !a;
-        assert_eq!(res.x, !1);
-        assert_eq!(res.y, !2);
-    }
-
-    #[test]
-    fn test_cmp() {
-        let a = Vec2::new(1, 2);
-        let b = Vec2::new(2, 3);
-
-        assert!(a == a);
-        assert!(a != b);
-
-        // ApproxEq
-        assert!(a.is_close_to(a, 0));
-        assert!(!a.is_close_to(b, 0));
-        assert!(a.is_close_to(b, 1));
-
-        assert!(a.is_approx_eq(a));
-        assert!(!a.is_approx_eq(b));
-
-        // ApproxZero
-        assert!(!a.is_close_to_zero(0));
-        assert!(a.is_close_to_zero(2));
-        assert!(!a.is_zero());
-    }
-
-    #[test]
-    fn test_common_funcs() {
-        let a = Vec2::new(2, 3);
-        let b = Vec2::new(1, 4);
-
-        assert_eq!(a.min(b), Vec2::new(1, 3));
-        assert_eq!(a.max(b), Vec2::new(2, 4));
-
-        assert_eq!(b.clamp_scalar(1, 2), Vec2::new(1, 2));
-        assert_eq!(b.clamp_scalar(3, 4), Vec2::new(3, 4));
-
-        let min = Vec2::new(0, 2);
-        let max = Vec2::new(1, 5);
-        assert_eq!(a.clamp(min, max), Vec2::new(1, 3));
-        assert_eq!(b.clamp(min, max), Vec2::new(1, 4));
-
-
-        assert_eq!(a.snap(4), Vec2::new(4, 4)); // x snaps to 4, cause the value is in the middle and rounds up
-        assert_eq!(b.snap(3), Vec2::new(0, 3));
-
-        assert_eq!(Vec2::new(1.2f32, 1.6f32).snap(1f32), Vec2::new(1f32, 2f32));
-
-        assert_eq!(Vec2::new(-0.2f32, 1.5f32).saturate(), Vec2::new(0f32, 1f32));
-
-        let v0 = Vec2::new(3f32, 4f32); // len == 5
-        let v1 = Vec2::new(5f32, 12f32); // len == 13
-        let v2 = Vec2::new(0.6f32, 0.8f32); // len == 5
-        let v3 = Vec2::new(3.2f32, 3.8f32);
-
-        assert_eq!(v0.lerp(v1, 0.25f32), Vec2::new(3.5f32, 6f32));
-
-        assert_eq!(v0.len_sq(), 25f32);
-        assert_eq!(v0.len(), 5f32);
-
-        assert_eq!(v0.dist_sq(v1), 68f32);
-        assert_eq!(v0.dist(v1), 68f32.sqrt());
-
-        assert_eq!(v0.normalize(), v2);
-        assert_eq!(Vec2::set(0f32).normalize(), Vec2::set(0f32));
-
-        assert_eq!(v0.normalize_or(v1), v2);
-        assert_eq!(Vec2::set(0f32).normalize_or(v1), v1);
-
-        assert!(!v0.is_close_to_normalized(0f32));
-        assert!(v0.is_close_to_normalized(25f32));
-        assert!(v2.is_close_to_normalized(0f32));
-
-        assert!(!v0.is_normalized());
-        assert!(v2.is_normalized());
-
-        assert_eq!(v0.dir_and_len(), (v2, 5f32));
-
-        assert!(v0.clamp_len(0f32, 4f32).is_close_to(v2 * 4f32, 0.000001f32));
-        assert!(v0.clamp_len(16f32, 20f32).is_close_to(v2 * 16f32, 0.000001f32));
-
-        assert_eq!(Vec2::new(-3f32, -4f32).abs(), v0);
-        assert_eq!(v3.ceil(), Vec2::new(4f32, 4f32));
-        assert_eq!(v3.floor(), Vec2::new(3f32, 3f32));
-        assert_eq!(v3.round(), v0);
-        assert_eq!(Vec2::new(-4f32, 5f32).sign(), Vec2::new(-1f32, 1f32));
-        assert!(v3.fract().is_close_to(Vec2::new(0.2f32, 0.8f32), 0.0000001f32));
-
-        // Common per vec funcs
-        let v0 = Vec2::new(2f32, -3f32);
-
-        assert!(!v0.is_uniform(0.1f32));
-        assert!(v0.is_uniform(5f32));
-
-        assert_eq!(v0.min_component(), -3f32);
-        assert_eq!(v0.min_abs_component(), 2f32);
-        assert_eq!(v0.max_component(), 2f32);
-        assert_eq!(v0.max_abs_component(), 3f32);
-    }
+    use crate::Vec2;
 
     #[test]
     fn test_spec_fun() {
         let v0 = Vec2::new(2f32, -3f32);
         let v1 = Vec2::new(4f32, 5f32);
 
-        assert_eq!(v0.dot(v1), -7f32);
         assert_eq!(v0.cross(v1), 22f32);
 
         assert_eq!(v0.perpendicular_cw(), Vec2::new(-3f32, -2f32));

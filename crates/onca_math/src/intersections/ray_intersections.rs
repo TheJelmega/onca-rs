@@ -1,237 +1,312 @@
 use crate::*;
 
-//-- 2D: ray-ray intersection --------------------------------------------------------------------------------------------------
 
-impl<T: Real> Intersect<Ray2D<T>> for Ray2D<T> {
-    type Output = T;
+//------------------------------------------------------------------------------------------------------------------------------
+// 2D
+//------------------------------------------------------------------------------------------------------------------------------
 
-    fn intersect(self, rhs: Ray2D<T>) -> Self::Output {
-        let ab = rhs.orig - self.orig;
-        let ab_cross = ab.cross(rhs.dir);
-        let dir_cross = self.dir.cross(rhs.dir);
+//- 2D ray-line intersection ---------------------------------------------------------------------------------------------------
 
-        ab_cross / dir_cross
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for Line2D<T> {
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+        let dir_cross = ray.dir.cross(self.dir);
+        if dir_cross.is_zero() {
+            return None;
+        }
+
+        let ab = self.orig - ray.orig;
+        let ray_cross = ab.cross(self.dir);
+        let t = ray_cross / dir_cross;
+
+        if t >= T::zero() {
+            Some(t)
+        } else {
+            None
+        }
     }
 }
 
-//-- 2D: ray-line intersection -------------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<Line2D<T>> for Ray2D<T> {
-    type Output = T;
-
-    fn intersect(self, rhs: Line2D<T>) -> Self::Output {
-        let ab = rhs.orig - self.orig;
-        let ab_cross = ab.cross(rhs.dir);
-        let dir_cross = self.dir.cross(rhs.dir);
-
-        ab_cross / dir_cross
-    }
-}
-
-//-- 2D: ray-line segment intersection -----------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<LineSegment2D<T>> for Ray2D<T> {
-    type Output = T;
-
-    fn intersect(self, rhs: LineSegment2D<T>) -> Self::Output {
-        let segment_dir = (rhs.end - rhs.begin).normalize();
-        let ab = rhs.begin - self.orig;
-        let dir_cross = self.dir.cross(segment_dir);
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for Line2D<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
         
-        // If we are not on the segment, no intersection happened
-        let seg_cross = ab.cross(self.dir);
+    }
+}
 
-        // `seg_cross / dir_cross` is in range [0; 1], so just compare with [0; dir_cross]
-        if seg_cross < T::zero() || seg_cross > dir_cross {
-            return T::INF;
+//- 2D ray-line segnent intersection -------------------------------------------------------------------------------------------
+
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for LineSegment2D<T> {
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+        let segment_dir = self.end - self.begin;
+        let dir_cross = ray.dir.cross(segment_dir);
+        if dir_cross.is_zero() {
+            return None;
+        }
+
+        let ab = self.begin - ray.orig;
+
+        // Value on line segment
+        let segment_cross = ab.cross(ray.dir);
+        let segment_t = segment_cross / dir_cross;
+        if segment_t < T::zero() || segment_t > T::one() {
+            return None;
+        }
+
+        // Value on ray
+        let ray_cross = ab.cross(segment_dir);
+        let t = ray_cross / dir_cross;
+
+        if t >= T::zero() {
+            Some(t)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for LineSegment2D<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
+        
+    }
+}
+
+//- 2D ray-ray intersection ----------------------------------------------------------------------------------------------------
+
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for Ray2D<T> {
+    // Keep in mind that this function works from the perspective of the ray that's given to us
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+        // Math explenation, also holds for:
+        // - Lines: no need to check if it's on the line
+        // - Segments: the same logic, with the exception that the segment's point is calculated between [0; segment.len()] + segment's dir lenght cancels out
+        //
+        // Given: 
+        //     'point on ray0 = a + t * r' and 'point on ray1 = b + u * s ', where the point is the common point on the line,
+        //
+        // We get:
+        //     a + t * r = b + u * s
+        //
+        // And by using the fact that `v ⨯ v == 0, we can rewrite the equation for:
+        // - ray0:
+        //          (a + t * r) ⨯ s = (b + u * s) ⨯ s
+        //    (a ⨯ s) + t * (r ⨯ s) = (b ⨯ s) + u * (s ⨯ s)
+        //    (a ⨯ s) + t * (r ⨯ s) = b ⨯ s
+        //              t * (r ⨯ s) = (b ⨯ s) - (a ⨯ s)
+        //              t * (r ⨯ s) = (b - a) ⨯ s
+        //                        t = ((b - a) ⨯ s) / (r ⨯ s)
+        //
+        // - ray1: 
+        //    using the same logic as above, but crossing with r, we can get: 
+        //        u = ((b - a) ⨯ r) / (s ⨯ r)
+        //
+        //    additionally with property: (s ⨯ r) = - (r ⨯ s), we get:
+        //        u = ((b - a) ⨯ r) / -(r ⨯ s)
+        //
+        // We can use these equation to calculate the point and distance t, as long as 0 <= t <= 1 
+        //
+        // With the edge case that if `(r ⨯ s) == 0`, we have parallel ray, and so no intersection, as we will not count it as such
+
+        let dir_cross = ray.dir.cross(self.dir);
+        if dir_cross.is_zero() {
+            return None;
         }
         
-        let ab_cross = ab.cross(segment_dir);
-        ab_cross / dir_cross
-    }
-}
-
-impl<T: Real> Intersect<Ray2D<T>> for LineSegment2D<T> {
-    type Output = <Ray2D<T> as Intersect<LineSegment2D<T>>>::Output;
-
-    /// Calculate the itnersection point between a 2D ray and a circle
-    /// 
-    /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
-    fn intersect(self, rhs: Ray2D<T>) -> Self::Output {
-        <Ray2D<T> as Intersect<LineSegment2D<T>>>::intersect(rhs, self)
-    }
-}
-
-//-- 2D: ray-circle intersection -----------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<Circle<T>> for Ray2D<T> {
-    type Output = T;
-
-    /// Calculate the itnersection point between a 2D ray and a circle
-    /// 
-    /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
-    fn intersect(self, rhs: Circle<T>) -> T {
-        let dist_to_mid = self.dist(rhs.center);
-        let mid = self.orig + self.dir * dist_to_mid;
-        let dist_from_center_sq = (mid - rhs.center).len_sq();
-
-        let radius2 = rhs.radius * rhs.radius;
-        if dist_from_center_sq > radius2 {
-            T::INF
+        let ab = self.orig - ray.orig;
+        
+        // Value on line segment
+        let self_cross = ab.cross(ray.dir);
+        let self_t = self_cross / dir_cross;
+        if self_t < T::zero() {
+            return None;
+        }
+        
+        // Value on ray
+        let ray_cross = ab.cross(self.dir);
+        let t = ray_cross / dir_cross;
+        
+        if t >= T::zero() {
+            Some(t)
         } else {
-            if dist_from_center_sq.is_approx_eq(radius2) {
-                dist_to_mid
-            } else {
-                let offset = (radius2 - dist_from_center_sq).sqrt();
-                dist_to_mid - offset
+            None
+        }
+    }
+}
+
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for Ray2D<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
+        
+    }
+}
+
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for BoundedRay2D<T> {
+    // Keep in mind that this function works from the perspective of the ray that's given to us
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+
+        let dir_cross = ray.dir.cross(self.dir);
+        if dir_cross.is_zero() {
+            return None;
+        }
+        
+        let ab = self.orig - ray.orig;
+        
+        // Value on line segment
+        let self_cross = ab.cross(ray.dir);
+        let self_t = self_cross / dir_cross;
+        if self_t < self.min || self_t > self.max {
+            return None;
+        }
+        
+        // Value on ray
+        let ray_cross = ab.cross(self.dir);
+        let t = ray_cross / dir_cross;
+        
+        if t >= T::zero() {
+            Some(t)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for BoundedRay2D<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
+        
+    }
+}
+
+//- 2D ray-circle intersection -------------------------------------------------------------------------------------------------
+
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for Circle<T> {
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+        let ray_to_center = self.center - ray.orig;
+        let closest_dist_to_center = ray_to_center.dot(ray.dir);
+
+        // Ray is pointing in opposite direction
+        if closest_dist_to_center < T::zero() {
+            return None;
+        }
+
+        let mid = ray.orig + ray.dir * closest_dist_to_center;
+
+        let mid_to_center_len_sq = self.center.dist_sq(mid);
+        let radius_2 = self.radius * self.radius;
+
+        let t = if mid_to_center_len_sq > radius_2 {
+            return None
+        } else if mid_to_center_len_sq.is_approx_eq(radius_2) {
+            closest_dist_to_center
+        } else {
+            let t_diff = (radius_2 - mid_to_center_len_sq).sqrt();
+            closest_dist_to_center - t_diff
+        };
+
+        if t > T::zero() {
+            Some(t)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for Circle<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
+        
+    }
+}
+
+//- 2D ray-rectangle intersection ----------------------------------------------------------------------------------------------
+
+impl<T: Real> IntersectWithRay<T, Ray2D<T>> for Rect<T> {
+    // Based on https://en.wikipedia.org/wiki/Cohen%E2%80%93Sutherland_algorithm
+    fn intersect_ray(&self, ray: &Ray2D<T>) -> Option<T> {
+        let to_min = self.min - ray.orig;
+        let to_max = self.max - ray.orig;
+        let max_dist = to_min.len_sq().max(to_max.len());
+
+        let begin = ray.orig;
+        let end = ray.orig + ray.dir * max_dist;
+
+        let begin_quadrant = self.quadrant(begin);
+        let end_quadrant = self.quadrant(end);
+
+        // If they have matching quadrants, we start outside the rect and move away from it or parrallel to a side, so we can just ignore it
+        if (begin_quadrant == RectQuadrant::Inside && end_quadrant == RectQuadrant::Inside) || begin_quadrant.intersects(end_quadrant) {
+            return None;
+        }
+
+        // We only care about the firs intersection we encounter, so no need to use a second pass, but we do use a slighly modifed version because of it
+        let mut t = None;
+
+        // If the origin starts outside of the center, we can just rely on knowing that we are going towards the center.
+        // The correct point will always be the point furthest away, since to get to the intersection with that side, we first need to pass the other edge
+        if begin_quadrant != RectQuadrant::Inside {
+            if begin_quadrant.contains(RectQuadrant::Left) {
+                let dist = to_min.x / ray.dir.x;
+                t = Some(dist);
+            } else if begin_quadrant.contains(RectQuadrant::Right) {
+                let dist = to_max.x / ray.dir.x;
+                t = Some(dist);
+            }
+            if begin_quadrant.contains(RectQuadrant::Bottom) {
+                let dist = to_min.y / ray.dir.y;
+                t = t.map_or(Some(dist), |t| Some(t.max(dist)));
+            } else if begin_quadrant.contains(RectQuadrant::Top) {
+                let dist = to_max.y / ray.dir.y;
+                t = t.map_or(Some(dist), |t| Some(t.max(dist)));
+            }
+        } else {
+            if end_quadrant.contains(RectQuadrant::Left) {
+                let dist = to_min.x / ray.dir.x;
+                t = Some(dist);
+            } else if end_quadrant.contains(RectQuadrant::Right) {
+                let dist = to_max.x / ray.dir.x;
+                t = Some(dist);
+            }
+            if end_quadrant.contains(RectQuadrant::Bottom) {
+                let dist = to_min.y / ray.dir.y;
+                t = t.map_or(Some(dist), |t| Some(t.max(dist)));
+            } else if end_quadrant.contains(RectQuadrant::Top) {
+                let dist = to_max.y / ray.dir.y;
+                t = t.map_or(Some(dist), |t| Some(t.max(dist)));
             }
         }
-    }
-}
 
-impl<T: Real> Intersect<Ray2D<T>> for Circle<T> {
-    type Output = <Ray2D<T> as Intersect<Circle<T>>>::Output;
-
-    /// Calculate the itnersection point between a 2D ray and a circle
-    /// 
-    /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
-    fn intersect(self, rhs: Ray2D<T>) -> Self::Output {
-        <Ray2D<T> as Intersect<Circle<T>>>::intersect(rhs, self)
-    }
-}
-
-//-- 2D: ray-rect intersection -------------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<Rect<T>> for Ray2D<T> {
-    type Output = T;
-
-    /// Calculate the intersection points between a 2D ray and a rect
-    /// 
-    /// the result is given as a tuple of the distances to the intersections, INF if no intersection happened
-    fn intersect(self, rhs: Rect<T>) -> T {
-        // When dir.? == 0, division will result in -/+INF
-
-        let t0x = (rhs.min.x - self.orig.x) / self.dir.x;
-        let t1x = (rhs.max.x - self.orig.x) / self.dir.x;        
-        let t_min = t0x.min(t1x);
-        
-        let t0y = (rhs.min.y - self.orig.y) / self.dir.y;
-        let t1y = (rhs.max.y - self.orig.y) / self.dir.y;
-        let t_min = t_min.max(t0y.min(t1y));
-
-        t_min
-    }
-}
-
-impl<T: Real> Intersect<Ray2D<T>> for Rect<T> {
-    type Output = <Ray2D<T> as Intersect<Rect<T>>>::Output;
-
-    /// Calculate the intersection points between a 2D ray and a rect
-    /// 
-    /// the result is given as a tuple of the distances to the intersections, INF if no intersection happened
-    fn intersect(self, rhs: Ray2D<T>) -> Self::Output {
-        <Ray2D<T> as Intersect<Rect<T>>>::intersect(rhs, self)
-    }
-}
-
-//-- 3D: ray-plane intersection ------------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<Plane<T>> for Ray<T> {
-    type Output = T;
-
-    fn intersect(self, rhs: Plane<T>) -> Self::Output {
-        let plane_point = rhs.normal * rhs.dist;
-        let ray_to_plane = plane_point - self.orig;
-        let ray_to_plane_dot = ray_to_plane.dot(rhs.normal);
-        let dir_dot = self.dir.dot(rhs.normal);
-
-        ray_to_plane_dot / dir_dot
-    }
-}
-
-impl<T: Real> Intersect<Ray<T>> for Plane<T> {
-    type Output = <Ray<T> as Intersect<Plane<T>>>::Output;
-
-    /// Calculate the intersection points between a 2D ray and a rect
-    /// 
-    /// the result is given as a tuple of the distances to the intersections, INF if no intersection happened
-    fn intersect(self, rhs: Ray<T>) -> Self::Output {
-        <Ray<T> as Intersect<Plane<T>>>::intersect(rhs, self)
-    }
-}
-
-//-- 3D: ray-sphere intersection -----------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<Sphere<T>> for Ray<T> {
-    type Output = T;
-
-    /// Calculate the itnersection point between a ray and a sphere
-    /// 
-    /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
-    fn intersect(self, rhs: Sphere<T>) -> T {
-        let dist_to_mid = self.dist(rhs.center);
-        let mid = self.orig + self.dir * dist_to_mid;
-        let dist_from_center_sq = (mid - rhs.center).len_sq();
-
-        let radius2 = rhs.radius * rhs.radius;
-        if dist_from_center_sq > radius2 {
-            T::INF
-        } else {
-            if dist_from_center_sq.is_approx_eq(radius2) {
-                dist_to_mid
-            } else {
-                let offset = (radius2 - dist_from_center_sq).sqrt();
-                dist_to_mid - offset
+        // Make sure that the point end up on the rect, so either inside or
+        if let Some(dist) = t {
+            let quadrant = self.quadrant(ray.orig + ray.dir * (dist - T::EPSILON));
+            if quadrant.intersects(end_quadrant) {
+                t = None;
             }
         }
-    }
-}
-
-impl<T: Real> Intersect<Ray<T>> for Sphere<T> {
-    type Output = <Ray<T> as Intersect<Sphere<T>>>::Output;
-
-    /// Calculate the itnersection point between a 2D ray and a circle
-    /// 
-    /// the result is given as the ray parameter of the closest intersection, INF if no intersection happened
-    fn intersect(self, rhs: Ray<T>) -> Self::Output {
-        <Ray<T> as Intersect<Sphere<T>>>::intersect(rhs, self)
-    }
-}
-
-//-- 3D: ray-aabb intersection -------------------------------------------------------------------------------------------------
-
-impl<T: Real> Intersect<AABB<T>> for Ray<T> {
-    type Output = T;
-
-    /// Calculate the intersection points between a 2D ray and a rect
-    /// 
-    /// the result is given as a tuple of the distances to the intersections, INF if no intersection happened
-    fn intersect(self, rhs: AABB<T>) -> T {
-        // When dir.? == 0, division will result in -/+INF
-
-        let t0x = (rhs.min.x - self.orig.x) / self.dir.x;
-        let t1x = (rhs.max.x - self.orig.x) / self.dir.x;        
-        let t_min = t0x.min(t1x);
         
-        let t0y = (rhs.min.y - self.orig.y) / self.dir.y;
-        let t1y = (rhs.max.y - self.orig.y) / self.dir.y;
-        let t_min = t_min.max(t0y.min(t1y));
-
-        let t0z = (rhs.min.z - self.orig.z) / self.dir.z;
-        let t1z = (rhs.max.z - self.orig.z) / self.dir.z;
-        let t_min = t_min.max(t0z.min(t1z));
-
-        t_min
+        t.filter(|&val| val >= T::zero())
     }
 }
 
-impl<T: Real> Intersect<Ray<T>> for AABB<T> {
-    type Output = <Ray<T> as Intersect<AABB<T>>>::Output;
-
-    /// Calculate the intersection points between a 2D ray and a rect
-    /// 
-    /// the result is given as a tuple of the distances to the intersections, INF if no intersection happened
-    fn intersect(self, rhs: Ray<T>) -> Self::Output {
-        <Ray<T> as Intersect<AABB<T>>>::intersect(rhs, self)
+impl<T: Real> IntersectWithRay<T, BoundedRay2D<T>> for Rect<T> {
+    fn intersect_ray(&self, ray: &BoundedRay2D<T>) -> Option<T> {
+        let t = <Self as IntersectWithRay<_, Ray2D<_>>>::intersect_ray(self, &ray.to_ray());
+        t.filter(|&val| val >= ray.min && val <= ray.max)
+        
     }
 }
+
+//------------------------------------------------------------------------------------------------------------------------------
+// 3D
+//------------------------------------------------------------------------------------------------------------------------------
+
+//- 3d ray-plane intersection --------------------------------------------------------------------------------------------------
+
+//impl IntersectWithRay<T, Ray<T>> for Plane<T> {
+//    fn intersect_ray(&self, ray: &Ray<T>) -> Option<T> {
+//        todo!()
+//    }
+//}

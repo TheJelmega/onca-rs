@@ -1,15 +1,21 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec2, ApproxEq, Real, Lerp, NumericCast};
+use crate::*;
 
 /// 2D circle
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Circle<T: Numeric> {
-    pub center : Vec2<T>,
+    pub center : Point2<T>,
     pub radius : T
 }
 
 impl<T: Numeric> Circle<T> {
+    /// Create a circle
+    #[must_use]
+    pub fn new(center: Point2<T>, radius: T) -> Self {
+        Self { center, radius }
+    }
+
     /// Get the area of the circle
     #[inline]
     #[must_use]
@@ -28,11 +34,11 @@ impl<T: Numeric> Circle<T> {
     /// Check if the circle contains a point
     #[inline]
     #[must_use]
-    pub fn contains_point(self, point: Vec2<T>) -> bool {
+    pub fn contains_point(self, point: Point2<T>) -> bool {
         self.center.dist_sq(point) <= self.radius * self.radius
     }
 
-    // TODO(jel): should we distiguish between overlap and touching?
+    // TODO: should we distiguish between overlap and touching?
     /// Check if 2 circles overlap
     #[inline]
     #[must_use]
@@ -44,7 +50,7 @@ impl<T: Numeric> Circle<T> {
     /// Calculate the distance between the circle and a point
     #[inline]
     #[must_use]
-    pub fn dist_to_point(self, point: Vec2<T>) -> T {
+    pub fn dist_to_point(self, point: Point2<T>) -> T {
         let dist = self.center.dist(point);
         if dist > self.radius { dist - self.radius } else { T::zero() }
     }
@@ -61,12 +67,10 @@ impl<T: Numeric> Circle<T> {
 }
 
 impl<T: Real> Circle<T> {
-    // TODO(jel): is there a way of doing this regardless of whether the number is an integer or real number
+    // TODO: is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest circle fitting both circles
     #[must_use]
-    pub fn merge(self, other: Self) -> Self where
-        f32: NumericCast<T>
-    {
+    pub fn merge(self, other: Self) -> Self {
         let dist = self.center.dist(other.center);
 
         // early exit if 1 of the circles fits into the other
@@ -77,9 +81,9 @@ impl<T: Real> Circle<T> {
         }
 
         let diam = dist + self.radius + other.radius;
-        let radius = diam / 2.0.cast();
+        let radius = diam / T::from_i32(2);
 
-        let theta = 0.5.cast() + (other.radius - self.radius) / 0.5.cast();
+        let theta = T::from_f32(0.5) + (other.radius - self.radius) * T::from_f32(0.5);
         let center = self.center.lerp(other.center, theta);
 
         Self { center, radius }

@@ -1,15 +1,40 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec2, ApproxEq, MinMax, NumericCast};
+use onca_common_macros::flags;
+
+use crate::*;
+
+/// Quadrants of the a rect
+/// ```text
+///  TopLeft   |  Top   |    TopRight
+/// -----------|--------|------------
+///  Left      | Inside |       Right
+/// -----------|--------|------------
+/// BottomLeft | Bottom | BottomRight
+/// ```
+#[flags]
+pub enum RectQuadrant {
+    Inside = 0,
+    Left,
+    Right,
+    Top,
+    Bottom
+}
 
 /// 2D rectangle (can also be used as a 2D AABB)
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Rect<T: Numeric> {
-    pub min : Vec2<T>,
-    pub max : Vec2<T>
+    pub min : Point2<T>,
+    pub max : Point2<T>
 }
 
 impl<T: Numeric> Rect<T> {
+    /// Create a new rect
+    #[must_use]
+    pub fn new(min: Point2<T>, max: Point2<T>) -> Self {
+        Self { min, max }
+    }
+
     /// Get the size of the rect
     #[inline]
     #[must_use]
@@ -20,32 +45,26 @@ impl<T: Numeric> Rect<T> {
     /// Get the center of the rect
     #[inline]
     #[must_use]
-    pub fn center(self) -> Vec2<T> where
-        i32: NumericCast<T>
-    {
-        (self.min + self.max) / 2.cast()
+    pub fn center(self) -> Point2<T> {
+        ((self.min.to_vec() + self.max.to_vec()) / T::from_i32(2)).into()
     }
 
     /// Resize the rect around its center
     #[must_use]
-    pub fn resize(self, size: Vec2<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn resize(self, size: Vec2<T>) -> Self {
         debug_assert!(size.x >= T::zero());
         debug_assert!(size.y >= T::zero());
 
         let center = self.center();
-        let half_size = size / 2.cast();
+        let half_size = size / T::from_i32(2);
         Self { min: center - half_size, max: center + half_size }
     }
 
     /// Recenter the rect
     #[inline]
     #[must_use]
-    pub fn recenter(self, center: Vec2<T>) -> Self where
-        i32: NumericCast<T>
-    {
-        let half_size = self.size() / 2.cast();
+    pub fn recenter(self, center: Point2<T>) -> Self {
+        let half_size = self.size() / T::from_i32(2);
         Self { min: center - half_size, max: center + half_size }
     }
 
@@ -151,6 +170,31 @@ impl<T: Numeric> Rect<T> {
     #[must_use]
     pub fn dist(self, other: Self) -> T {
         self.dist_sq(other).sqrt()
+    }
+
+    /// Get the [`RectQuadrant`] of the rectangle in which the point lies
+    #[must_use]
+    pub fn quadrant(self, point: Point2<T>) -> RectQuadrant {
+        let mut quadrant = RectQuadrant::Inside;
+        // If statements seems to create branched code, even with opt-level=3, so might not be optimal, but good enough for now
+        if point.x < self.min.x {
+            quadrant |= RectQuadrant::Left;
+        } else if point.x > self.max.x {
+            quadrant |= RectQuadrant::Right;
+        }
+        if point.y < self.min.y {
+            quadrant |= RectQuadrant::Bottom;
+        } else if point.y > self.max.y {
+            quadrant  |= RectQuadrant::Top;
+        }
+
+        // This branchless version could be used if needed:
+        // Comparison: https://godbolt.org/z/bYvKWKdPr
+        //quadrant |= if point.x < self.min.x { RectQuadrant::Left } else { RectQuadrant::Inside };
+        //quadrant |= if point.x > self.max.x { RectQuadrant::Right } else { RectQuadrant::Inside };
+        //quadrant |= if point.y < self.min.y { RectQuadrant::Bottom } else { RectQuadrant::Inside };
+        //quadrant |= if point.y > self.max.y { RectQuadrant::Top } else { RectQuadrant::Inside };
+        quadrant
     }
 }
 

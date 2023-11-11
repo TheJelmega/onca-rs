@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec3, ApproxEq, MinMax, NumericCast};
+use crate::{Numeric, Vec3, ApproxEq, MinMax};
 
 /// 2D aabbangle (can also be used as a 2D AABB)
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -20,33 +20,27 @@ impl<T: Numeric> AABB<T> {
     /// Get the center of the aabb
     #[inline]
     #[must_use]
-    pub fn center(self) -> Vec3<T> where
-        i32: NumericCast<T>
-    {
-        (self.min + self.max) / 2.cast()
+    pub fn center(self) -> Vec3<T> {
+        (self.min + self.max) / T::from_i32(2)
     }
 
     /// Resize the aabb around its center
     #[must_use]
-    pub fn resize(self, size: Vec3<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn resize(self, size: Vec3<T>) -> Self {
         debug_assert!(size.x >= T::zero());
         debug_assert!(size.y >= T::zero());
         debug_assert!(size.z >= T::zero());
 
         let center = self.center();
-        let half_size = size / 2.cast();
+        let half_size = size / T::from_i32(2);
         Self { min: center - half_size, max: center + half_size }
     }
 
     /// Recenter the aabb
     #[inline]
     #[must_use]
-    pub fn recenter(self, center: Vec3<T>) -> Self where
-        i32: NumericCast<T>
-    {
-        let half_size = self.size() / 2.cast();
+    pub fn recenter(self, center: Vec3<T>) -> Self {
+        let half_size = self.size() / T::from_i32(2);
         Self { min: center - half_size, max: center + half_size }
     }
 

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Numeric, Vec3, ApproxEq, Real, Lerp, NumericCast};
+use crate::{Numeric, Vec3, ApproxEq, Real, Lerp};
 
 /// 2D sphere
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -13,10 +13,8 @@ impl<T: Numeric> Sphere<T> {
     /// Get the volume of the sphere
     #[inline]
     #[must_use]
-    pub fn volume(self) -> T where
-        i32: NumericCast<T>
-    {
-        4.cast() * self.radius * self.radius * self.radius * T::PI / 3.cast()
+    pub fn volume(self) -> T {
+        T::from_i32(4) * self.radius * self.radius * self.radius * T::PI / T::from_i32(3)
     }
 
     /// Check if the sphere fully contains another sphere
@@ -66,10 +64,7 @@ impl<T: Real> Sphere<T> {
     // TODO: is there a way of doing this regardless of whether the number is an integer or real number
     /// Get the smallest sphere fitting both spheres
     #[inline]
-    pub fn merge(self, other: Self) -> Self where
-        f32: NumericCast<T>,
-        i32: NumericCast<T>
-    {
+    pub fn merge(self, other: Self) -> Self {
         let dist = self.center.dist(other.center);
 
         // early exit if 1 of the spheres fits into the other
@@ -80,9 +75,9 @@ impl<T: Real> Sphere<T> {
         }
 
         let diam = dist + self.radius + other.radius;
-        let radius = diam / 2.cast();
+        let radius = diam * T::from_f32(0.25);
 
-        let theta = 0.5.cast() + (other.radius - self.radius) / (dist * 2.cast());
+        let theta = T::from_f32(0.5) + (other.radius - self.radius) / (dist * T::from_i32(2));
         let center = self.center.lerp(other.center, theta);
 
         Self { center, radius }

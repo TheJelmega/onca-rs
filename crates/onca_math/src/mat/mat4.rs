@@ -270,9 +270,7 @@ impl<T: Real> Mat4<T> {
 
     // TODO
     /// Decompose the matrix into a scale, rotation and translation
-    fn decompose(self) -> (Vec3<T>, Quat<T>, Vec3<T>)  where
-        i32: NumericCast<T>
-    {
+    fn decompose(self) -> (Vec3<T>, Quat<T>, Vec3<T>) {
         let scale = Vec3 {
             x: self.column(0).len(),
             y: self.column(1).len(),
@@ -405,9 +403,7 @@ impl<T: Real> Mat4<T> {
 
     // TODO
     /// Create a 3d rotation matrix
-    pub fn create_rotation(rot: Quat<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_rotation(rot: Quat<T>) -> Self {
         debug_assert!(rot.is_normalized());
 
         let xx = rot.x * rot.x;
@@ -424,7 +420,7 @@ impl<T: Real> Mat4<T> {
 
         let zero = T::zero();
         let one = T::one();
-        let two: T = 2.cast();
+        let two: T = T::from_i32(2);
 
         Self { vals: [one - two * (yy + zz),       two * (xy - zw),       two * (xz + yw), zero,
                             two * (xy * zw), one - two * (xx + zz),       two * (yz - zw), zero,
@@ -445,9 +441,7 @@ impl<T: Real> Mat4<T> {
 
     // TODO
     /// Create a 3d transformation matrix
-    pub fn create_transform(scale: Vec3<T>, rot: Quat<T>, trans: Vec3<T>) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_transform(scale: Vec3<T>, rot: Quat<T>, trans: Vec3<T>) -> Self {
         debug_assert!(rot.is_normalized());
 
         let xx = rot.x * rot.x;
@@ -464,7 +458,7 @@ impl<T: Real> Mat4<T> {
 
         let zero = T::zero();
         let one = T::one();
-        let two: T = 2.cast();
+        let two: T = T::from_i32(2);
 
         Self { vals: [scale.x * (one - two * (yy + zz)), scale.y * (      two * (xy - zw)), scale.z * (      two * (xz + yw)), zero,
                       scale.x * (      two * (xy + zw)), scale.y * (one - two * (xx + zz)), scale.z * (      two * (yz - zw)), zero,
@@ -508,16 +502,14 @@ impl<T: Real> Mat4<T> {
     /// Create an othrographic projection matrix (isometric)
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
-    pub fn create_ortho(width: T, height: T, near: T, far: T) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_ortho(width: T, height: T, near: T, far: T) -> Self {
         debug_assert!(width > T::zero());
         debug_assert!(height > T::zero());
         debug_assert!(near < far);
 
         let zero = T::zero();
         let one = T::one();
-        let two = 2.cast();
+        let two = T::from_i32(2);
 
         let f_range = one / (far - near);
 
@@ -531,16 +523,14 @@ impl<T: Real> Mat4<T> {
     /// Create an othrographic projection matrix (isometric), which can be offset from the center of the screen
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
-    pub fn create_ortho_offset(left: T, right: T, top: T, bottom: T, near: T, far: T) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_ortho_offset(left: T, right: T, top: T, bottom: T, near: T, far: T) -> Self {
         debug_assert!(left < right);
         debug_assert!(bottom < top);
         debug_assert!(far < near);
 
         let zero = T::zero();
         let one = T::one();
-        let two = 2.cast();
+        let two = T::from_i32(2);
 
         let rcp_width = (right - left).recip();
         let rcp_height = (top - bottom).recip();
@@ -556,9 +546,7 @@ impl<T: Real> Mat4<T> {
     /// Create a perspective matrix, with the `width` and `height` given as the size of the frustum at the `near` plane
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
-    pub fn create_perspective(width: T, height: T, near: T, far: T) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_perspective(width: T, height: T, near: T, far: T) -> Self {
         debug_assert!(width > T::zero());
         debug_assert!(height > T::zero());
         debug_assert!(near < far);
@@ -566,7 +554,7 @@ impl<T: Real> Mat4<T> {
 
         let zero = T::zero();
         let one = T::one();
-        let two_near = 2.cast() * near;
+        let two_near = T::from_i32(2) * near;
         let f_range = far / (far - near);
 
         Self { vals: [two_near / width, zero             , zero           , zero,
@@ -579,9 +567,7 @@ impl<T: Real> Mat4<T> {
     /// Create a perspective matrix, with the `left`, `right`, `top` and `bottom` defining the size of the frustum at the `near` plane
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
-    pub fn create_perspective_offset(left: T, right: T, top: T, bottom: T, near: T, far: T) -> Self where
-        i32: NumericCast<T>
-    {
+    pub fn create_perspective_offset(left: T, right: T, top: T, bottom: T, near: T, far: T) -> Self {
         debug_assert!(left < right);
         debug_assert!(bottom < top);
         debug_assert!(near < far);
@@ -590,7 +576,7 @@ impl<T: Real> Mat4<T> {
         let zero = T::zero();
         let one = T::one();
 
-        let two_near = 2.cast() * near;
+        let two_near = T::from_i32(2) * near;
         let f_range = far / (far - near);
         let rcp_width = (right - left).recip();
         let rcp_height = (top - bottom).recip();
@@ -606,8 +592,7 @@ impl<T: Real> Mat4<T> {
     /// 
     /// This version assumes a LH coordinate system with a z depth in the range (0; 1)
     pub fn create_perspective_fov(fov: Radians<T>, aspect: T, near: T, far: T) -> Self where
-        Radians<T>: Trig<Output = T>,
-        i32: NumericCast<T>
+        Radians<T>: Trig<Output = T>
     {
         debug_assert!(fov > Radians::zero());
         debug_assert!(aspect > T::zero());
@@ -617,7 +602,7 @@ impl<T: Real> Mat4<T> {
         let zero = T::zero();
         let one = T::one();
 
-        let height = (fov / 2.cast()).tan().recip();
+        let height = (fov / T::from_i32(2)).tan().recip();
         let width = height * aspect;
         let f_range = far / (far - near);
 

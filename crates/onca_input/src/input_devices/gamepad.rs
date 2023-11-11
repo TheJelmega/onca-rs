@@ -13,7 +13,7 @@ use onca_common::{
 use onca_hid as hid;
 #[cfg(feature = "raw_input_logging")]
 use onca_logging::log_verbose;
-use onca_math::{f32v2, Zero, MathConsts};
+use onca_math::{f32v2, Zero, MathConsts, SmoothStep};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum GamepadButton {
@@ -188,7 +188,7 @@ impl GamepadReleaseCurve {
             GamepadReleaseCurve::Instant => f32v2::zero(),
             // lerping from 0, is the same as * (1 - interpolant)
             GamepadReleaseCurve::Linear(max_time) => from * (1f32 - time_passed / max_time),
-            GamepadReleaseCurve::Smooth(max_time) => from.smoothstep(f32v2::zero(), time_passed / max_time),
+            GamepadReleaseCurve::Smooth(max_time) => from * (1f32 - (time_passed / max_time).smooth_step(0.0, 1.0)),
         }
     }
 
@@ -198,7 +198,7 @@ impl GamepadReleaseCurve {
             // lerping from 0, is the same as * (1 - interpolant)
             GamepadReleaseCurve::Linear(max_time) => from * (1f32 - time_passed / max_time),
             // lerping from 0, is the same as * (1 - interpolant)
-            GamepadReleaseCurve::Smooth(max_time) => from * (1f32 - onca_math::smoothstep_interpolant(time_passed / max_time)),
+            GamepadReleaseCurve::Smooth(max_time) => from * (1f32 - (time_passed / max_time).smooth_step(0.0, 1.0)),
         }
     }
 
