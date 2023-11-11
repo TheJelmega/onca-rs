@@ -4,7 +4,7 @@ use core::{
 };
 use std::{ptr::NonNull, alloc::Layout};
 use crate::{
-    alloc::{Allocator},
+    alloc::Allocator,
     mem::get_memory_manager
 };
 
