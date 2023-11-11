@@ -545,13 +545,6 @@ impl ral::CommandListInterface for CommandList {
                 .load_op(load_op)
                 .store_op(rt.store_op.to_vulkan())
                 .clear_value(clear_value);
-
-            if let Some(resolve) = &rt.resolve {
-                vk_rt = vk_rt.resolve_mode(resolve.mode.to_vulkan())
-                             .resolve_image_layout(texture_layout_to_vk(resolve.layout))
-                             .resolve_image_view(todo!());
-            }
-
             vk_rts.push(vk_rt.build());
         }
 
@@ -586,13 +579,6 @@ impl ral::CommandListInterface for CommandList {
                     .store_op(store_op.to_vulkan())
                     .clear_value(clear_value);
 
-                if let Some(resolve) = &depth_stencil.resolve && let Some(depth_mode) = resolve.depth_mode {
-                    attachment = attachment
-                        .resolve_mode(depth_mode.to_vulkan())
-                        .resolve_image_layout(texture_layout_to_vk(resolve.layout))
-                        .resolve_image_view(todo!());
-                }
-
                 depth_attachment = Some(attachment);
                 info = info.depth_attachment(&depth_attachment.unwrap())
             }
@@ -610,13 +596,6 @@ impl ral::CommandListInterface for CommandList {
                     .load_op(load_op)
                     .store_op(store_op.to_vulkan())
                     .clear_value(clear_value);
-
-                if let Some(resolve) = &depth_stencil.resolve && let Some(stencil_mode) = resolve.stencil_mode {
-                    attachment = attachment
-                        .resolve_mode(stencil_mode.to_vulkan())
-                        .resolve_image_layout(texture_layout_to_vk(resolve.layout))
-                        .resolve_image_view(todo!());
-                }
 
                 stencil_attachment = Some(attachment);
                 info = info.depth_attachment(&stencil_attachment.unwrap())

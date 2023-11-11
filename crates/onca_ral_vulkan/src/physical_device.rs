@@ -275,7 +275,6 @@ fn get_device(instance: &Arc<Instance>, phys_dev: vk::PhysicalDevice) -> ral::Re
     check_format_properties(&instance, phys_dev, &vk_options)?;
 
     let shader = get_shader_support(&vk_options)?;
-    let sampling = get_sampling_support(&vk_options)?;
     let sparse_resources = get_sparse_resource_support(&vk_options)?;
     let multi_view = get_multi_view_support(&vk_options)?;
     let mesh_shading = get_mesh_shader_support(&vk_options)?;
@@ -296,7 +295,6 @@ fn get_device(instance: &Arc<Instance>, phys_dev: vk::PhysicalDevice) -> ral::Re
         memory_info,
         capabilities: Capabilities::MinSampleShading,
         shader,
-        sampling,
         pipeline_cache_support: PipelineCacheSupport::Single | PipelineCacheSupport::Library,
         render_pass_tier: RenderpassTier::Tier2,
         sparse_resources,
@@ -587,53 +585,6 @@ fn check_vertex_format_support(instance: &Instance, phys_dev: vk::PhysicalDevice
         }
     });
     res
-}
-
-fn get_sampling_support(vk_options: &VulkanOptions) -> ral::Result<SamplingSupport> {
-    let mut sample16_support = Sample16SupportFlags::None;
-    sample16_support.set(Sample16SupportFlags::FramebufferColor          , is_flag_set(vk_options.props.limits.framebuffer_color_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::FramebufferColorInteger   , is_flag_set(vk_options.props12.framebuffer_integer_color_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::FramebufferDepth          , is_flag_set(vk_options.props.limits.framebuffer_depth_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::FramebufferStencil        , is_flag_set(vk_options.props.limits.framebuffer_stencil_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::FramebufferNoAttachments  , is_flag_set(vk_options.props.limits.framebuffer_no_attachments_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::SampledTextureColor       , is_flag_set(vk_options.props.limits.sampled_image_color_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::SampledTextureColorInteger, is_flag_set(vk_options.props.limits.sampled_image_integer_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::SampledTextureDepth       , is_flag_set(vk_options.props.limits.sampled_image_depth_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::SampledTextureStencil     , is_flag_set(vk_options.props.limits.sampled_image_stencil_sample_counts, vk::SampleCountFlags::TYPE_16));
-    sample16_support.set(Sample16SupportFlags::StorageTexture            , is_flag_set(vk_options.props.limits.storage_image_sample_counts, vk::SampleCountFlags::TYPE_16));
-
-    let mut depth_resolve_modes = ResolveModeSupport::None;
-    depth_resolve_modes.set(ResolveModeSupport::SampleZero, is_flag_set(vk_options.props12.supported_depth_resolve_modes, vk::ResolveModeFlags::SAMPLE_ZERO));
-    depth_resolve_modes.set(ResolveModeSupport::Average   , is_flag_set(vk_options.props12.supported_depth_resolve_modes, vk::ResolveModeFlags::AVERAGE));
-    depth_resolve_modes.set(ResolveModeSupport::Min       , is_flag_set(vk_options.props12.supported_depth_resolve_modes, vk::ResolveModeFlags::MIN));
-    depth_resolve_modes.set(ResolveModeSupport::Max       , is_flag_set(vk_options.props12.supported_depth_resolve_modes, vk::ResolveModeFlags::MAX));
-
-    let mut stencil_resolve_modes = ResolveModeSupport::None;
-    stencil_resolve_modes.set(ResolveModeSupport::SampleZero, is_flag_set(vk_options.props12.supported_stencil_resolve_modes, vk::ResolveModeFlags::SAMPLE_ZERO));
-    stencil_resolve_modes.set(ResolveModeSupport::Min       , is_flag_set(vk_options.props12.supported_stencil_resolve_modes, vk::ResolveModeFlags::MIN));
-    stencil_resolve_modes.set(ResolveModeSupport::Max       , is_flag_set(vk_options.props12.supported_stencil_resolve_modes, vk::ResolveModeFlags::MAX));
-
-    // Sample locations
-    
-
-    let programmable_sample_positions = if vk_options.sample_loc_props.max_sample_location_grid_size.width == 2 &&
-        vk_options.sample_loc_props.max_sample_location_grid_size.height == 2 &&
-        is_flag_set(vk_options.sample_loc_props.sample_location_sample_counts, vk::SampleCountFlags::TYPE_1) &&
-        is_flag_set(vk_options.sample_loc_props.sample_location_sample_counts, vk::SampleCountFlags::TYPE_16) &&
-        vk_options.sample_loc_props.variable_sample_locations.as_bool()
-    {
-        ProgrammableSamplePositionsTier::Tier2
-    } else {
-        ProgrammableSamplePositionsTier::Tier1
-    };
-
-    Ok(SamplingSupport {
-        sample16_support,
-        resolve_modes: ResolveModeSupport::all(),
-        depth_resolve_modes,
-        stencil_resolve_modes,
-        programmable_sample_positions,
-    })
 }
 
 fn get_shader_support(vk_options: &VulkanOptions) -> ral::Result<ShaderSupport> {

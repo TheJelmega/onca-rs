@@ -1,6 +1,5 @@
 //! Module containing abstractions for RAL implementation, if you are not implementing a RAL, these will not be used
 
-use onca_common::prelude::*;
 use crate::*;
 pub struct SubmitBatch<'a> {
     pub wait_fences:   &'a [FenceWaitSubmitInfo],

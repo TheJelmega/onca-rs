@@ -1,5 +1,3 @@
-use core::num::NonZeroU16;
-
 use windows::{
     core::{Error as WinError, HRESULT, PCSTR},
     Win32::{Graphics::{
@@ -194,19 +192,6 @@ impl ToDx for ral::Access {
         }
     
         flags
-    }
-}
-
-impl ToDx for ral::ResolveMode {
-    type DxType = D3D12_RESOLVE_MODE;
-
-    fn to_dx(&self) -> Self::DxType {
-        match self {
-            ral::ResolveMode::Average    => D3D12_RESOLVE_MODE_AVERAGE,
-            ral::ResolveMode::Min        => D3D12_RESOLVE_MODE_MIN,
-            ral::ResolveMode::Max        => D3D12_RESOLVE_MODE_MAX,
-            ral::ResolveMode::SampleZero => unreachable!("DX12 should never try to handle `ResolveMode::SampleZero` itself"),
-        }
     }
 }
 

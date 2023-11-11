@@ -1,6 +1,6 @@
 use core::{mem::ManuallyDrop, num::NonZeroU64};
 
-use onca_common::{prelude::*, sync::{Mutex, RwLock, RwLockUpgradableReadGuard}};
+use onca_common::{prelude::*, sync::Mutex};
 use onca_common_macros::flags;
 use onca_logging::log_error;
 

@@ -6,10 +6,6 @@ use core::{
 };
 use std::{sync::Arc, sync::Weak};
 
-use onca_common::{
-    prelude::*
-};
-
 /// RAL interface handle
 /// 
 /// # NOTE:

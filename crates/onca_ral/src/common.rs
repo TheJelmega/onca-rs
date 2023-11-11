@@ -1913,28 +1913,6 @@ impl Default for InputLayout {
     }
 }
 
-/// Multisample state
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct MultisampleState {
-    /// Number of samples
-    pub samples:           SampleCount,
-    /// Sample mask
-    // Only needs 16 bits, as we only support up to 16 samples
-    pub sample_mask:       u16,
-    /// Alpha to coverage
-    pub alpha_to_coverage: bool,
-}
-
-impl Default for MultisampleState {
-    fn default() -> Self {
-        Self {
-            samples: Default::default(),
-            sample_mask: 0xFFFF,
-            alpha_to_coverage: Default::default()
-        }
-    }
-}
-
 /// Primitive restart
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PrimitiveRestart {
@@ -1962,8 +1940,6 @@ pub struct GraphicsPipelineDesc {
     pub depth_stencil_state:  DepthStencilState,
     /// Blend state
     pub blend_state:          BlendState,
-    /// Multisample state
-    pub multisample_state:    MultisampleState,
     /// Input state
     pub input_layout:         Option<InputLayout>,
     /// Render targer formats
@@ -2005,7 +1981,6 @@ impl PartialEq for GraphicsPipelineDesc {
         self.rasterizer_state == other.rasterizer_state &&
         self.depth_stencil_state == other.depth_stencil_state &&
         self.blend_state == other.blend_state &&
-        self.multisample_state == other.multisample_state &&
         self.input_layout == other.input_layout &&
         Handle::ptr_eq(&self.vertex_shader, &other.vertex_shader) &&
         Handle::ptr_eq(&self.pixel_shader, &other.pixel_shader)
@@ -2021,8 +1996,6 @@ pub struct MeshPipelineDescription {
     pub depth_stencil_state:  DepthStencilState,
     /// Blend state
     pub blend_state:          BlendState,
-    /// Multisample state
-    pub multisample_state:    MultisampleState,
     /// Render targer formats
     pub rendertarget_formats: [Option<Format>; constants::MAX_RENDERTARGETS as usize],
     /// Depth stencil formats
@@ -2045,7 +2018,6 @@ impl PartialEq for MeshPipelineDescription {
         self.rasterizer_state == other.rasterizer_state &&
         self.depth_stencil_state == other.depth_stencil_state &&
         self.blend_state == other.blend_state &&
-        self.multisample_state == other.multisample_state &&
         Handle::ptr_eq(&self.mesh_shader, &other.mesh_shader) &&
         Handle::ptr_eq(&self.pixel_shader, &other.pixel_shader) &&
         self.task_shader.as_ref().map_or(false, |task0| other.task_shader.as_ref().map_or(false, |task1| Handle::ptr_eq(task0, task1)))
@@ -2772,150 +2744,6 @@ impl Barrier {
 }
 
 //==============================================================================================================================
-// SAMPLING
-//==============================================================================================================================
-
-/// Supported sample count flags
-#[flags(u8)]
-pub enum SupportedSampleCounts {
-    Sample1,
-    Sample2,
-    Sample4,
-    Sample8,
-    Sample16,
-    Sample32,
-    Sample64,
-}
-
-impl SupportedSampleCounts {
-    pub fn up_to(count: u8) -> SupportedSampleCounts {
-        match count {
-            1               => SupportedSampleCounts::Sample1,
-            2 | 3           => SupportedSampleCounts::Sample2,
-            val if val < 8  => SupportedSampleCounts::Sample4,
-            val if val < 16 => SupportedSampleCounts::Sample8,
-            _               => SupportedSampleCounts::Sample16,
-        }
-    }
-}
-
-/// Sample count
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-pub enum SampleCount {
-    #[default]
-    Sample1,
-    Sample2,
-    Sample4,
-    Sample8,
-    Sample16,
-}
-pub const NUM_SAMPLE_COUNTS : usize = SampleCount::Sample16 as usize + 1;
-
-impl SampleCount {
-    pub fn get_count(&self) -> u32 {
-        match self {
-            SampleCount::Sample1  => 1,
-            SampleCount::Sample2  => 2,
-            SampleCount::Sample4  => 4,
-            SampleCount::Sample8  => 8,
-            SampleCount::Sample16 => 16,
-        }
-    }
-}
-
-/// Sample point.
-/// 
-/// A sample point coordinate is relative to the sample origin (sample center), and is normalized to the range [-8; 7].
-/// Each normalized value indicating a multiple of 1/16 steps from the origin, e.g. (-8, 4) is at location (-0.5, 0.25) relative to the center at (0, 0).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct SamplePoint {
-    pub x : i8,
-    pub y : i8
-}
-
-/// Collection of sample points for a given sample count
-/// 
-/// The number of sample points must match match the sample count.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CustomSamplePoints {
-    Sample1(SamplePoint),
-    Sample2([SamplePoint; 2]),
-    Sample4([SamplePoint; 4]),
-    Sample8([SamplePoint; 8]),
-    Sample16([SamplePoint; 16]),
-}
-
-/// Collection of sample points for a given sample count for a 2x2 pixel quad
-/// 
-/// The number of sample points must match match the sample count.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CustomSamplePoints2x2 {
-    Sample1([SamplePoint; 4]),
-    Sample2([[SamplePoint; 2]; 4]),
-    Sample4([[SamplePoint; 4]; 4]),
-}
-
-/// Sample type
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum SampleType {
-    /// Sample using a vendor/device specific quality
-    VendorQuality(u32),
-    /// Sample using the standard sample points
-    #[default]
-    StandardSamplePoints,
-    /// Sample using custom sample point
-    CustomSamplePoints(CustomSamplePoints),
-    /// Sample using custom sample point for a 2x2 pixel quad
-    CustomSamplePoints2x2(CustomSamplePoints2x2)
-}
-
-/// Number of pixels that should be sampled by a `SampleType`
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum SampledPixels {
-    /// Sample a single pixel
-    Single,
-    /// Sample a 2x2 quad of 4 pixels (sampled around the center of the 2x2 quad)
-    Quad,
-}
-
-/// Resolve mode
-/// 
-/// If a resolve mode is not supported by the RAL, it will default to Average
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum ResolveMode {
-    /// Resolve to the average of the samples
-    #[default]
-    Average,
-    /// Resolve to the minimum value of the samples
-    Min,
-    /// Resolve to the maximum value of the samples
-    Max,
-    /// Resolve to the value of sample 0
-    /// 
-    /// Some API and GPU combinations don't support SampleZero, and will therefore fall back on the following:
-    /// - Non-integer formats will use Average
-    /// - Integer formats will use Min
-    /// 
-    /// This is currently supported on:
-    /// - Vulkan
-    /// - DX12 with NVIDIA via NVApi (currently now implemented yet)
-    SampleZero,
-}
-
-/// Mutlisample resolve support
-#[flags]
-pub enum ResolveModeSupport {
-    /// Resolve to the value of sample 0
-    SampleZero,
-    /// Resolve to the average of the samples
-    Average,
-    /// Resolve to the minimum value of the samples
-    Min,
-    /// Resolve to the maximum value of the samples
-    Max,
-}
-
-//==============================================================================================================================
 // COMPUTE SHADER
 //==============================================================================================================================
 
@@ -3028,32 +2856,6 @@ pub enum AttachmentStoreOp {
     DontCare,
 }
 
-/// Rendering info render target resolve info
-#[derive(Clone, Debug)]
-pub struct RenderInfoRenderTargetResolve {
-    /// Resolve mode for multisampled data
-    pub mode:   ResolveMode,
-    /// Resolve layout
-    pub layout: TextureLayout,
-    /// Resolve destination
-    // TODO
-    pub dst:    ()
-}
-
-/// Rendering info render target resolve info
-#[derive(Clone, Debug)]
-pub struct RenderInfoDepthStencilResolve {
-    /// Resolve mode for depth multisampled data
-    pub depth_mode:   Option<ResolveMode>,
-    /// Resolve mode for stencil multisampled data
-    pub stencil_mode: Option<ResolveMode>,
-    /// Resolve layout
-    pub layout:       TextureLayout,
-    /// Resolve destination
-    // TODO
-    pub dst:          ()
-}
-
 /// Render info render target attachement description
 #[derive(Clone, Debug)]
 pub struct RenderTargetAttachmentDesc {
@@ -3061,8 +2863,6 @@ pub struct RenderTargetAttachmentDesc {
     pub rtv:         RenderTargetViewHandle,
     /// Render target layout
     pub layout:      TextureLayout,
-    /// Resolve info for multisampled data
-    pub resolve:     Option<RenderInfoRenderTargetResolve>,
     /// Attachment load operation
     pub load_op:     AttachmentLoadOp<ClearColor>,
     /// Attachment store operation
@@ -3103,8 +2903,6 @@ pub struct DepthStencilAttachmentDesc {
     
     /// Depth/stencil layout
     pub layout:                TextureLayout,
-    /// Resolve info for multisampled data
-    pub resolve:               Option<RenderInfoDepthStencilResolve>,
     /// Depth attachment load and store operation. If `None`, depth will be ignored.
     pub depth_load_store_op:   Option<(AttachmentLoadOp<f32>, AttachmentStoreOp)>,
     /// Depth attachment load and store operation. If `None`, stencil will be ignored

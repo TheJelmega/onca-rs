@@ -596,7 +596,6 @@ const SAMPLED_RENDERTARGET_SUPPORT : FormatSupport = FormatSupport::Sampled.bito
 const COLOR_TEXTURE_FORMAT_SUPPORT: FormatSupport = SAMPLED_RENDERTARGET_SUPPORT.bitor(FormatSupport::Storage);
 const DEPTH_STENCIL_FORMAT_SUPPORT: FormatSupport = FormatSupport::Sampled.bitor(FormatSupport::DepthStencil);
 const BUFFER_AND_COLOR_TEXTURE_FORMAT_SUPPORT: FormatSupport = FULL_BUFFER_SUPPORT.bitor(COLOR_TEXTURE_FORMAT_SUPPORT);
-const BUFFER_AND_SAMPLED_TEXTURE_FORMAT_SUPPORT: FormatSupport = FULL_BUFFER_SUPPORT.bitor(FormatSupport::Sampled);
 
 const FORMAT_INFO: [FormatInfo; Format::COUNT] = [
     //                                                   Components,                                     Data type,               , support

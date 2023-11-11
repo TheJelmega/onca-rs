@@ -138,46 +138,6 @@ pub struct Properties {
 }
 
 //==============================================================================================================================
-// SAMPLING
-//==============================================================================================================================
-
-/// Programmable sample positions tier
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ProgrammableSamplePositionsTier {
-    Tier1,
-    Tier2,
-}
-
-#[flags]
-pub enum Sample16SupportFlags {
-    FramebufferColor,
-    FramebufferColorInteger,
-    FramebufferDepth,
-    FramebufferStencil,
-    FramebufferNoAttachments,
-    SampledTextureColor,
-    SampledTextureColorInteger,
-    SampledTextureDepth,
-    SampledTextureStencil,
-    StorageTexture,
-}
-
-/// Sampling support
-#[derive(Clone, Copy, Debug)]
-pub struct SamplingSupport {
-    /// Types that support 16x sampling
-    pub sample16_support             : Sample16SupportFlags,
-	/// Supported resolve modes for non-depth and non-stencil values
-	pub resolve_modes                : ResolveModeSupport,
-	/// Supported depth resolve modes
-	pub depth_resolve_modes          : ResolveModeSupport,
-	/// Supported stencil resolve modes
-	pub stencil_resolve_modes        : ResolveModeSupport,
-	/// Programmable sampling location support
-	pub programmable_sample_positions: ProgrammableSamplePositionsTier,
-}
-
-//==============================================================================================================================
 // SHADERS
 //==============================================================================================================================
 
@@ -384,8 +344,6 @@ pub struct PhysicalDevice {
 	pub capabilities:           Capabilities,
 	/// Shader support
 	pub shader:                 ShaderSupport,
-	/// Sampling support
-	pub sampling:               SamplingSupport,
     /// Which pipeline cache features are supported?
 	pub pipeline_cache_support: PipelineCacheSupport,
 	/// Render pass tier

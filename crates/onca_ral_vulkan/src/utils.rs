@@ -170,31 +170,17 @@ impl ToVulkan for ral::TextureSubresourceRange {
     }
 }
 
-impl ToVulkan for ral::SampleCount {
-    type VkType = vk::SampleCountFlags;
-
-    fn to_vulkan(&self) -> Self::VkType {
-        match self {
-            ral::SampleCount::Sample1  => vk::SampleCountFlags::TYPE_1,
-            ral::SampleCount::Sample2  => vk::SampleCountFlags::TYPE_2,
-            ral::SampleCount::Sample4  => vk::SampleCountFlags::TYPE_4,
-            ral::SampleCount::Sample8  => vk::SampleCountFlags::TYPE_8,
-            ral::SampleCount::Sample16 => vk::SampleCountFlags::TYPE_16,
-        }
-    }
-}
-
 impl ToVulkan for ral::CommandListBeginFlags {
     type VkType = vk::CommandBufferUsageFlags;
 
     fn to_vulkan(&self) -> Self::VkType {
         let mut vk_flags = vk::CommandBufferUsageFlags::empty();
 
-    if self.contains(ral::CommandListBeginFlags::OneTimeSubmit) {
-        vk_flags |= vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT;
-    }
-
-    vk_flags
+        if self.contains(ral::CommandListBeginFlags::OneTimeSubmit) {
+            vk_flags |= vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT;
+        }
+    
+        vk_flags
     }
 }
 
@@ -417,19 +403,6 @@ impl ToVulkan for ral::AttachmentStoreOp {
         match self {
             ral::AttachmentStoreOp::Store    => vk::AttachmentStoreOp::STORE,
             ral::AttachmentStoreOp::DontCare => vk::AttachmentStoreOp::DONT_CARE,
-        }
-    }
-}
-
-impl ToVulkan for ral::ResolveMode {
-    type VkType = vk::ResolveModeFlags;
-
-    fn to_vulkan(&self) -> Self::VkType {
-        match self {
-            ral::ResolveMode::Average    => vk::ResolveModeFlags::AVERAGE,
-            ral::ResolveMode::Min        => vk::ResolveModeFlags::MIN,
-            ral::ResolveMode::Max        => vk::ResolveModeFlags::MAX,
-            ral::ResolveMode::SampleZero => vk::ResolveModeFlags::SAMPLE_ZERO,
         }
     }
 }

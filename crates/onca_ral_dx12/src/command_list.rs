@@ -424,96 +424,14 @@ impl ral::CommandListInterface for CommandList {
             let dx_rt = rt.rtv.interface().as_concrete_type::<RenderTargetView>();
             let begin_access = load_op_to_dx(rt.load_op, rt.rtv.desc().format);
 
-            let end_access = match &rt.resolve {
-                Some(resolve) =>{
-
-                    // TODO: this is where custom API would handle this
-                    let resolve_mode = if resolve.mode == ral::ResolveMode::SampleZero {
-                        let data_type = rt.rtv.desc().format.data_type();
-                        if data_type.is_integer() {
-                            ral::ResolveMode::Min
-                        } else {
-                            ral::ResolveMode::Average
-                        }
-                    } else {
-                        resolve.mode
-                    };
-
-                    let resolve_mode = resolve_mode.to_dx();
-                            // Since this will not be dropped, make sure we get a copy without incrementing the reference count
-                    let non_drop_source = {
-                        let source_tex = ral::WeakHandle::upgrade(&rt.rtv.texture()).unwrap();
-                        let dx_source_tex = source_tex.interface().as_concrete_type::<Texture>().resource.cast().unwrap();
-                        
-                        let mut non_drop_resource = MaybeUninit::uninit();
-                        non_drop_resource.write(dx_source_tex);
-                        ManuallyDrop::new(Some(non_drop_resource.assume_init()))
-                    };
-                    let non_drop_destination = {
-                        let dst_tex = ral::WeakHandle::<ral::Texture>::upgrade(todo!()).unwrap();
-                        let dx_dst_tex = dst_tex.interface().as_concrete_type::<Texture>().resource.cast().unwrap();
-
-                        let mut non_drop_resource = MaybeUninit::uninit();
-                        non_drop_resource.write(dx_dst_tex);
-                        ManuallyDrop::new(Some(non_drop_resource.assume_init()))
-                    };
-
-                    // TODO
-                    let subresources = &mut dynamic.rendering_rt_subresources[idx];
-                    let texture = ral::WeakHandle::upgrade(rt.rtv.texture()).unwrap();
-
-                    // Only 1 mip is allowed to be bound as a render target, so calculate subresources for each layer
-                    // match texture.full_subresource_range() {
-                    //     TextureSubresourceRange::Texture { aspect, base_mip, mip_levels } => {
-                    //         subresources.push(D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS {
-                    //             SrcSubresource: 0,
-                    //             DstSubresource: 0,
-                    //             DstX: rendering_info.render_area.x as u32,
-                    //             DstY: rendering_info.render_area.y as u32,
-                    //             SrcRect: rendering_info.render_area.to_dx(),
-                    //         });
-                    //     },
-                    //     TextureSubresourceRange::Array { aspect, base_mip, mip_levels, base_layer, array_layers } => {
-                    //         let mip_levels = mip_levels.unwrap().get() as u32;
-                    //         let array_layers = array_layers.unwrap().get() as u32;
-
-                    //         // Full range always has an array layer count
-                    //         for layer in 0..array_layers {
-                    //             subresources.push(D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS {
-                    //                 SrcSubresource: calculate_subresource(0, layer, 0, mip_levels, array_layers),
-                    //                 DstSubresource: todo!(),
-                    //                 DstX: rendering_info.render_area.x as u32,
-                    //                 DstY: rendering_info.render_area.y as u32,
-                    //                 SrcRect: todo!(),
-                    //             });
-                    //         }
-                    //     },
-                    // }
-
-                    D3D12_RENDER_PASS_ENDING_ACCESS {
-                        Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE,
-                        Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0 {
-                            Resolve: ManuallyDrop::new(D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS {
-                                pSrcResource: non_drop_source,
-                                pDstResource: non_drop_destination,
-                                SubresourceCount: subresources.len() as u32,
-                                pSubresourceParameters: subresources.as_ptr(),
-                                Format: todo!(),
-                                ResolveMode: resolve_mode,
-                                PreserveResolveSource: (rt.store_op == ral::AttachmentStoreOp::Store).into(),
-                            })
-                        },
-                    }
+            let end_access = match rt.store_op {
+                ral::AttachmentStoreOp::Store => D3D12_RENDER_PASS_ENDING_ACCESS {
+                    Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
+                    Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
                 },
-                None => match rt.store_op {
-                    ral::AttachmentStoreOp::Store => D3D12_RENDER_PASS_ENDING_ACCESS {
-                        Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
-                        Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
-                    },
-                    ral::AttachmentStoreOp::DontCare => D3D12_RENDER_PASS_ENDING_ACCESS {
-                        Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD,
-                        Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
-                    },
+                ral::AttachmentStoreOp::DontCare => D3D12_RENDER_PASS_ENDING_ACCESS {
+                    Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD,
+                    Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
                 },
             };
 

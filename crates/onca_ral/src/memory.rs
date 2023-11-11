@@ -1,7 +1,7 @@
 use onca_common::prelude::*;
 use onca_common_macros::flags;
 
-use crate::{Result, handle::InterfaceHandle, HandleImpl, Handle, MemoryType, WeakHandle, Device, MemoryInfo, Error, api, DeviceHandle, MemAlign};
+use crate::{Result, handle::InterfaceHandle, HandleImpl, Handle, MemoryType, WeakHandle, Device, MemoryInfo, Error, DeviceHandle, MemAlign};
 
 
 #[flags]

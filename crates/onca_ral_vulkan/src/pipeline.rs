@@ -243,13 +243,6 @@ impl Pipeline {
             .push_next(&mut clip_enable_state)
             .push_next(&mut line_raster_state);
 
-        // minSampleShading and alphaToOne (can be done in the pixel shader if needed, by just setting alpha of the incoming color to 1) is not supported
-        let sample_mask = [desc.multisample_state.sample_mask as u32];
-        let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
-            .rasterization_samples(desc.multisample_state.samples.to_vulkan())
-            .sample_mask(&sample_mask)
-            .alpha_to_coverage_enable(desc.multisample_state.alpha_to_coverage);
-
         let depth_stencil_state = desc.depth_stencil_state.to_vulkan();
 
         let mut rendertarget_formats = [vk::Format::UNDEFINED; ral::constants::MAX_RENDERTARGETS as usize];
@@ -313,7 +306,6 @@ impl Pipeline {
             .input_assembly_state(&input_assembly_state)
             .viewport_state(&viewport_state)
             .rasterization_state(&rasterizer_state)
-            .multisample_state(&multisample_state)
             .depth_stencil_state(&depth_stencil_state)
             .color_blend_state(&blend_state)
             .dynamic_state(&dynamic_state_info)

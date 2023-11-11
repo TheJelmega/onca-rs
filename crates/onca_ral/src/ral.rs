@@ -10,7 +10,7 @@ use onca_common::{
 use onca_logging::{log_error, LogCategory, LogLevel, Logger};
 use onca_toml::{self as toml, Toml};
 
-use crate::{PhysicalDevice, Result, Error, Device, DeviceInterfaceHandle, CommandQueue, QueuePriority, QueueType, CommandQueueInterfaceHandle, handle::Handle, DeviceHandle, QueueIndex, CommandQueueHandle, GpuAllocatorImpl};
+use crate::{PhysicalDevice, Result, Error, DeviceInterfaceHandle, CommandQueue, QueuePriority, QueueType, CommandQueueInterfaceHandle, handle::Handle, DeviceHandle, QueueIndex, CommandQueueHandle, GpuAllocatorImpl};
 
 const LOG_CAT : LogCategory = LogCategory::new("Graphics RAL");
 

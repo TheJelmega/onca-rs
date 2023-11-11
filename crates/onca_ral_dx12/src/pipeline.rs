@@ -8,7 +8,7 @@ use windows::Win32::Graphics::{
     Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC, DXGI_FORMAT}
 };
 
-use crate::{device::Device, shader::Shader, utils::{ToDx, ToRalError, get_sampler_filter, get_root_parameter_type, get_descriptor_range_type}, sampler::StaticSampler, descriptors::DescriptorTableLayout};
+use crate::{device::Device, shader::Shader, utils::{ToDx, ToRalError, get_root_parameter_type}, sampler::StaticSampler, descriptors::DescriptorTableLayout};
 
 pub struct PipelineLayout {
     pub root_sig: ID3D12RootSignature
@@ -134,12 +134,10 @@ impl Pipeline {
         pipeline_stream.set_root_signature(&desc.pipeline_layout);
         pipeline_stream.set_vertex_shader(&desc.vertex_shader);
         pipeline_stream.set_pixel_shader(&desc.pixel_shader);
-        pipeline_stream.set_blend_desc(&desc.blend_state, desc.multisample_state.alpha_to_coverage);
-        pipeline_stream.set_sample_mask(desc.multisample_state.sample_mask as u32);
-        pipeline_stream.set_raster_desc(&desc.rasterizer_state, desc.multisample_state.samples != ral::SampleCount::Sample1);
+        pipeline_stream.set_blend_desc(&desc.blend_state);
+        pipeline_stream.set_raster_desc(&desc.rasterizer_state);
         pipeline_stream.set_strip_cut(desc.primitive_restart.to_dx());
         pipeline_stream.set_topology_type(desc.topology.get_type().to_dx());
-        pipeline_stream.set_sample_desc(desc.multisample_state);
         pipeline_stream.set_depth_stencil_state(&desc.depth_stencil_state);
         pipeline_stream.set_render_target_formats(desc.rendertarget_formats);
 
@@ -191,7 +189,6 @@ pub struct PipelineStream {
     vs_shader:      Option<PipelineSubObject<D3D12_SHADER_BYTECODE>>,
     ps_shader:      Option<PipelineSubObject<D3D12_SHADER_BYTECODE>>,
     blend_desc:     Option<PipelineSubObject<D3D12_BLEND_DESC>>,
-    sample_mask:    Option<PipelineSubObject<u32>>,
     raster_desc:    Option<PipelineSubObject<D3D12_RASTERIZER_DESC1>>,
     strip_cut:      Option<PipelineSubObject<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>>,
     topology_type:  Option<PipelineSubObject<D3D12_PRIMITIVE_TOPOLOGY_TYPE>>,
@@ -231,24 +228,14 @@ impl PipelineStream {
         });
     }
 
-    fn set_blend_desc(&mut self, blend_state: &ral::BlendState, alpha_to_coverage: bool) {
-        let mut blend_desc = blend_state.to_dx();
-        blend_desc.AlphaToCoverageEnable = alpha_to_coverage.into();
-
+    fn set_blend_desc(&mut self, blend_state: &ral::BlendState) {
         self.blend_desc = Some(PipelineSubObject {
             subobject: D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND,
-            data: blend_desc
+            data: blend_state.to_dx()
         });
     }
 
-    fn set_sample_mask(&mut self, sample_mask: u32) {
-        self.sample_mask = Some(PipelineSubObject {
-            subobject: D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
-            data: sample_mask
-        });
-    }
-
-    fn set_raster_desc(&mut self, raster_state: &ral::RasterizerState, multisample_enable: bool) {
+    fn set_raster_desc(&mut self, raster_state: &ral::RasterizerState) {
         let (depth_bias, depth_slope, depth_clamp) = raster_state.depth_bias.map_or((0.0, 0.0, 0.0), |bias| (bias.scale, bias.slope, bias.clamp));
 
         let raster_desc = D3D12_RASTERIZER_DESC1 {
@@ -259,7 +246,7 @@ impl PipelineStream {
             DepthBiasClamp: depth_clamp,
             SlopeScaledDepthBias: depth_slope,
             DepthClipEnable: raster_state.depth_clip_enable.into(),
-            MultisampleEnable: multisample_enable.into(),
+            MultisampleEnable: false.into(),
             AntialiasedLineEnable: false.into(),
             ForcedSampleCount: 0,
             ConservativeRaster: raster_state.conservative_raster.to_dx(),
@@ -311,18 +298,6 @@ impl PipelineStream {
         self.dsv_format = Some(PipelineSubObject {
             subobject: D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
             data: dsv_format
-        });
-    }
-
-    fn set_sample_desc(&mut self, multisample_state: ral::MultisampleState) {
-        let sample_desc = DXGI_SAMPLE_DESC {
-            Count: multisample_state.samples.get_count(),
-            Quality: 0,
-        };
-
-        self.sample_desc = Some(PipelineSubObject {
-            subobject: D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
-            data: sample_desc
         });
     }
 

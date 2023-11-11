@@ -6,7 +6,7 @@ use onca_common_macros::{EnumDisplay, EnumCount};
 use crate::{
     HandleImpl, Handle, Result, Error,
     handle::{InterfaceHandle, create_ral_handle},
-    constants::{self, CONSTANT_BUFFER_SIZE_ALIGN}, ShaderVisibility, WeakHandle, GpuAllocation, Device, SamplerHandle, SampledTextureViewHandle, StorageTextureViewHandle, DeviceHandle, BufferRange, BufferHandle, StructuredBufferViewDesc, Buffer, TexelBufferViewDesc,
+    constants::{self, CONSTANT_BUFFER_SIZE_ALIGN}, ShaderVisibility, WeakHandle, GpuAllocation, Device, SamplerHandle, SampledTextureViewHandle, StorageTextureViewHandle, DeviceHandle, BufferRange, BufferHandle, StructuredBufferViewDesc, TexelBufferViewDesc,
 };
 
 /// Descriptor heap type

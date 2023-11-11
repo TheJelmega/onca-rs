@@ -307,7 +307,6 @@ fn get_device(factory: &IDXGIFactory7, adapter: IDXGIAdapter4) -> ral::Result<ra
         memory_info,
         capabilities: get_capabilities(&options)?,
         shader: get_shader_support(&options, shader_model.HighestShaderModel)?,
-        sampling: get_sample_info(&options)?,
         pipeline_cache_support: get_pipeline_cache_support(&dummy_device)? ,
         render_pass_tier: get_render_pass_support(&options),
         sparse_resources: get_sparse_resource_support(),
@@ -741,35 +740,6 @@ fn get_shader_support(options: &D3DOptions, shader_model: D3D_SHADER_MODEL) -> r
         flags,
         min_lane_count: options.options1.WaveLaneCountMin as u8,
         max_lane_count: options.options1.WaveLaneCountMax as u8,
-    })
-}
-
-fn get_sample_info(options: &D3DOptions) -> ral::Result<SamplingSupport> {
-    let programmable_sample_positions = match options.options2.ProgrammableSamplePositionsTier {
-        D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED => return Err(ral::Error::MissingFeature("Programmable sample positions")),
-        D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_1 => ProgrammableSamplePositionsTier::Tier1,
-        D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_2 => ProgrammableSamplePositionsTier::Tier2,
-        _ => unreachable!(),
-    };
-
-    let sample16_support = Sample16SupportFlags::FramebufferColor |        
-                           Sample16SupportFlags::FramebufferColorInteger |
-                           Sample16SupportFlags::FramebufferDepth |
-                           Sample16SupportFlags::FramebufferStencil |
-                           Sample16SupportFlags::FramebufferNoAttachments |
-                           Sample16SupportFlags::SampledTextureColor |
-                           Sample16SupportFlags::SampledTextureColorInteger |
-                           Sample16SupportFlags::SampledTextureDepth |
-                           Sample16SupportFlags::SampledTextureStencil |
-                           Sample16SupportFlags::StorageTexture;
-
-    Ok(SamplingSupport {
-        sample16_support,
-        // TODO: Support ResolveModeSupport::SampleZero via compute shader or figure out an alternate way of doing this
-        resolve_modes: ResolveModeSupport::Average | ResolveModeSupport::Min | ResolveModeSupport::Max,
-        depth_resolve_modes: ResolveModeSupport::Average | ResolveModeSupport::Min | ResolveModeSupport::Max,
-        stencil_resolve_modes: ResolveModeSupport::Min | ResolveModeSupport::Max,
-        programmable_sample_positions,
     })
 }
 

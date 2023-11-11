@@ -6,9 +6,10 @@ use onca_window::{OSWindowHandle, Window};
 
 use crate::{
     common::*,
-    Texture, RenderTargetView, SampledTextureViewDesc, Handle, TextureHandle, Result, Error, CommandQueueHandle, WeakHandle, Device,
     handle::{InterfaceHandle, HandleImpl},
-    api, TextureUsage, TextureSize, TextureFlags, RenderTargetViewDesc, RenderTargetViewType, TextureAspect, RenderTargetViewHandle, DeviceHandle,
+    api,
+    Handle, TextureHandle, Result, Error, CommandQueueHandle, WeakHandle, Device,
+    TextureUsage, TextureSize, TextureFlags, RenderTargetViewDesc, RenderTargetViewType, TextureAspect, RenderTargetViewHandle, DeviceHandle,
 };
 
 
