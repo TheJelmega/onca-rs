@@ -54,3 +54,18 @@ impl OncaGlobalAlloc {
         }
     }
 }
+
+// External bindings to onca_malloc
+extern "C" {
+	/// Allocate `size` bytes aligned by `alignment`.
+	/// 
+	/// Return a pointer to the allocated memory or null if out of memory.
+	/// 
+	/// Returns a unique pointer if called with `size == 0`.
+	pub fn onca_malloc(layout: Layout) -> Option<NonNull<u8>>;
+
+	/// Free previously allocated memory.
+	/// 
+	/// The pointer `p` must have been allocated before (or be null)
+	pub fn onca_free(ptr: NonNull<u8>, _layout: Layout);
+}

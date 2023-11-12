@@ -3,7 +3,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{alloc::{Allocator, AllocHeader}, prelude::AllocId};
+use crate::alloc::{Allocator, AllocHeader, AllocId, onca_malloc, onca_free};
 
 extern crate alloc;
 
@@ -14,15 +14,13 @@ extern crate alloc;
 /// This allocator has a special allocator id, which will always refer to the Mallocator: 0xFFFF
 pub struct Mallocator;
 
-static MI_MALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 impl Allocator for Mallocator {
     unsafe fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
-        NonNull::new(MI_MALLOC.alloc(layout))
+        onca_malloc(layout)
     }
 
     unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
-        MI_MALLOC.dealloc(ptr.as_ptr(), layout);
+        onca_free(ptr, layout)
     }
 
     fn owns(&self, _ptr: std::ptr::NonNull<u8>, _layout: Layout) -> bool {

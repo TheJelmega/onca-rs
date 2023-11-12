@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use crate::{
     alloc::{
         Allocator, AllocId, NUM_RESERVED_ALLOC_IDS, get_active_alloc, ScopedAlloc,
-        primitives::{Mallocator, FreelistAllocator}, AllocHeader,
+        primitives::{Mallocator, FreelistAllocator}, AllocHeader, onca_free, onca_malloc,
     },
     sync::{RwLock, Mutex}, MiB, scoped_alloc
 };
@@ -143,7 +143,7 @@ impl MemoryManager {
     pub unsafe fn alloc_raw(&self, init_state: AllocInitState, layout: Layout, alloc_id_override: Option<AllocId>) -> Option<NonNull<u8>> {
         Self::handle_alloc(layout, init_state, true, alloc_id_override, |alloc_id, layout| {
             if alloc_id == AllocId::Untracked {
-                (onca_malloc::malloc(layout), true)
+                (onca_malloc(layout), true)
             } else {
                match self.get_allocator(alloc_id) {
                    Some(alloc) => (alloc.alloc(layout), alloc.supports_free()),
@@ -158,7 +158,7 @@ impl MemoryManager {
     pub unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         Self::handle_dealloc(ptr, layout, |alloc_id, ptr, layout| {
             if alloc_id == AllocId::Untracked {
-                onca_malloc::free(ptr, layout);
+                onca_free(ptr, layout);
             } else {
                if let Some(alloc) = self.get_allocator(alloc_id) {
                    alloc.dealloc(ptr.cast(), layout)
@@ -174,14 +174,14 @@ impl MemoryManager {
         // Ensure the correct alloc id is used
         scoped_alloc!(AllocId::Untracked);
         Self::handle_alloc(layout, init_state, false, Some(AllocId::Untracked), |_, layout| {
-            (onca_malloc::malloc(layout), true)
+            (onca_malloc(layout), true)
         }).unwrap()
     }
 
     pub unsafe fn dealloc_untracked(ptr: NonNull<u8>, layout: Layout) {
         Self::handle_dealloc(ptr, layout, |alloc_id, ptr, layout| {
             assert!(alloc_id == AllocId::Untracked, "Trying to deallocate tracked memory as untracked memory");
-            onca_malloc::free(ptr, layout);
+            onca_free(ptr, layout);
         })
     }
 
