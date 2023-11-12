@@ -19,7 +19,7 @@ use crate::{
 };
 
 thread_local! {
-    pub static TLS_ALLOC: OnceCell<FreelistAllocator> = OnceCell::new();
+    pub static TLS_ALLOC: OnceCell<UnsafeCell<FreelistAllocator>> = OnceCell::new();
 }
 
 struct MemoryManagerPtr(*const MemoryManager);
@@ -28,7 +28,6 @@ unsafe impl Send for MemoryManagerPtr {}
 unsafe impl Sync for MemoryManagerPtr {}
 
 static MEMORY_MANAGER : RwLock<MemoryManagerPtr> = RwLock::new(MemoryManagerPtr(null()));
-static UNTRACKED_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub fn set_memory_manager(manager: &MemoryManager) {
     *MEMORY_MANAGER.write() = MemoryManagerPtr(manager as *const _);
@@ -51,7 +50,7 @@ pub enum AllocInitState {
 
 struct State
 {
-    malloc          : Mallocator,
+    malloc          : UnsafeCell<Mallocator>,
     allocs          : [Option<*mut dyn Allocator>; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize + 1],
     // Cannot be 0, as 0 is the untracked allocator and is a special case
     default         : NonZeroU16,
@@ -60,7 +59,7 @@ struct State
 impl State {
     const fn new() -> Self {
         Self{ 
-            malloc: Mallocator,
+            malloc: UnsafeCell::new(Mallocator),
             allocs: [None; MemoryManager::MAX_REGISTERABLE_ALLOCS as usize + 1],
             default: unsafe { NonZeroU16::new_unchecked(1) },
         }
@@ -128,28 +127,23 @@ impl MemoryManager {
         }
 
         let mut state = self.state.read();
-        let alloc_ref : Option<&dyn Allocator> = match alloc.get_id() {
+        let alloc_ref : Option<&mut dyn Allocator> = match alloc.get_id() {
             0 => unreachable!("Cannot get the untracked allocator directly"),
-            1 => Some(&state.malloc),
+            1 => Some(unsafe { &mut *state.malloc.get()}),
             2 => Self::get_tls_alloc(),
             id => match state.allocs[(id - NUM_RESERVED_ALLOC_IDS) as usize] {
                 None => None,
-                Some(alloc) => Some(unsafe{ &*alloc })
+                Some(alloc) => Some(unsafe{ &mut *alloc })
             }
         };
-        
-        alloc_ref.map(|val| unsafe {
-            // SAFETY: Memory manager will never move, so pointer casting will always result in a correct result
-            let mut_ptr = val as *const dyn Allocator as *mut dyn Allocator;
-            &mut *mut_ptr
-        })
+        alloc_ref
     }
 
     /// Allocate a raw allocation with the given layout, using the active allocator and memory tag.
     pub unsafe fn alloc_raw(&self, init_state: AllocInitState, layout: Layout, alloc_id_override: Option<AllocId>) -> Option<NonNull<u8>> {
         Self::handle_alloc(layout, init_state, true, alloc_id_override, |alloc_id, layout| {
             if alloc_id == AllocId::Untracked {
-                (NonNull::new(UNTRACKED_ALLOC.alloc(layout)), true)
+                (onca_malloc::malloc(layout), true)
             } else {
                match self.get_allocator(alloc_id) {
                    Some(alloc) => (alloc.alloc(layout), alloc.supports_free()),
@@ -164,7 +158,7 @@ impl MemoryManager {
     pub unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         Self::handle_dealloc(ptr, layout, |alloc_id, ptr, layout| {
             if alloc_id == AllocId::Untracked {
-                UNTRACKED_ALLOC.dealloc(ptr.as_ptr(), layout);
+                onca_malloc::free(ptr, layout);
             } else {
                if let Some(alloc) = self.get_allocator(alloc_id) {
                    alloc.dealloc(ptr.cast(), layout)
@@ -180,14 +174,14 @@ impl MemoryManager {
         // Ensure the correct alloc id is used
         scoped_alloc!(AllocId::Untracked);
         Self::handle_alloc(layout, init_state, false, Some(AllocId::Untracked), |_, layout| {
-            (NonNull::new(UNTRACKED_ALLOC.alloc(layout)), true)
+            (onca_malloc::malloc(layout), true)
         }).unwrap()
     }
 
     pub unsafe fn dealloc_untracked(ptr: NonNull<u8>, layout: Layout) {
         Self::handle_dealloc(ptr, layout, |alloc_id, ptr, layout| {
             assert!(alloc_id == AllocId::Untracked, "Trying to deallocate tracked memory as untracked memory");
-            UNTRACKED_ALLOC.dealloc(ptr.as_ptr(), layout);
+            onca_malloc::free(ptr, layout);
         })
     }
 
@@ -234,7 +228,7 @@ impl MemoryManager {
         }
     }
 
-    fn get_tls_alloc() -> Option<&'static dyn Allocator> {
+    fn get_tls_alloc<'a>() -> Option<&'a mut dyn Allocator> {
         // .with() could allocate memory and if we keep the tls stack for that, we'll get into infinite recursion
         scoped_alloc!(AllocId::Malloc);
 
@@ -242,11 +236,12 @@ impl MemoryManager {
             let alloc = tls.get_or_init(|| unsafe {
                 let layout = Layout::from_size_align(MiB(1), 8).unwrap();
                 let buffer = get_memory_manager().alloc_raw(AllocInitState::Uninitialized, layout, Some(AllocId::Malloc)).expect("Failed to allocate TLS allocator memory buffer");
-                FreelistAllocator::new(buffer, layout)
+                UnsafeCell::new(FreelistAllocator::new(buffer, layout))
             });
+            
 
             // SAFETY: This will always be valid when called
-            unsafe { &*(alloc as *const _ as *const dyn Allocator) }
+            unsafe { &mut *alloc.get() }
         }))
     }
 }

@@ -724,7 +724,7 @@ pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16,
     let mut button_count = 0;
 
     // SAFETY: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
-    #[allow(cast_ref_to_mut)]
+    #[allow(invalid_reference_casting)]
     let report_data = unsafe { &mut *(report as *const _ as *mut [u8]) };
 
     _ = unsafe { HidP_GetUsages(report_type, page.as_u16(), collection_id, null_mut(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report_data) };
@@ -817,7 +817,7 @@ pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<
     let win_report_type = to_native_report_type(report_type);
 
     // SAFETY: HidP_GetUsages doesn't actually write to the report buffer, so this *technically* not a mutable reference
-    #[allow(cast_ref_to_mut)]
+    #[allow(invalid_reference_casting)]
     let report_data = unsafe {  &mut *(report as *const _ as *mut [u8]) };
 
     let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
