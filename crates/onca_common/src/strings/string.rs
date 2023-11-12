@@ -9,7 +9,6 @@ use core::{
     ops::*,
     char::decode_utf16,
     iter::{FromIterator, from_fn},
-    str::pattern::Pattern,
     ops::{RangeBounds, Range}, 
 };
 use std::collections::TryReserveError;

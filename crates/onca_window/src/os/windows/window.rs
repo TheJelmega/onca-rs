@@ -95,11 +95,11 @@ impl OSWindowHandle {
         }
     }
 
-    pub(crate) fn maximize(&mut self, window_id: WindowId) {
+    pub(crate) fn maximize(&mut self, _window_id: WindowId) {
         unsafe { ShowWindow(self.hwnd, SW_SHOWMAXIMIZED) };
     }
 
-    pub(crate) fn restore(&mut self, window_id: WindowId) {
+    pub(crate) fn restore(&mut self, _window_id: WindowId) {
         unsafe { ShowWindow(self.hwnd, SW_RESTORE) };
     }
 
@@ -212,12 +212,12 @@ impl OSWindowHandle {
         }
     }
 
-    pub(crate) fn set_visible(&mut self, window_id: WindowId, settings: &WindowSettings, visible: bool) {
+    pub(crate) fn set_visible(&mut self, _window_id: WindowId, settings: &WindowSettings, visible: bool) {
         let window_cmd = get_show_window_cmd(visible, settings.is_active(), settings.is_minimized(), settings.is_maximized());
         unsafe { ShowWindow(self.hwnd, window_cmd) };
     }
 
-    pub(crate) fn set_active(&mut self, window_id: WindowId, settings: &WindowSettings, active: bool) {
+    pub(crate) fn set_active(&mut self, _window_id: WindowId, settings: &WindowSettings, active: bool) {
         let window_cmd = get_show_window_cmd(settings.is_visible(), active, settings.is_minimized(), settings.is_maximized());
         unsafe { ShowWindow(self.hwnd, window_cmd) };
     }
@@ -285,8 +285,7 @@ impl OSWindowHandle {
                 0,
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOREPOSITION | SWP_FRAMECHANGED,
-            );
-            res
+            ).map_err(|err| err.code().0 as u32)
         }
     }
 
@@ -315,12 +314,20 @@ impl OSWindowHandle {
                 return false;
             }
 
-            PostMessageA(
+            let res = PostMessageA(
                 self.hwnd,
                 WM_NCLBUTTONDOWN,
                 WPARAM(HTCAPTION as usize),
                 LPARAM(&points as *const _ as isize),
             );
+            if let Err(err) = res {
+                log_error!(
+                    LOG_CAT,
+                    Self::begin_drag,
+                    "Failed to send message to start dragging the window. ({err})"
+                );
+                return false;
+            }
 
             true
         }
@@ -334,7 +341,7 @@ impl OSWindowHandle {
                     log_error!(
                         LOG_CAT,
                         Self::begin_drag,
-                        "Failed getting the mouse's position before dragging. (err: {})",
+                        "Failed getting the mouse's position before sizing. (err: {})",
                         GetLastError().unwrap_err()
                     );
                     return false;
@@ -346,7 +353,7 @@ impl OSWindowHandle {
                 log_error!(
                     LOG_CAT,
                     Self::begin_drag,
-                    "Failed to release mouse capture before starting to drag window. ({err})"
+                    "Failed to release mouse capture before starting to size window. ({err})"
                 );
                 return false;
             }
@@ -362,18 +369,26 @@ impl OSWindowHandle {
                 ResizeDir::NorthEast => HTTOPLEFT,
             };
 
-            PostMessageA(
+            let res = PostMessageA(
                 self.hwnd,
                 WM_NCLBUTTONDOWN,
                 WPARAM(hittest as usize),
                 LPARAM(&points as *const _ as isize),
             );
+            if let Err(err) = res {
+                log_error!(
+                    LOG_CAT,
+                    Self::begin_drag,
+                    "Failed to send message before sizing the window. ({err})"
+                );
+                return false;
+            }
 
             true
         }
     }
 
-    pub(crate) fn notify_user(&mut self, window_id: WindowId, attention: AttentionType) {
+    pub(crate) fn notify_user(&mut self, _window_id: WindowId, attention: AttentionType) {
         unsafe {
             let (flags, count) = match attention {
                 AttentionType::None => (FLASHW_STOP, 0),
@@ -557,7 +572,7 @@ unsafe extern "system" fn wnd_proc(
             let width = (lparam.0 & 0xFFFF) as u16;
             let height = ((lparam.0 >> 16) & 0xFFFF) as u16;
             let size = PhysicalSize::new(width, height);
-            let is_size_move = window.settings().flags().is_set(Flags::InSizeMove);
+            let is_size_move = window.settings().flags().contains(Flags::InSizeMove);
 
             window.settings.flags.set(Flags::HasResized, is_size_move);
             match wparam.0 as u32 {
@@ -630,8 +645,8 @@ unsafe extern "system" fn wnd_proc(
                 window.id
             );
 
-            if window.settings.flags.is_set(Flags::DraggingWindow)
-                || window.settings.flags.is_set(Flags::SizingWindow)
+            if window.settings.flags.contains(Flags::DraggingWindow)
+                || window.settings.flags.contains(Flags::SizingWindow)
             {
                 let points = match cursor_coords() {
                     Some(points) => points,
@@ -645,12 +660,19 @@ unsafe extern "system" fn wnd_proc(
                     }
                 };
 
-                PostMessageA(
+               let res = PostMessageA(
                     hwnd,
                     WM_LBUTTONUP,
                     WPARAM(0),
                     LPARAM(&points as *const _ as isize),
                 );
+                if let Err(err) = res {
+                    log_warning!(
+                        LOG_CAT,
+                        "Failed send message to end drag. ({err})"
+                    );
+                }
+
                 window
                     .settings
                     .flags
@@ -659,7 +681,7 @@ unsafe extern "system" fn wnd_proc(
 
             window.settings.flags.set(Flags::InSizeMove, false);
 
-            if window.settings.flags().is_set(Flags::HasMoved) {
+            if window.settings.flags().contains(Flags::HasMoved) {
                 window.settings.flags.set(Flags::HasMoved, false);
                 let pos = window.settings.position();
 
@@ -673,7 +695,7 @@ unsafe extern "system" fn wnd_proc(
                 window.send_window_event(WindowEvent::Moved(pos));
             }
 
-            if window.settings.flags().is_set(Flags::HasResized) {
+            if window.settings.flags().contains(Flags::HasResized) {
                 window.settings.flags.set(Flags::HasResized, false);
                 let size = window.settings.size();
                 window.send_window_event(WindowEvent::Resized(size));
@@ -1038,39 +1060,39 @@ fn get_win32_style(settings: &WindowSettings) -> (WINDOW_STYLE, WINDOW_EX_STYLE)
     let mut win32_style_ex = WINDOW_EX_STYLE(0);
 
     let style = settings.flags();
-    if style.is_set(Flags::MinimizeButton) {
+    if style.contains(Flags::MinimizeButton) {
         win32_style |= WS_MINIMIZEBOX;
     }
-    if style.is_set(Flags::MaximizeButton) {
+    if style.contains(Flags::MaximizeButton) {
         win32_style |= WS_MAXIMIZEBOX;
     }
-    if !style.is_set(Flags::AcceptsInput) {
+    if !style.contains(Flags::AcceptsInput) {
         win32_style |= WS_DISABLED;
     }
-    if !style.is_set(Flags::Active) {
+    if !style.contains(Flags::Active) {
         win32_style_ex |= WS_EX_NOACTIVATE;
     }
-    if style.is_set(Flags::Visible) {
+    if style.contains(Flags::Visible) {
         win32_style |= WS_VISIBLE;
     }
-    if style.is_set(Flags::Minimized) {
+    if style.contains(Flags::Minimized) {
         win32_style |= WS_MINIMIZE;
     }
-    if style.is_set(Flags::Maximized) {
+    if style.contains(Flags::Maximized) {
         win32_style |= WS_MAXIMIZE;
     }
-    if style.is_set(Flags::ToolWindow) {
+    if style.contains(Flags::ToolWindow) {
         win32_style_ex |= WS_EX_TOOLWINDOW;
     }
-    if style.is_set(Flags::AcceptFiles) {
+    if style.contains(Flags::AcceptFiles) {
         win32_style_ex |= WS_EX_ACCEPTFILES;
     }
-    if style.is_set(Flags::TopMost) {
+    if style.contains(Flags::TopMost) {
         win32_style_ex |= WS_EX_TOPMOST;
     }
 
     let border_style = settings.border_style();
-    if style.is_set(Flags::Resizable) {
+    if style.contains(Flags::Resizable) {
         if border_style == BorderStyle::Borderless {
             log_warning!(LOG_CAT, "Cannot use Resizable with Borderless window style");
         } else {
@@ -1137,12 +1159,12 @@ fn calculate_margins(style: WINDOW_STYLE, ex_style: WINDOW_EX_STYLE) -> Margins 
 fn cursor_coords() -> Option<POINTS> {
     let mut points = POINT::default();
     let res = unsafe { GetCursorPos(&mut points) };
-    if let Err(err) = res {
+    if let Err(_) = res {
+        None
+    } else {
         Some(POINTS {
             x: points.x as i16,
             y: points.y as i16,
         })
-    } else {
-        None
     }
 }

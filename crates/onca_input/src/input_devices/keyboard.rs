@@ -1,6 +1,5 @@
 use core::fmt;
 use onca_common::{
-    prelude::*,
     collections::BitSet,
     sync::{Mutex, RwLock},
     event_listener::DynEventListenerRef

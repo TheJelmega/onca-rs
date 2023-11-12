@@ -5,7 +5,7 @@ use windows::{
         UI::WindowsAndMessaging::{
             HICON, LoadImageA, IMAGE_BITMAP, LR_LOADFROMFILE, DestroyIcon, CopyIcon
         },
-        Foundation::{HMODULE, GetLastError}
+        Foundation::HMODULE,
     },
     core::PCSTR
 };

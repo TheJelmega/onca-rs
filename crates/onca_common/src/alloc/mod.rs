@@ -62,10 +62,14 @@ extern "C" {
 	/// Return a pointer to the allocated memory or null if out of memory.
 	/// 
 	/// Returns a unique pointer if called with `size == 0`.
+    // We will only be calling this fom rust, and will be compiled with the same version, should structures should match
+    #[allow(improper_ctypes)]
 	pub fn onca_malloc(layout: Layout) -> Option<NonNull<u8>>;
-
+    
 	/// Free previously allocated memory.
-	/// 
-	/// The pointer `p` must have been allocated before (or be null)
+    /// 
+    /// The pointer `p` must have been allocated before (or be null)
+    // We will only be calling this fom rust, and will be compiled with the same version, should structures should match
+    #[allow(improper_ctypes)]
 	pub fn onca_free(ptr: NonNull<u8>, _layout: Layout);
 }

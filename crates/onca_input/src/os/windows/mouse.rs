@@ -7,7 +7,7 @@ use windows::Win32::{
         },
         WindowsAndMessaging::*,
     },
-    Foundation::{HWND, GetLastError},
+    Foundation::HWND,
     Devices::HumanInterfaceDevice::{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, MOUSE_MOVE_ABSOLUTE, MOUSE_VIRTUAL_DESKTOP}
 };
 

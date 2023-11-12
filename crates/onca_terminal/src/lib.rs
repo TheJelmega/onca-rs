@@ -1,5 +1,3 @@
-#![feature(local_key_cell_methods)]
-
 use std::{
     cell::RefCell,
     io::Write,
@@ -45,7 +43,7 @@ impl Terminal {
             if opt.is_none() {
                 *opt = Some(String::new());
             }
-            let mut buf = opt.as_mut().unwrap();
+            let buf = opt.as_mut().unwrap();
             buf.clear();
             let needed_size = text.len() + MIN_ADDITONAL_SIZE;
             if needed_size > buf.capacity() {

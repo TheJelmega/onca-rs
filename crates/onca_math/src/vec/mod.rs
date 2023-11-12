@@ -410,11 +410,6 @@ pub enum Swizzle {
     W,
 }
 
-pub const SWIZZLE_X : u8 = 0;
-pub const SWIZZLE_Y : u8 = 1;
-pub const SWIZZLE_Z : u8 = 2;
-pub const SWIZZLE_W : u8 = 3;
-
 macro_rules! create_swizzle {
     {@2d $($fun:ident => $a:ident, $b:ident)*} => {
         $(

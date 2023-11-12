@@ -189,10 +189,11 @@ pub struct Ral {
 impl Ral {
     /// Create a new render abstraction layer
     pub fn new(memory_manager: &MemoryManager, logger: &Logger, alloc: AllocId, settings: Settings) -> Result<Self> {
+        // TODO: Fixup path and copy from deps to output
         let dynlib_name = match &settings.api {
-            RalApi::DX12 => "deps/onca_ral_dx12",
-            RalApi::Vulkan => "deps/onca_ral_vulkan",
-            RalApi::Software => "deps/onca_ral_software",
+            RalApi::DX12 => "onca_ral_dx12",
+            RalApi::Vulkan => "onca_ral_vulkan",
+            RalApi::Software => "onca_ral_software",
             RalApi::Other(name) => &name,
         };
         let dynlib = match DynLib::load(dynlib_name) {

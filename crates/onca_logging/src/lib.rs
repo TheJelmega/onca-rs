@@ -1,5 +1,3 @@
-#![feature(local_key_cell_methods)]
-
 use core::{
     fmt::{Display, Arguments},
     ptr::null,
@@ -9,7 +7,7 @@ use core::{
 use std::fmt::Write;
 use onca_common::{
     prelude::*,
-    io::{self, prelude::*},
+    io,
     sync::{RwLock, Mutex},
     time::TimeStamp,
 };
@@ -167,7 +165,6 @@ macro_rules! log_location {
 pub struct LoggerState {
     writers:        [Option<Box<dyn io::Write>>; Self::MAX_WRITERS],
     cache:          Option<String>,
-    writer_idx:     usize,
     always_flush:   bool,
     log_to_console: bool,
 }
@@ -175,11 +172,9 @@ pub struct LoggerState {
 impl LoggerState {
     const MAX_WRITERS: usize = 8;
     const CACHE_FLUSH_LIMIT: usize = KiB(4);
-    const CACHE_SIZE: usize = Self::CACHE_FLUSH_LIMIT + KiB(1);
+    const CACHE_SIZE: usize = Self::CACHE_FLUSH_LIMIT;
 
     pub const fn new() -> Self {
-        const NONE: Option<Box<dyn io::Write>> = None;
-
         // Cause the `Option` contians a `Box<T>`, the option is not Clone, so we need to manually build the array
         let writers = [
             None,
@@ -195,7 +190,6 @@ impl LoggerState {
         Self {
             writers,
             cache: None,
-            writer_idx: 0,
             always_flush: false,
             log_to_console: true,
         }

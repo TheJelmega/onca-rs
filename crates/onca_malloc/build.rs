@@ -37,20 +37,6 @@ fn main() {
     cc.compile("mimalloc");
 
     println!("cargo:warning=mimalloc built sucessfully");
-    
-
-    // link to mimalloc-redirect.lib
-    
-    // mimalloc_dir.push("bin");
-
-    // let lib_search_path_str = mimalloc_dir.to_str().unwrap();
-    // let lib_path_str = mimalloc_dir.to_str().unwrap();
-    // println!("cargo:warning=mimalloc search lib path={lib_search_path_str}");
-    // println!("cargo:warning=mimalloc lib path={lib_path_str}");
-    // println!("cargo:warning=mimalloc lib path exists? {}", Path::new(lib_path_str).exists());
-
-    // println!("cargo:rustc-link-search=native={lib_search_path_str}");
-    // println!("cargo:rustc-link-lib=dylib=mimalloc-redirect");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../../external/mimalloc");

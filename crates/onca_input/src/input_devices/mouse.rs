@@ -1,6 +1,5 @@
 use core::fmt;
 use onca_common::{
-    prelude::*,
     collections::BitSet,
     sync::{RwLock, Mutex},
 };
@@ -150,20 +149,20 @@ pub struct Mouse {
 
 impl Mouse {
     // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    pub const XY_STR            : &str = "Mouse XY 2D-Axis";
-    pub const X_STR             : &str = "Mouse X";
-    pub const Y_STR             : &str = "Mouse Y";
-    pub const WHEEL_STR         : &str = "Mouse Wheel Axis";
-    pub const WHEEL_UP_STR      : &str = "Mouse Wheel Up";
-    pub const WHEEL_DOWN_STR    : &str = "Mouse Wheel Down";
-    pub const HWHEEL_STR        : &str = "Mouse Wheel Horizontal Axis";
-    pub const HWHEEL_LEFT_STR   : &str = "Mouse Mouse Wheel Left";
-    pub const HWHEEL_RIGHT_STR  : &str = "Mouse Wheel Right";
-    pub const LEFT_BUTTON_STR   : &str = "Mouse Left Button";
-    pub const MIDDLE_BUTTON_STR : &str = "Mouse Middle Button";
-    pub const RIGHT_BUTTON_STR  : &str = "Mouse Right Button";
-    pub const SIDE0_BUTTON_STR  : &str = "Mouse Side Button0";
-    pub const SIDE1_BUTTON_STR  : &str = "Mouse Side Button1";
+    pub const XY_STR            : &'static str = "Mouse XY 2D-Axis";
+    pub const X_STR             : &'static str = "Mouse X";
+    pub const Y_STR             : &'static str = "Mouse Y";
+    pub const WHEEL_STR         : &'static str = "Mouse Wheel Axis";
+    pub const WHEEL_UP_STR      : &'static str = "Mouse Wheel Up";
+    pub const WHEEL_DOWN_STR    : &'static str = "Mouse Wheel Down";
+    pub const HWHEEL_STR        : &'static str = "Mouse Wheel Horizontal Axis";
+    pub const HWHEEL_LEFT_STR   : &'static str = "Mouse Mouse Wheel Left";
+    pub const HWHEEL_RIGHT_STR  : &'static str = "Mouse Wheel Right";
+    pub const LEFT_BUTTON_STR   : &'static str = "Mouse Left Button";
+    pub const MIDDLE_BUTTON_STR : &'static str = "Mouse Middle Button";
+    pub const RIGHT_BUTTON_STR  : &'static str = "Mouse Right Button";
+    pub const SIDE0_BUTTON_STR  : &'static str = "Mouse Side Button0";
+    pub const SIDE1_BUTTON_STR  : &'static str = "Mouse Side Button1";
 
     pub const XY            : InputAxisId = InputAxisId::new(Self::XY_STR           );
     pub const X             : InputAxisId = InputAxisId::new(Self::X_STR            );

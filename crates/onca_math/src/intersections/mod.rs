@@ -1,4 +1,4 @@
-use crate::{Ray2D, Real, BoundedRay2D};
+use crate::Real;
 
 
 /// A trait to calculate the intersection with a 2D ray.

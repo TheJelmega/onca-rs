@@ -315,29 +315,29 @@ pub struct Gamepad {
 
 impl Gamepad {
     // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    pub const LEFT_THUMB_STR             : &str = "Gamepad Left Thumbstick 2D-Axis";
-    pub const LEFT_THUMB_X_STR           : &str = "Gamepad Left Thumbstick X-Axis";
-    pub const LEFT_THUMB_Y_STR           : &str = "Gamepad Left Thumbstick Y-Axis";
-    pub const LEFT_THUMB_BUTTON_STR      : &str = "Gamepad Left Thumbstick Button";
-    pub const RIGHT_THUMB_STR            : &str = "Gamepad Right Thumbstick 2D-Axis";
-    pub const RIGHT_THUMB_X_STR          : &str = "Gamepad Right Thumbstick X-Axis";
-    pub const RIGHT_THUMB_Y_STR          : &str = "Gamepad Right Thumbstick Y-Axis";
-    pub const RIGHT_THUMB_BUTTON_STR     : &str = "Gamepad Right Thumbstick Button";
-    pub const DPAD_DIR_STR               : &str = "Gamepad D-Pad Direction";
-    pub const DPAD_UP_STR                : &str = "Gamepad D-Pad Up";
-    pub const DPAD_DOWN_STR              : &str = "Gamepad D-Pad Down";
-    pub const DPAD_LEFT_STR              : &str = "Gamepad D-Pad Left";
-    pub const DPAD_RIGHT_STR             : &str = "Gamepad D-Pad Right";
-    pub const FACE_BOTTOM_STR            : &str = "Gamepad Face Button Bottom";
-    pub const FACE_RIGHT_STR             : &str = "Gamepad Face Button Right";
-    pub const FACE_LEFT_STR              : &str = "Gamepad Face Button Left";
-    pub const FACE_UP_STR                : &str = "Gamepad Face Button Top";
-    pub const LEFT_SPECIAL_STR           : &str = "Gamepad Left Special";
-    pub const RIGHT_SPECIAL_STR          : &str = "Gamepad Right Special";
-    pub const LEFT_BUMPER_STR            : &str = "Gamepad Left Bumper";
-    pub const RIGHT_BUMPER_STR           : &str = "Gamepad Right Bumper";
-    pub const LEFT_TRIGGER_STR           : &str = "Gamepad Left Trigger";
-    pub const RIGHT_TRIGGER_STR          : &str = "Gamepad Right Trigger";
+    pub const LEFT_THUMB_STR             : &'static str = "Gamepad Left Thumbstick 2D-Axis";
+    pub const LEFT_THUMB_X_STR           : &'static str = "Gamepad Left Thumbstick X-Axis";
+    pub const LEFT_THUMB_Y_STR           : &'static str = "Gamepad Left Thumbstick Y-Axis";
+    pub const LEFT_THUMB_BUTTON_STR      : &'static str = "Gamepad Left Thumbstick Button";
+    pub const RIGHT_THUMB_STR            : &'static str = "Gamepad Right Thumbstick 2D-Axis";
+    pub const RIGHT_THUMB_X_STR          : &'static str = "Gamepad Right Thumbstick X-Axis";
+    pub const RIGHT_THUMB_Y_STR          : &'static str = "Gamepad Right Thumbstick Y-Axis";
+    pub const RIGHT_THUMB_BUTTON_STR     : &'static str = "Gamepad Right Thumbstick Button";
+    pub const DPAD_DIR_STR               : &'static str = "Gamepad D-Pad Direction";
+    pub const DPAD_UP_STR                : &'static str = "Gamepad D-Pad Up";
+    pub const DPAD_DOWN_STR              : &'static str = "Gamepad D-Pad Down";
+    pub const DPAD_LEFT_STR              : &'static str = "Gamepad D-Pad Left";
+    pub const DPAD_RIGHT_STR             : &'static str = "Gamepad D-Pad Right";
+    pub const FACE_BOTTOM_STR            : &'static str = "Gamepad Face Button Bottom";
+    pub const FACE_RIGHT_STR             : &'static str = "Gamepad Face Button Right";
+    pub const FACE_LEFT_STR              : &'static str = "Gamepad Face Button Left";
+    pub const FACE_UP_STR                : &'static str = "Gamepad Face Button Top";
+    pub const LEFT_SPECIAL_STR           : &'static str = "Gamepad Left Special";
+    pub const RIGHT_SPECIAL_STR          : &'static str = "Gamepad Right Special";
+    pub const LEFT_BUMPER_STR            : &'static str = "Gamepad Left Bumper";
+    pub const RIGHT_BUMPER_STR           : &'static str = "Gamepad Right Bumper";
+    pub const LEFT_TRIGGER_STR           : &'static str = "Gamepad Left Trigger";
+    pub const RIGHT_TRIGGER_STR          : &'static str = "Gamepad Right Trigger";
 
     pub const LEFT_THUMB         : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_STR        );
     pub const LEFT_THUMB_X       : InputAxisId = InputAxisId::new(Self::LEFT_THUMB_X_STR      );

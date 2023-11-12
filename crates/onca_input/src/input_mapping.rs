@@ -8,7 +8,7 @@ use onca_common::{
     event_listener::*,
 };
 use onca_common_macros::flags;
-use onca_math::{f32v2, f32v3, SWIZZLE_X, SWIZZLE_Y, SWIZZLE_Z, Swizzle};
+use onca_math::{f32v2, f32v3, Swizzle};
 
 use crate::{AxisValue, AxisType, User, InputProcessContext, InputAxisId};
 

@@ -303,7 +303,7 @@ impl WindowSettings {
     /// 
     /// Settings must not already have been set to maximized.
     pub fn minimized(mut self) -> Self {
-        debug_assert!(!self.flags.is_set(Flags::Maximized));
+        debug_assert!(!self.flags.contains(Flags::Maximized));
         self.flags |= Flags::Minimized;
         self
     }
@@ -312,7 +312,7 @@ impl WindowSettings {
     /// 
     /// Settings must not already have been set to minimized.
     pub fn maximized(mut self) -> Self {
-        debug_assert!(!self.flags.is_set(Flags::Minimized));
+        debug_assert!(!self.flags.contains(Flags::Minimized));
         self.flags |= Flags::Maximized;
         self
     }
@@ -473,79 +473,79 @@ impl WindowSettings {
 
     /// Check if the window has a minimize box
     pub fn has_minimize_button(&self) -> bool {
-        self.flags.is_set(Flags::MinimizeButton)
+        self.flags.contains(Flags::MinimizeButton)
     }
 
     /// Check if the window has a maximize box
     pub fn has_maximize_button(&self) -> bool {
-        self.flags.is_set(Flags::MaximizeButton)
+        self.flags.contains(Flags::MaximizeButton)
     }
 
     /// Check if the window is minimized
     pub fn is_minimized(&self) -> bool {
-        self.flags.is_set(Flags::Minimized)
+        self.flags.contains(Flags::Minimized)
     }
 
     /// Check if the window is maximized
     pub fn is_maximized(&self) -> bool {
-        self.flags.is_set(Flags::Maximized)
+        self.flags.contains(Flags::Maximized)
     }
 
     /// Check if the window is resizable
     pub fn is_resizable(&self) -> bool {
-        self.flags.is_set(Flags::Resizable)
+        self.flags.contains(Flags::Resizable)
     }
 
     /// Check if the window is fullscreen
     pub fn is_fullscreen(&self) -> bool {
-        self.flags.is_set(Flags::Fullscreen)
+        self.flags.contains(Flags::Fullscreen)
     }
 
     /// Check if the window is topmost
     pub fn is_top_most(&self) -> bool {
-        self.flags.is_set(Flags::TopMost)
+        self.flags.contains(Flags::TopMost)
     }
 
     /// Check if the window is active
     pub fn is_active(&self) -> bool {
-        self.flags.is_set(Flags::Active)
+        self.flags.contains(Flags::Active)
     }
 
     /// Check if the window is visisble
     pub fn is_visible(&self) -> bool {
-        self.flags.is_set(Flags::Visible)
+        self.flags.contains(Flags::Visible)
     }
 
     /// Check if the window is DPI aware
     pub fn is_dpi_aware(&self) -> bool {
-        self.flags.is_set(Flags::DpiAware)
+        self.flags.contains(Flags::DpiAware)
     }
 
     /// Check if the mouse is in the window
     pub fn is_mouse_in_window(&self) -> bool {
-        self.flags.is_set(Flags::MouseInWindow)
+        self.flags.contains(Flags::MouseInWindow)
     }
 
     /// Check if the mouse is in the window
     pub fn is_tool_window(&self) -> bool {
-        self.flags.is_set(Flags::ToolWindow)
+        self.flags.contains(Flags::ToolWindow)
     }
 
     /// Check if the window accepts input
     pub fn does_accept_input(&self) -> bool {
-        self.flags.is_set(Flags::AcceptsInput)
+        self.flags.contains(Flags::AcceptsInput)
     }
 
     /// Check if the window accepts drag-drop files
     pub fn does_accept_files(&self) -> bool {
-        self.flags.is_set(Flags::AcceptFiles)
+        self.flags.contains(Flags::AcceptFiles)
     }
 
     /// Check if the window scales with DPI
     /// 
     /// Can only return `true` if DPI scaling is enabled
     pub fn does_scale_with_dpi(&self) -> bool {
-        self.flags.is_set(Flags::DpiAware | Flags::DpiScaling)
+        self.flags.contains(Flags::DpiAware | Flags::DpiScaling)
     }
 
     /// Checks if all values are valid for the current DPI awareness
