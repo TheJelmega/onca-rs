@@ -1,19 +1,29 @@
 use std::{mem, num::NonZeroU32};
 use onca_common::{
     prelude::*,
-    utils::{self, is_flag_set}, io,
+    io,
+    utils::{self, is_flag_set},
 };
 use windows::{
     core::PCSTR,
-    Win32::{Storage::FileSystem::{
-        GetDiskFreeSpaceA, GetDiskFreeSpaceExA,
-        GetDriveTypeA,
-        GetLogicalDriveStringsA, 
-        GetVolumeInformationA,
-        FindFirstVolumeA, FindNextVolumeA, FindVolumeClose,
-        GetVolumePathNamesForVolumeNameA
-    }, System::WindowsProgramming::DRIVE_UNKNOWN},
-    Win32::{Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_FILES}, System::WindowsProgramming::{DRIVE_NO_ROOT_DIR, DRIVE_REMOVABLE, DRIVE_FIXED, DRIVE_REMOTE, DRIVE_CDROM, DRIVE_RAMDISK}},
+    Win32::{
+        Storage::FileSystem::{
+            GetDiskFreeSpaceA, GetDiskFreeSpaceExA,
+            GetDriveTypeA,
+            GetLogicalDriveStringsA, 
+            GetVolumeInformationA,
+            FindFirstVolumeA, FindNextVolumeA, FindVolumeClose,
+            GetVolumePathNamesForVolumeNameA
+        },
+        System::WindowsProgramming::DRIVE_UNKNOWN,
+    },
+    Win32::{
+        Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_FILES},
+        System::{
+            WindowsProgramming::{DRIVE_NO_ROOT_DIR, DRIVE_REMOVABLE, DRIVE_FIXED, DRIVE_REMOTE, DRIVE_CDROM, DRIVE_RAMDISK},
+            SystemServices::{FILE_CASE_SENSITIVE_SEARCH, FILE_CASE_PRESERVED_NAMES, FILE_UNICODE_ON_DISK, FILE_FILE_COMPRESSION, FILE_VOLUME_QUOTAS, FILE_SUPPORTS_SPARSE_FILES, FILE_SUPPORTS_REPARSE_POINTS, FILE_VOLUME_IS_COMPRESSED, FILE_SUPPORTS_ENCRYPTION, FILE_READ_ONLY_VOLUME}
+        }
+    },
 };
 use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, Path};
 use super::MAX_PATH;
@@ -25,7 +35,7 @@ pub fn get_drive_info(path: &Path) -> io::Result<DriveInfo> {
 pub fn get_drive_type(path: &Path) -> DriveType {
     scoped_alloc!(AllocId::TlsTemp);
         
-    let path = path.to_null_terminated_path_buf();
+    let path = path.to_path_buf();
     match unsafe { GetDriveTypeA(PCSTR(path.as_ptr())) } {
         DRIVE_UNKNOWN     => DriveType::Unknown,
         DRIVE_NO_ROOT_DIR => DriveType::NoRootDir,
@@ -58,7 +68,8 @@ pub fn get_all_drive_info() -> io::Result<Vec<DriveInfo>> {
 
     let mut infos = Vec::new();
     for utf8 in names.split_inclusive(|&c| c == 0) {
-        let path = Path::new(unsafe { core::str::from_utf8_unchecked(utf8) });
+        // SAFETY: Windows should always return valid utf-8 paths
+        let path = unsafe { Path::new_unchecked(std::str::from_utf8_unchecked(utf8) )};
         let drv_info = get_drive_info_internal(path)?;
         infos.push(drv_info);
     }
@@ -66,18 +77,18 @@ pub fn get_all_drive_info() -> io::Result<Vec<DriveInfo>> {
 }
 
 fn get_drive_info_internal(path: &Path) -> io::Result<DriveInfo> {
+    let mut total_bytes = 0;
+    let mut available_bytes = 0;
+    let mut available_to_user = 0;
+    let mut bytes_per_sector = 0;
+    let mut sectors_per_cluster = 0;
+    let mut total_clusters = 0;
+    let mut free_clusters = 0;
+    
+    let path = path.to_path_buf();
+    let pcstr = PCSTR(path.as_ptr());
+    
     unsafe {
-        let mut total_bytes = 0;
-        let mut available_bytes = 0;
-        let mut available_to_user = 0;
-        let mut bytes_per_sector = 0;
-        let mut sectors_per_cluster = 0;
-        let mut total_clusters = 0;
-        let mut free_clusters = 0;
-
-        let path = path.to_null_terminated_path_buf();
-        let pcstr = PCSTR(path.as_ptr());
-
         GetDiskFreeSpaceExA(pcstr, Some(&mut available_bytes), Some(&mut total_bytes), Some(&mut available_to_user))
             .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
         
@@ -104,8 +115,8 @@ fn get_drive_info_internal(path: &Path) -> io::Result<DriveInfo> {
     }
 }
 
-pub fn get_volume_info(path: &Path) -> Option<VolumeInfo> {
-    get_volume_info_internal(path.to_null_terminated_path_buf())
+pub fn get_volume_info(path: &Path) -> io::Result<VolumeInfo> {
+    get_volume_info_internal(path.to_path_buf())
 }
 
 pub fn get_all_volume_info() -> io::Result<Vec<VolumeInfo>> {
@@ -113,7 +124,6 @@ pub fn get_all_volume_info() -> io::Result<Vec<VolumeInfo>> {
     let handle = unsafe { FindFirstVolumeA(&mut guid_buf).map_err(|err| io::Error::from_raw_os_error(err.code().0)) }?;
 
     let mut infos = Vec::new();
-    let res;
     loop {
         let mut roots = get_drive_names_for_volume(&guid_buf)?;
         if !roots.is_empty() {
@@ -121,51 +131,35 @@ pub fn get_all_volume_info() -> io::Result<Vec<VolumeInfo>> {
 
             // SAFETY: we only get here when there is at least 1 root and we are draining the entire roots array, so we don't need to check for the first one
             let first_path = unsafe { drain.next().unwrap_unchecked() };
-            let info = get_volume_info_internal(first_path);
-            if let Some(mut info) = info {
-                info.roots.extend(drain);
-                infos.push(info);
-            }
+            let mut info = get_volume_info_internal(first_path)?;
+            info.roots.extend(drain);
+            infos.push(info);
         }
 
-        match unsafe { FindNextVolumeA(handle, &mut guid_buf) } {
-            Ok(_) => (),
-            Err(err) if err.code().0 == ERROR_NO_MORE_FILES.0 as i32 => {
-                res = Ok(());
+        if let Err(err) = unsafe { FindNextVolumeA(handle, &mut guid_buf) } {
+            if err.code().0 == ERROR_NO_MORE_FILES.0 as i32 {
                 break;
-            },
-            Err(err) => {
-                res = Err(io::Error::from_raw_os_error(err.code().0));
-                break;
-            },
+            } else {
+                return Err(io::Error::from_raw_os_error(err.code().0));
+            }
         }
     }
     unsafe { FindVolumeClose(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-    res.map(|_| infos)
+    Ok(infos)
 }
 
 fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
     let mut fs_flags = FilesystemFlags::None;
 
-    const FILE_CASE_SENSITIVE_SEARCH : u32 = 0x1;
     fs_flags.set(FilesystemFlags::CaseSensitiveSearch, is_flag_set(win32_fs_flags, FILE_CASE_SENSITIVE_SEARCH));
-    const FILE_CASE_PRESERVED_NAMES : u32 = 0x2;
     fs_flags.set(FilesystemFlags::CasePreservedNames, is_flag_set(win32_fs_flags, FILE_CASE_PRESERVED_NAMES));
-    const FILE_UNICODE_ON_DISK : u32 = 0x4;
     fs_flags.set(FilesystemFlags::UnicodePaths, is_flag_set(win32_fs_flags, FILE_UNICODE_ON_DISK));
-    const FILE_FILE_COMPRESSION : u32 = 0x10;
     fs_flags.set(FilesystemFlags::FileCompression, is_flag_set(win32_fs_flags, FILE_FILE_COMPRESSION));
-    const FILE_VOLUME_QUOTAS : u32 = 0x20;
     fs_flags.set(FilesystemFlags::VolumeQuotas, is_flag_set(win32_fs_flags, FILE_VOLUME_QUOTAS));
-    const FILE_SUPPORTS_SPARSE_FILES : u32 = 0x40;
     fs_flags.set(FilesystemFlags::SparseFiles, is_flag_set(win32_fs_flags, FILE_SUPPORTS_SPARSE_FILES));
-    const FILE_SUPPORTS_REPARSE_POINTS : u32 = 0x80;
     fs_flags.set(FilesystemFlags::ReparsePoint, is_flag_set(win32_fs_flags, FILE_SUPPORTS_REPARSE_POINTS));
-    const FILE_VOLUME_IS_COMPRESSED : u32 = 0x8000;
     fs_flags.set(FilesystemFlags::Compressed, is_flag_set(win32_fs_flags, FILE_VOLUME_IS_COMPRESSED));
-    const FILE_SUPPORTS_ENCRYPTION : u32 = 0x00020000;
     fs_flags.set(FilesystemFlags::Encryption, is_flag_set(win32_fs_flags, FILE_SUPPORTS_ENCRYPTION));
-    const FILE_READ_ONLY_VOLUME : u32 = 0x00080000;
     fs_flags.set(FilesystemFlags::ReadOnly, is_flag_set(win32_fs_flags, FILE_READ_ONLY_VOLUME));
 
     fs_flags
@@ -173,7 +167,7 @@ fn get_volume_fs_flags(win32_fs_flags: u32) -> FilesystemFlags {
 
 fn get_drive_names_for_volume(guid: &[u8]) -> io::Result<Vec<PathBuf>> {
     let utf8_paths = {
-        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
 
         let pcstr = PCSTR(guid.as_ptr());
         let mut needed = 0;
@@ -202,12 +196,13 @@ fn get_drive_names_for_volume(guid: &[u8]) -> io::Result<Vec<PathBuf>> {
     Ok(
         utf8_paths.split(|&c| c == 0)
                   .filter(|s| !s.is_empty())
-                  .map(|s| Path::new(utils::null_terminated_arr_to_str_unchecked(s)).to_null_terminated_path_buf())
+                  // SAFETY: Windows should not return invalid paths
+                  .map(|s| unsafe { Path::new_unchecked(utils::null_terminated_arr_to_str_unchecked(s)).to_path_buf() })
                   .collect()
     )
 }
 
-fn get_volume_info_internal(path: PathBuf) -> Option<VolumeInfo> {
+fn get_volume_info_internal(path: PathBuf) -> io::Result<VolumeInfo> {
     let pwcstr = PCSTR(path.as_ptr());
 
     const MAX_BUF_LEN : usize = MAX_PATH + 1;
@@ -217,18 +212,16 @@ fn get_volume_info_internal(path: PathBuf) -> Option<VolumeInfo> {
     let mut win32_fs_flags = 0u32;
     let mut fs_name = [0u8; MAX_BUF_LEN];
     
-    if let Err(_) = unsafe { GetVolumeInformationA(
+    unsafe { GetVolumeInformationA(
         pwcstr,
         Some(&mut name),
         Some(&mut serial),
         Some(&mut max_comp_len),
         Some(&mut win32_fs_flags),
         Some(&mut fs_name)
-    ) } {
-        return None;
-    }
+    ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
-    Some(VolumeInfo {
+    Ok(VolumeInfo {
         roots: vec![path],
         name: String::from_utf8_lossy(utils::null_terminate_slice(&name)).into(),
         serial: NonZeroU32::new(serial),

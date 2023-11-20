@@ -9,7 +9,7 @@ use onca_common::{
 };
 use windows::{
     Win32::{
-        Foundation::{HANDLE, ERROR_INSUFFICIENT_BUFFER, PSID, LUID},
+        Foundation::{HANDLE, ERROR_INSUFFICIENT_BUFFER, PSID, LUID, CloseHandle},
         Storage::FileSystem::{
             GetFileInformationByHandleEx,
             FileStandardInfo, FILE_STANDARD_INFO,
@@ -22,7 +22,7 @@ use windows::{
             FILE_ID_INFO,
             FileIdInfo,
             FILE_READ_DATA, FILE_WRITE_ATTRIBUTES, FILE_EXECUTE, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_WRITE_EA,
-            DELETE
+            DELETE, FILE_GENERIC_READ, OPEN_ALWAYS, GetFinalPathNameByHandleA, FILE_NAME_NORMALIZED
         }, 
         Security::{
             GetFileSecurityA, LookupAccountNameA, SID, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SID_NAME_USE, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
@@ -34,7 +34,7 @@ use windows::{
         System::{
             SystemServices::MAXIMUM_ALLOWED, 
             WindowsProgramming::GetUserNameA
-        },
+        }, NetworkManagement::NetManagement::UNLEN,
     }, 
     core::{PCSTR, PSTR, PCWSTR}
 };
@@ -48,24 +48,22 @@ pub(crate) struct EntrySearchHandle(HANDLE);
 impl EntrySearchHandle {
     pub(crate) fn new(path: &Path) -> io::Result<(EntrySearchHandle, PathBuf)> {
         let mut buf = path.to_path_buf();
-        buf.pop();
-        buf.push("/*");
-        buf.null_terminate();
+        buf.set_file_name("*");
         let pcwstr = PCSTR(buf.as_ptr());
         
         let mut find_data = WIN32_FIND_DATAA::default();
         let handle = unsafe{ FindFirstFileA(pcwstr, &mut find_data) }
             .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-        
+
         // Skip both "." and ".."
-        while find_data.cFileName[0] as char == '.' && (find_data.cFileName[1] == 0 || // "."
-                                                        (find_data.cFileName[1] as char == '.' && find_data.cFileName[2] == 0)) // ".."
+        while matches!(find_data.cFileName[..3], [b'.', 0, _] | [b'.', b'.', 0])
         {
             unsafe { FindNextFileA(handle, &mut find_data) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
         }
 
         let mut path = path.to_path_buf();
-        path.push(PathBuf::from_utf8_lossy(utils::null_terminate_slice(&find_data.cFileName)));
+        // SAFETY: Windows should always return a valid file name
+        path.push(unsafe { PathBuf::from_utf8_lossy(utils::null_terminate_slice(&find_data.cFileName)).unwrap_unchecked() });
         Ok((EntrySearchHandle(handle), path))
     }
 
@@ -93,7 +91,8 @@ impl Drop for EntrySearchHandle {
 }
 
 pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
-    let path = path.to_null_terminated_path_buf();
+    scoped_alloc!(AllocId::TlsTemp);
+    let path = path.to_path_buf();
 
     let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
     unsafe { GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
@@ -163,11 +162,8 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
     scoped_alloc!(AllocId::TlsTemp);
 
     // Get the SID of the current user, we will use this later to get the correct file permissions for the user
-
-    // UNLEN definition: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsch/165836c1-89d7-4abb-840d-80cf2510aa3e
-    const UNLEN : usize = 256;
-    let mut username_buf = [0; UNLEN + 1];
-    let mut written = UNLEN as u32 + 1;
+    let mut username_buf = [0; UNLEN as usize + 1];
+    let mut written = UNLEN + 1;
     unsafe { GetUserNameA(PSTR(username_buf.as_mut_ptr()), &mut written) }
         .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
@@ -265,8 +261,7 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
 
 pub(crate) fn get_entry_file_type(path: &Path) -> io::Result<FileType> {
     scoped_alloc!(AllocId::TlsTemp);
-    
-    let path = path.to_null_terminated_path_buf();
+    let path = path.to_path_buf();
 
     let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
     unsafe { GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
@@ -282,4 +277,41 @@ pub(crate) fn get_entry_file_type(path: &Path) -> io::Result<FileType> {
         (false, true)  => FileType::Directory,
         (false, false) => FileType::File,
     })
+}
+
+pub(crate) fn get_fully_qualified_name(path: &Path) -> io::Result<PathBuf> {
+    scoped_alloc!(AllocId::TlsTemp);
+
+    let path_buf = path.to_path_buf();
+    let handle = unsafe { CreateFileA(
+        PCSTR(path_buf.as_ptr()),
+        FILE_GENERIC_READ.0,
+        FILE_SHARE_READ,
+        None,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        HANDLE::default()
+    ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let needed = unsafe { GetFinalPathNameByHandleA(handle, &mut [], FILE_NAME_NORMALIZED) } as usize;
+    let mut path = if needed == 0 {
+        return Err(io::Error::last_os_error())
+    } else {
+        let mut path = String::with_capacity(needed);
+        unsafe { path.as_mut_vec().set_len(needed) };
+        path
+    };
+
+    let written = unsafe { GetFinalPathNameByHandleA(handle, &mut path.as_mut_vec(), FILE_NAME_NORMALIZED) } as usize;
+    if written == 0 {
+        return Err(io::Error::last_os_error())
+    } else {
+        unsafe { path.as_mut_vec().set_len(written) };
+    }
+
+    // Path returned starts with `//?/`, so strip it
+    path.drain(..=3);
+
+    unsafe { CloseHandle(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+    Ok(PathBuf::from_str(&path).unwrap())
 }

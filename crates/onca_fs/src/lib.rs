@@ -2,9 +2,9 @@
 
 // TODO: Should we just set a global temp allocator id for the entire file system?
 
+use onca_common::io;
 
 mod path;
-use onca_common::io;
 pub use path::*;
 
 mod drive_volume;

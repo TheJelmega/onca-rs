@@ -17,8 +17,8 @@ impl Entry {
     /// 
     /// Return an error if the path does not point to a valid entry.
     #[must_use]
-    pub fn new(path: PathBuf) -> io::Result<Entry> {
-        let entry = Entry { path };
+    pub fn new(path: &Path) -> io::Result<Entry> {
+        let entry = Entry { path: path.to_path_buf() };
         if entry.file_type() == FileType::Unknown {
             Err(io::Error::last_os_error())
         } else {
@@ -36,6 +36,12 @@ impl Entry {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    //
+    #[must_use]
+    pub fn fully_qualified_path(&self) -> PathBuf {
+        os_imp::entry::get_fully_qualified_name(&self.path).unwrap_or_default()
     }
 
     /// Get the metadata associated with the entry.

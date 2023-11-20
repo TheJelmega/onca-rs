@@ -66,12 +66,10 @@ impl AsyncReadResult {
                 Poll::Pending
             } 
             AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
-            AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
+            AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
+            AsyncIOCompletionState::Exhausted             => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
         }
     }
-
-    
 
     pub fn wait(&mut self, timeout: u32) -> Poll<io::Result<Vec<u8>>> {
         const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
@@ -81,10 +79,10 @@ impl AsyncReadResult {
             SUCCESS |
             TIMEOUT => {
                 match self.completion_data.state {
-                    AsyncIOCompletionState::InFlight => Poll::Pending,
+                    AsyncIOCompletionState::InFlight              => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
-                    AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
+                    AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
+                    AsyncIOCompletionState::Exhausted             => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
                 }
             },
             res => Poll::Ready(Err(io::Error::from_raw_os_error(res.0 as i32))),
@@ -132,10 +130,10 @@ impl AsyncWriteResult {
             SUCCESS |
             TIMEOUT => {
                 match self.completion_data.state {
-                    AsyncIOCompletionState::InFlight => Poll::Pending,
+                    AsyncIOCompletionState::InFlight              => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(bytes_read)),
-                    AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-                    AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
+                    AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
+                    AsyncIOCompletionState::Exhausted             => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
                 }
             },
             res => Poll::Ready(Err(io::Error::from_raw_os_error(res.0 as i32))),

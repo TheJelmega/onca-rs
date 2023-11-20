@@ -1,4 +1,4 @@
-use std::future::Future;
+use std::{future::Future, pin::Pin, task::{self, Poll}};
 
 use onca_common::io;
 use onca_common_macros::flags;
@@ -64,8 +64,79 @@ pub enum FileCreateFlags {
     WriteThrough,
 }
 
+//------------------------------
+
+/// Result type of an async read operation
+pub type FileAsyncReadResult = Box<dyn io::AsyncIOResult<Output = io::Result<Vec<u8>>>>;
+
+/// Result type of an asycn write operation
+pub type FileAsyncWriteResult = Box<dyn io::AsyncIOResult<Output = io::Result<u64>>>;
+
+pub trait FileHandle {
+    /// Write all data that is currently cached.
+    /// 
+    /// # Note
+    /// 
+    /// This does not have to sync the metadata, only the data
+    fn flush_data(&mut self) -> io::Result<()>;
+
+    /// Write all data and metadat that is currenty cached
+    fn flush_all(&mut self) -> io::Result<()>;
+
+    /// Cancel all async I/O for this file, which were called from the current thread.
+    fn cancel_all_thread_async_io(&mut self) -> io::Result<()>;
+
+    /// Cancel all async I/O for this file
+    fn cancel_all_async_io(&mut self) -> io::Result<()>;
+
+    /// Set the lenght of the file.
+    /// 
+    /// If `len` is smaller than the current file size, the data will be truncated, if larger, the new data will be undefined.
+    /// 
+    /// # Note
+    /// 
+    /// After this operation, the cursor will still be at the same location as before the call, meaning that it can be located passed the new file lenght.
+    fn set_len(&mut self, len: u64) -> io::Result<()>;
+
+    /// Set the modification time of the file
+    fn set_modified(&mut self, time: u64) -> io::Result<()>;
+
+    /// Set the file permissions.
+    fn set_permissions(&mut self, permissions: Permission) -> io::Result<()>;
+
+    /// Set if the file should is hidden in a file explorer.
+    /// 
+    /// This may be a no-op if the underlying filesystem does not support this.
+    fn set_hidden(&mut self, hidden: bool) -> io::Result<()>;
+
+    /// Set if the file should be indexed for search.
+    /// 
+    /// This may be a no-op if the underlying filesystem does not support this.
+    fn set_content_indexed(&mut self, content_indexed: bool) -> io::Result<()>;
+
+    /// Read bytes from the file, returning the number of bytes read.
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+
+    /// Write bytes from the file, returning the number of bytes written.
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
+
+    /// Flush writes to the file.
+    fn flush(&mut self) -> io::Result<()>;
+
+    /// Seek to a location in the file
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
+
+    // Read bytes asynchronously from the file.
+    fn read_async(&mut self, bytes_to_read: u64) -> io::Result<FileAsyncReadResult>;
+
+    // Write bytes asynchronously to the file
+    fn write_async(&mut self, buf: Vec<u8>) -> io::Result<FileAsyncWriteResult>;
+}
+
+//------------------------------
+
 pub struct File {
-    handle : os_imp::file::FileHandle,
+    handle : Box<dyn FileHandle>,
     path   : PathBuf,
 }
 
@@ -113,7 +184,7 @@ impl File {
     /// 
     /// # Note
     /// 
-    /// This might not sync the file's metadata, for that, use [`sync_all`].
+    /// This might not sync the file's metadata, for that, use [`flush_all`].
     /// 
     /// # Error
     /// 
@@ -157,7 +228,7 @@ impl File {
     /// 
     /// # Note
     /// 
-    /// After a call to this, the cursor will still be at teh same location as before, meaning it could be passed the new file length.
+    /// After a call to this, the cursor will still be at the same location as before, meaning it could be passed the new file length.
     /// 
     /// # Error
     /// 
@@ -258,17 +329,19 @@ pub fn delete<P: AsRef<Path>>(path: P) -> io::Result<()> {
 }
 
 /// Asynchronous read result
-pub struct AsyncReadResult(os_imp::file_async::AsyncReadResult);
+pub struct AsyncReadResult(Box<dyn io::AsyncIOResult<Output = <Self as Future>::Output>>);
 
 impl Future for AsyncReadResult {
     type Output = io::Result<Vec<u8>>;
  
     fn poll(mut self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
-        self.0.poll(cx)
+        // SAFETY: we only pin so we can call the underlying `poll` implentation
+        let pin = unsafe { Pin::new_unchecked(&mut *self.0) };
+        pin.poll(cx)
     }
 }
 
-impl io::AsyncReadResult for AsyncReadResult {
+impl io::AsyncIOResult for AsyncReadResult {
     fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<Vec<u8>>> {
         self.0.wait(timeout)
     }
@@ -279,17 +352,19 @@ impl io::AsyncReadResult for AsyncReadResult {
 }
 
 /// Asynchronous write result
-pub struct AsyncWriteResult(os_imp::file_async::AsyncWriteResult);
+pub struct AsyncWriteResult(Box<dyn io::AsyncIOResult<Output = <Self as Future>::Output>>);
 
 impl Future for AsyncWriteResult {
     type Output = io::Result<u64>;
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        self.0.poll(cx)
+        // SAFETY: we only pin so we can call the underlying `poll` implentation
+        let pin = unsafe { Pin::new_unchecked(&mut *self.0) };
+        pin.poll(cx)
     }
 }
 
-impl io::AsyncWriteResult for AsyncWriteResult {
+impl io::AsyncIOResult for AsyncWriteResult {
     fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<u64>> {
         self.0.wait(timeout)
     }

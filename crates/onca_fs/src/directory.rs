@@ -10,7 +10,7 @@ use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
     scoped_alloc!(AllocId::TlsTemp);
 
-    let entry = Entry::new(path.as_ref().to_path_buf());
+    let entry = Entry::new(path.as_ref());
     match entry {
         Ok(entry) => entry.file_type() == FileType::Directory,
         Err(_) => false,

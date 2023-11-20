@@ -1,26 +1,14 @@
 use std::{future::Future, task::Poll};
 pub use std::io::*;
 
-
-/// An asynchronous read result
-pub trait AsyncReadResult : Future {
-    /// Wait until the asynchronous read has been completed or the timeout was reached
+/// An asynchronous I/O result
+pub trait AsyncIOResult : Future {
+    /// Wait until the asynchronous io operation has been completed or the timeout was reached
     /// 
     /// If the timeout was reached, the function will return `Poll::Pending`
-    fn wait(&mut self, timeout: u32) -> Poll<Result<Vec<u8>>>;
+    fn wait(&mut self, timeout: u32) -> Poll<<Self as Future>::Output>;
 
     /// Cancel the current asynchronous read
-    fn cancel(&mut self) -> Result<()>;
-}
-
-/// An asynchronous write result
-pub trait AsyncWriteResult : Future {
-
-    fn wait(&mut self, timeout: u32) -> Poll<Result<u64>>;
-
-    /// Cancel the current asynchronous write
-    /// 
-    /// Cancelling an asynchrounous read will leave the contents of the file in an unknown state
     fn cancel(&mut self) -> Result<()>;
 }
 
@@ -31,7 +19,7 @@ pub trait AsyncWriteResult : Future {
 /// Readers are defined by one required method [`read_async()`].
 pub trait AsyncRead {
     /// Type representing the `Future` returned by an asynchronous read operation
-    type AsyncResult : AsyncReadResult;
+    type AsyncResult: AsyncIOResult;
 
     /// Pull some bytes from this source into the specified buffer, returning a future that will fill in the buffer
     /// 
@@ -58,7 +46,7 @@ pub trait AsyncRead {
 
 pub trait AsyncWrite {
     /// Type representing the `Future` returned by an asynchronous write operation
-    type AsyncResult : AsyncWriteResult;
+    type AsyncResult: AsyncIOResult;
 
     /// Write a buffe into this writer, returning a future that will write out the buffer.
     /// 

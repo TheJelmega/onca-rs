@@ -133,13 +133,13 @@ pub fn get_all_drive_info() -> io::Result<Vec<DriveInfo>> {
 /// 
 /// Returns an erro if the path is not valid volume root.
 #[must_use]
-pub fn get_volume_info<P: AsRef<Path>>(path: &P) -> Option<VolumeInfo> {
+pub fn get_volume_info<P: AsRef<Path>>(path: &P) -> io::Result<VolumeInfo> {
     os_imp::drive_volume::get_volume_info(path.as_ref())
 }
 
 /// Retrieve th evolume info for all available volumes.
 /// 
-/// Returns an error if not all volume error could be retrieved
+/// Returns an error if not all volume infos could be retrieved
 #[must_use]
 pub fn get_all_volume_info() -> io::Result<Vec<VolumeInfo>> {
     os_imp::drive_volume::get_all_volume_info()
