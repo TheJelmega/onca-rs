@@ -1,5 +1,5 @@
 [common]
-# Which API to use, either: "dx12", "vulkan", "software", or the name of the RAL dynamic library
+# Which API to use, either: "dx12", "vulkan", "software" (not supported yet), or the name of the RAL dynamic library (not supported yet)
 api = "vulkan"
 
 [vulkan]
@@ -12,6 +12,8 @@ additional-layers = []
 
 [debug]
 # Enable/Disable graphics debug utilities (validation, etc)
+#
+# Note: this currently only enables/disables debug features for the underlying APIs, the RAL validations are handled using a rust features for now
 enable = true
 # Enable/Disable graphics API validation
 validation = true
