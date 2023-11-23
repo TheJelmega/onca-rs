@@ -1,4 +1,7 @@
-use std::{future::Future, pin::Pin, task::{self, Poll}};
+use std::{
+    future::Future,
+    pin::Pin
+};
 
 use onca_common::io;
 use onca_common_macros::flags;

@@ -27,7 +27,7 @@ use windows::{
     core::PCSTR,
 };
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FileHandle as _, FileAsyncWriteResult, FileAsyncReadResult, FileAccessFlags};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FileAsyncWriteResult, FileAsyncReadResult, FileAccessFlags};
 
 use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
