@@ -22,6 +22,9 @@ pub use file::*;
 mod entry;
 pub use entry::*;
 
+mod vfs;
+pub use vfs::*;
+
 mod os;
 
 pub fn get_working_dir() -> io::Result<PathBuf> {

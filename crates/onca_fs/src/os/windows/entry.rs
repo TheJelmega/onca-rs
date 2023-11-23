@@ -22,7 +22,7 @@ use windows::{
             FILE_ID_INFO,
             FileIdInfo,
             FILE_READ_DATA, FILE_WRITE_ATTRIBUTES, FILE_EXECUTE, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_WRITE_EA,
-            DELETE, FILE_GENERIC_READ, OPEN_ALWAYS, GetFinalPathNameByHandleA, FILE_NAME_NORMALIZED
+            DELETE, FILE_GENERIC_READ, OPEN_ALWAYS, GetFinalPathNameByHandleA, FILE_NAME_NORMALIZED, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_DIRECTORY
         }, 
         Security::{
             GetFileSecurityA, LookupAccountNameA, SID, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SID_NAME_USE, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
@@ -39,124 +39,144 @@ use windows::{
     core::{PCSTR, PSTR, PCWSTR}
 };
 
-use crate::{Metadata, FileType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount};
+use crate::{Metadata, EntryType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount, EntryHandle, EntrySearchHandle};
 use super::{high_low_to_u64, dword_to_flags, file};
 
+//------------------------------
 
-pub(crate) struct EntrySearchHandle(HANDLE);
+pub(crate) struct NativeEntryHandle {
+    path: PathBuf
+}
 
-impl EntrySearchHandle {
-    pub(crate) fn new(path: &Path) -> io::Result<(EntrySearchHandle, PathBuf)> {
-        let mut buf = path.to_path_buf();
-        buf.set_file_name("*");
-        let pcwstr = PCSTR(buf.as_ptr());
-        
-        let mut find_data = WIN32_FIND_DATAA::default();
-        let handle = unsafe{ FindFirstFileA(pcwstr, &mut find_data) }
+impl NativeEntryHandle {
+    pub(crate) fn new(path: &Path) -> io::Result<(Box<Self>, EntryType)> {
+        let entry = Self { path: path.to_path_buf() };
+        let entry_type = entry.entry_type()?;
+        Ok((Box::new(entry), entry_type))
+    }
+
+    fn entry_type(&self) -> io::Result<EntryType> {
+        let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
+        unsafe { GetFileAttributesExA(PCSTR(self.path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
             .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
-        // Skip both "." and ".."
-        while matches!(find_data.cFileName[..3], [b'.', 0, _] | [b'.', b'.', 0])
-        {
-            unsafe { FindNextFileA(handle, &mut find_data) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-        }
-
-        let mut path = path.to_path_buf();
-        // SAFETY: Windows should always return a valid file name
-        path.push(unsafe { PathBuf::from_utf8_lossy(utils::null_terminate_slice(&find_data.cFileName)).unwrap_unchecked() });
-        Ok((EntrySearchHandle(handle), path))
-    }
-
-    pub(crate) fn next(&self, mut path: PathBuf) -> Option<PathBuf> {
-        let mut find_data = WIN32_FIND_DATAA::default();
-
-        match unsafe { FindNextFileA(self.0, &mut find_data) } {
-            Ok(_) => {
-                path.set_file_name(utils::null_terminated_arr_to_str_unchecked(&find_data.cFileName));
-                Some(path)
-            },
-            Err(_) => None,
-        }
+        let is_reparse_point = is_flag_set(win32_attribs.dwFileAttributes, FILE_ATTRIBUTE_REPARSE_POINT.0);
+        let is_directory = is_flag_set(win32_attribs.dwFileAttributes, FILE_ATTRIBUTE_DIRECTORY.0);
+        Ok(match (is_reparse_point, is_directory) {
+            (true, true)   => EntryType::SymlinkDirectory,
+            (true, false)  => EntryType::SymlinkFile,
+            (false, true)  => EntryType::Directory,
+            (false, false) => EntryType::File,
+        })
     }
 }
 
-impl Drop for EntrySearchHandle {
-    fn drop(&mut self) {
-        if !self.0.is_invalid() {
-            if let Err(_) = unsafe { FindClose(self.0) } {
-                debug_assert!(false, "Failed to properly close search handle")
-            }
+impl crate::entry::EntryHandle for NativeEntryHandle {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn fully_qualified_path(&self) -> io::Result<PathBuf> {
+        let handle = unsafe { CreateFileA(
+            PCSTR(self.path.as_ptr()),
+            FILE_GENERIC_READ.0,
+            FILE_SHARE_READ,
+            None,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            HANDLE::default()
+        ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+        let needed = unsafe { GetFinalPathNameByHandleA(handle, &mut [], FILE_NAME_NORMALIZED) } as usize;
+        let mut path = if needed == 0 {
+            return Err(io::Error::last_os_error())
+        } else {
+            let mut path = String::with_capacity(needed);
+            unsafe { path.as_mut_vec().set_len(needed) };
+            path
+        };
+
+        let written = unsafe { GetFinalPathNameByHandleA(handle, &mut path.as_mut_vec(), FILE_NAME_NORMALIZED) } as usize;
+        if written == 0 {
+            return Err(io::Error::last_os_error())
+        } else {
+            unsafe { path.as_mut_vec().set_len(written) };
         }
+
+        // Path returned starts with `//?/`, so strip it
+        path.drain(..=3);
+
+        unsafe { CloseHandle(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        Ok(PathBuf::from_str(&path).unwrap())
+    }
+
+    fn metadata(&self) -> io::Result<Metadata> {
+        let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
+        unsafe { GetFileAttributesExA(PCSTR(self.path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
+            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        
+        let mut flags = dword_to_flags(win32_attribs.dwFileAttributes);
+        let is_reparse_point = flags.contains(FileFlags::ReparsePoint);
+        let is_directory = flags.contains(FileFlags::Directory);
+        let file_type = match (is_reparse_point, is_directory) {
+            (true, true)   => EntryType::SymlinkDirectory,
+            (true, false)  => EntryType::SymlinkFile,
+            (false, true)  => EntryType::Directory,
+            (false, false) => EntryType::File,
+        };
+
+        let permissions = get_permissions_pcstr(PCSTR(self.path.as_ptr()))?;
+
+        // Open file to get remaining data
+        let handle = unsafe { CreateFileA(
+            PCSTR(self.path.as_ptr()),
+            FILE_READ_ATTRIBUTES.0,
+            FILE_SHARE_READ,
+            None,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            HANDLE::default()
+        )}.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+
+        let mut std_info = FILE_STANDARD_INFO::default();
+        unsafe { GetFileInformationByHandleEx(handle, FileStandardInfo, &mut std_info as *mut _ as *mut c_void, size_of::<FILE_STANDARD_INFO>() as u32) }
+            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+        let alloc_size = std_info.AllocationSize as u64;
+        let num_links = NonZeroU32::new(std_info.NumberOfLinks).map_or(FileLinkCount::Unknown, |count| FileLinkCount::Known(count));
+        if std_info.DeletePending.0 != 0 {
+            flags |= FileFlags::MarkedForDelete;
+        }
+
+        let mut align_info = FILE_ALIGNMENT_INFO::default();
+        unsafe { GetFileInformationByHandleEx(handle, FileAlignmentInfo, &mut align_info as *mut _ as * mut c_void, size_of::<FILE_ALIGNMENT_INFO>() as u32) }
+            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        let min_align = align_info.AlignmentRequirement;
+
+        let mut file_id_info = FILE_ID_INFO::default();
+        unsafe { GetFileInformationByHandleEx(handle, FileIdInfo, &mut file_id_info as *mut _ as * mut c_void, size_of::<FILE_ID_INFO>() as u32) }
+            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        let volume_file_id = VolumeFileId{ volume_id: file_id_info.VolumeSerialNumber, file_id: file_id_info.FileId.Identifier };
+
+        Ok(Metadata {
+            file_type,
+            flags,
+            permissions,
+            creation_time: high_low_to_u64(win32_attribs.ftCreationTime.dwHighDateTime, win32_attribs.ftCreationTime.dwLowDateTime),
+            last_access_time: high_low_to_u64(win32_attribs.ftLastAccessTime.dwHighDateTime, win32_attribs.ftLastAccessTime.dwLowDateTime),
+            last_write_time: high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime),
+            file_size: high_low_to_u64(win32_attribs.nFileSizeHigh, win32_attribs.nFileSizeLow),
+            alloc_size,
+            compressed_size: file::get_compressed_size_pathbuf(&self.path)?,
+            num_links,
+            min_align,
+            volume_file_id,
+        })
     }
 }
 
-pub(crate) fn get_entry_meta(path: &Path) -> io::Result<Metadata> {
-    scoped_alloc!(AllocId::TlsTemp);
-    let path = path.to_path_buf();
-
-    let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
-    unsafe { GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
-        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
- 
-    let mut flags = dword_to_flags(win32_attribs.dwFileAttributes);
-    let is_reparse_point = flags.contains(FileFlags::ReparsePoint);
-    let is_directory = flags.contains(FileFlags::Directory);
-    let file_type = match (is_reparse_point, is_directory) {
-        (true, true)   => FileType::SymlinkDirectory,
-        (true, false)  => FileType::SymlinkFile,
-        (false, true)  => FileType::Directory,
-        (false, false) => FileType::File,
-    };
-
-    let permissions = get_permissions_pcstr(PCSTR(path.as_ptr()))?;
-
-    // Open file to get remaining data
-    let handle = unsafe { CreateFileA(
-        PCSTR(path.as_ptr()),
-        FILE_READ_ATTRIBUTES.0,
-        FILE_SHARE_READ,
-        None,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        HANDLE::default()
-    )}.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-
-    
-    let mut std_info = FILE_STANDARD_INFO::default();
-    unsafe { GetFileInformationByHandleEx(handle, FileStandardInfo, &mut std_info as *mut _ as *mut c_void, size_of::<FILE_STANDARD_INFO>() as u32) }
-        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-
-    let alloc_size = std_info.AllocationSize as u64;
-    let num_links = NonZeroU32::new(std_info.NumberOfLinks).map_or(FileLinkCount::Unknown, |count| FileLinkCount::Known(count));
-    if std_info.DeletePending.0 != 0 {
-        flags |= FileFlags::MarkedForDelete;
-    }
-
-    let mut align_info = FILE_ALIGNMENT_INFO::default();
-    unsafe { GetFileInformationByHandleEx(handle, FileAlignmentInfo, &mut align_info as *mut _ as * mut c_void, size_of::<FILE_ALIGNMENT_INFO>() as u32) }
-        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-    let min_align = align_info.AlignmentRequirement;
-
-    let mut file_id_info = FILE_ID_INFO::default();
-    unsafe { GetFileInformationByHandleEx(handle, FileIdInfo, &mut file_id_info as *mut _ as * mut c_void, size_of::<FILE_ID_INFO>() as u32) }
-        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-    let volume_file_id = VolumeFileId{ volume_id: file_id_info.VolumeSerialNumber, file_id: file_id_info.FileId.Identifier };
-
-    Ok(Metadata {
-        file_type,
-        flags,
-        permissions,
-        creation_time: high_low_to_u64(win32_attribs.ftCreationTime.dwHighDateTime, win32_attribs.ftCreationTime.dwLowDateTime),
-        last_access_time: high_low_to_u64(win32_attribs.ftLastAccessTime.dwHighDateTime, win32_attribs.ftLastAccessTime.dwLowDateTime),
-        last_write_time: high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime),
-        file_size: high_low_to_u64(win32_attribs.nFileSizeHigh, win32_attribs.nFileSizeLow),
-        alloc_size,
-        compressed_size: file::get_compressed_size_pathbuf(&path)?,
-        num_links,
-        min_align,
-        volume_file_id,
-    })
-}
+//------------------------------
 
 fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
     scoped_alloc!(AllocId::TlsTemp);
@@ -259,59 +279,54 @@ fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
     Ok(permissions)
 }
 
-pub(crate) fn get_entry_file_type(path: &Path) -> io::Result<FileType> {
-    scoped_alloc!(AllocId::TlsTemp);
-    let path = path.to_path_buf();
+//------------------------------
 
-    let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
-    unsafe { GetFileAttributesExA(PCSTR(path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
-        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
- 
-    let flags = dword_to_flags(win32_attribs.dwFileAttributes);
+pub(crate) struct NativeEntrySearchHandle(HANDLE);
 
-    let is_reparse_point = flags.contains(FileFlags::ReparsePoint);
-    let is_directory = flags.contains(FileFlags::Directory);
-    Ok(match (is_reparse_point, is_directory) {
-        (true, true)   => FileType::SymlinkDirectory,
-        (true, false)  => FileType::SymlinkFile,
-        (false, true)  => FileType::Directory,
-        (false, false) => FileType::File,
-    })
+impl NativeEntrySearchHandle {
+    pub(crate) fn new(path: &Path) -> io::Result<(Box<NativeEntrySearchHandle>, PathBuf)> {
+        let mut buf = path.to_path_buf();
+        buf.set_file_name("*");
+        let pcwstr = PCSTR(buf.as_ptr());
+        
+        let mut find_data = WIN32_FIND_DATAA::default();
+        let handle = unsafe{ FindFirstFileA(pcwstr, &mut find_data) }
+            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+        // Skip both "." and ".."
+        while matches!(find_data.cFileName[..3], [b'.', 0, _] | [b'.', b'.', 0])
+        {
+            unsafe { FindNextFileA(handle, &mut find_data) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        }
+
+        let mut path = path.to_path_buf();
+        // SAFETY: Windows should always return a valid file name
+        path.push(unsafe { PathBuf::from_utf8_lossy(utils::null_terminate_slice(&find_data.cFileName)).unwrap_unchecked() });
+        Ok((Box::new(NativeEntrySearchHandle(handle)), path))
+    }
 }
 
-pub(crate) fn get_fully_qualified_name(path: &Path) -> io::Result<PathBuf> {
-    scoped_alloc!(AllocId::TlsTemp);
+impl EntrySearchHandle for NativeEntrySearchHandle {
+    fn next(&mut self, mut path: PathBuf) -> Option<(Box<dyn EntryHandle>, EntryType, PathBuf)> {
+        let mut find_data = WIN32_FIND_DATAA::default();
 
-    let path_buf = path.to_path_buf();
-    let handle = unsafe { CreateFileA(
-        PCSTR(path_buf.as_ptr()),
-        FILE_GENERIC_READ.0,
-        FILE_SHARE_READ,
-        None,
-        OPEN_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        HANDLE::default()
-    ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-
-    let needed = unsafe { GetFinalPathNameByHandleA(handle, &mut [], FILE_NAME_NORMALIZED) } as usize;
-    let mut path = if needed == 0 {
-        return Err(io::Error::last_os_error())
-    } else {
-        let mut path = String::with_capacity(needed);
-        unsafe { path.as_mut_vec().set_len(needed) };
-        path
-    };
-
-    let written = unsafe { GetFinalPathNameByHandleA(handle, &mut path.as_mut_vec(), FILE_NAME_NORMALIZED) } as usize;
-    if written == 0 {
-        return Err(io::Error::last_os_error())
-    } else {
-        unsafe { path.as_mut_vec().set_len(written) };
+        match unsafe { FindNextFileA(self.0, &mut find_data) } {
+            Ok(_) => {
+                let (entry, entry_type) = NativeEntryHandle::new(&path).map_or(None, |val| Some(val))?;
+                path.set_file_name(utils::null_terminated_arr_to_str_unchecked(&find_data.cFileName));
+                Some((entry, entry_type, path))
+            },
+            Err(_) => None,
+        }
     }
+}
 
-    // Path returned starts with `//?/`, so strip it
-    path.drain(..=3);
-
-    unsafe { CloseHandle(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-    Ok(PathBuf::from_str(&path).unwrap())
+impl Drop for NativeEntrySearchHandle {
+    fn drop(&mut self) {
+        if !self.0.is_invalid() {
+            if let Err(_) = unsafe { FindClose(self.0) } {
+                debug_assert!(false, "Failed to properly close search handle")
+            }
+        }
+    }
 }

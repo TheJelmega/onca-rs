@@ -38,6 +38,11 @@ pub enum FileCreateFlags {
     /// 
     /// Requires Delete share mode,
     DeleteOnClose,
+}
+
+/// File access flags
+#[flags]
+pub enum FileAccessFlags {
     /// Disable OS file buffering of the file.
     /// 
     /// #Note
@@ -63,6 +68,7 @@ pub enum FileCreateFlags {
     /// Tell the OS to skip any drive caching and write directly to the drive.
     WriteThrough,
 }
+
 
 //------------------------------
 
@@ -143,34 +149,86 @@ pub struct File {
 impl File {
     /// Create/open a file.
     /// 
+    /// # Note
+    /// 
+    /// Only works for path on the native filesystem, for vfs support, use ['VirtualFileSystem::create_file']
+    /// 
     /// # Error
     /// 
-    /// Returns an error when either the file could not be created or opened, or when the path point to a symlink/hardlink.
+    /// Returns an error when either the file could not be created or opened, or when the path points to a symlink/hardlink.
     #[must_use]
-    pub fn create<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, false, false)
+    pub fn create<P: AsRef<Path>>(
+        path: P,
+        open_mode: OpenMode,
+        access_perms: Permission,
+        shared_access_perms: Permission,
+        create_flags: FileCreateFlags,
+        access_flags: FileAccessFlags
+    ) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access_perms, shared_access_perms, create_flags, access_flags, false, false)
+            .map(|(handle, path_buf)| File { handle, path: path_buf })
+    }
+
+    /// Open an existing file.
+    /// 
+    /// # Note
+    /// 
+    /// Only works for path on the native filesystem, for vfs support, use ['VirtualFileSystem::create_file']
+    /// 
+    /// # Error
+    /// 
+    /// Returns an error when either the file could not be opened, or when the path points to a symlink/hardlink.
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        access_perms: Permission,
+        shared_access_perms: Permission,
+        access_flags: FileAccessFlags,
+    ) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), OpenMode::OpenExisting, access_perms, shared_access_perms, FileCreateFlags::None, access_flags, false, false)
             .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a link.
     /// 
+    /// # Note
+    /// 
+    /// Only works for path on the native filesystem, for vfs support, use ['VirtualFileSystem::create_link']
+    /// 
     /// # Error
     /// 
     /// Returns an error when either the symlink/hardlink could not be reacted or opened, or when the path does not point to a symlink/hardlink.
     #[must_use]
-    pub fn create_link<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, true, false)
+    pub fn create_link<P: AsRef<Path>>(
+        path: P,
+        open_mode: OpenMode,
+        access_perms: Permission,
+        shared_access_perms: Permission,
+        create_flags: FileCreateFlags,
+        access_flags: FileAccessFlags
+    ) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access_perms, shared_access_perms, create_flags, access_flags, true, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 
     /// Create/open a temporary file, in the folder given by `path`.
     /// 
+    /// # Note
+    /// 
+    /// Only works for path on the native filesystem, for vfs support, use ['VirtualFileSystem::create_temp']
+    /// 
     /// #  Error
     /// 
     /// Returns an error when the temporary file could not be created.
     #[must_use]
-    pub fn create_temp<P: AsRef<Path>>(path: P, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags) -> io::Result<File> {
-        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access, shared_access, flags, false, false)
+    pub fn create_temp<P: AsRef<Path>>(
+        path: P,
+        open_mode: OpenMode,
+        access_perms: Permission,
+        shared_access_perms: Permission,
+        create_flags: FileCreateFlags,
+        access_flags: FileAccessFlags
+    ) -> io::Result<File> {
+        os_imp::file::FileHandle::create(path.as_ref(), open_mode, access_perms, shared_access_perms, create_flags, access_flags, false, false)
         .map(|(handle, path_buf)| File { handle, path: path_buf })
     }
 

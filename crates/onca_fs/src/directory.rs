@@ -3,18 +3,26 @@ use onca_common::{
     io
 };
 
-use crate::{os::os_imp, Path, Entry, FileType, EntryIter};
+use crate::{os::os_imp, Path, Entry, EntryIter, EntryType};
 
-/// Returns if the given path is valid and points to a directory.
+/// Check if the given path is valid and points to a directory.
 #[must_use]
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
-    scoped_alloc!(AllocId::TlsTemp);
-
-    let entry = Entry::new(path.as_ref());
-    match entry {
-        Ok(entry) => entry.file_type() == FileType::Directory,
+    match exists_internal(path.as_ref()) {
+        Ok(res) => res,
         Err(_) => false,
     }
+}
+
+pub(crate) fn exists_internal(path: &Path) -> io::Result<bool> {
+    Entry::new(path.as_ref()).map(|entry| entry.entry_type().is_dir())
+}
+
+/// Reads the content of a directory and return an iterator over the content.
+#[must_use]
+pub fn read<P: AsRef<Path>>(path: P) -> io::Result<EntryIter> {
+    let (handle, path) = os_imp::entry::NativeEntrySearchHandle::new(path.as_ref())?;
+    Ok(unsafe { EntryIter::from_raw(path, handle) })
 }
 
 /// Creates a directory with the given path.
@@ -35,7 +43,9 @@ pub fn create<P: AsRef<Path>>(path: P, resursively: bool) -> io::Result<()> {
     }
 }
 
-/// Remove a directory, the directory needs to be empty.
+/// Remove a directory.
+/// 
+/// The directory needs to be empty.
 /// 
 /// # Errors
 /// 
@@ -45,7 +55,7 @@ pub fn remove<P: AsRef<Path>>(path: P) -> io::Result<()> {
     os_imp::directory::remove(path.as_ref())
 }
 
-/// Remove a directory and all its content.
+/// Remove a directory and all its contents.
 /// 
 /// ***Use carefully!***
 /// 
@@ -57,19 +67,13 @@ pub fn remove_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
     scoped_alloc!(AllocId::TlsTemp);
 
     for entry in read(path.as_ref())? {
-        match entry.file_type() {
-            FileType::Unknown          => {}
-            FileType::File             => crate::file::delete(entry.path())?,
-            FileType::Directory        => remove_all(entry.path())?,
-            FileType::SymlinkFile      => crate::file::delete(entry.path())?,
-            FileType::SymlinkDirectory => remove_all(entry.path())?,
+        match entry.entry_type() {
+            EntryType::Unknown          => {}
+            EntryType::File             => crate::file::delete(entry.path())?,
+            EntryType::Directory        => remove_all(entry.path())?,
+            EntryType::SymlinkFile      => crate::file::delete(entry.path())?,
+            EntryType::SymlinkDirectory => remove_all(entry.path())?,
         }
     }
     remove(path)
-}
-
-/// Reads the content of a directory and returns an iterator over the content.
-#[must_use]
-pub fn read<P: AsRef<Path>>(path: P) -> io::Result<EntryIter> {
-    EntryIter::new(path)
 }

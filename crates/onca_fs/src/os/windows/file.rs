@@ -27,7 +27,7 @@ use windows::{
     core::PCSTR,
 };
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FileHandle as _, FileAsyncWriteResult, FileAsyncReadResult};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FileHandle as _, FileAsyncWriteResult, FileAsyncReadResult, FileAccessFlags};
 
 use super::{INVALID_FILE_SIZE, high_low_to_u64};
 
@@ -226,7 +226,16 @@ impl crate::file::FileHandle for FileHandle {
 }
 
 impl FileHandle {
-    pub(crate) fn create(path: &Path, open_mode: OpenMode, access: Permission, shared_access: Permission, flags: FileCreateFlags, open_link: bool, temporary: bool) -> io::Result<(Box<dyn crate::FileHandle>, PathBuf)> {
+    pub(crate) fn create(
+        path: &Path,
+        open_mode: OpenMode,
+        access_perms: Permission,
+        shared_access_perms: Permission,
+        create_flags: FileCreateFlags,
+        access_flags: FileAccessFlags,
+        open_link: bool,
+        temporary: bool
+    ) -> io::Result<(Box<dyn crate::FileHandle>, PathBuf)> {
         let mut path_buf = path.to_path_buf();
 
         if temporary {
@@ -250,30 +259,30 @@ impl FileHandle {
         }
         
         let mut win32_access = FILE_ACCESS_RIGHTS(0);
-        if access.contains(Permission::Read) {
+        if access_perms.contains(Permission::Read) {
             win32_access |= FILE_GENERIC_READ;
         }
-        if access.contains(Permission::Write) {
+        if access_perms.contains(Permission::Write) {
             win32_access |= FILE_GENERIC_WRITE;
-        } else if access.contains(Permission::Append) {
+        } else if access_perms.contains(Permission::Append) {
             win32_access |= FILE_APPEND_DATA;
         }
-        if access.contains(Permission::Execute) {
+        if access_perms.contains(Permission::Execute) {
             win32_access |= FILE_GENERIC_EXECUTE;
         }
-        if access.contains(Permission::Delete) {
+        if access_perms.contains(Permission::Delete) {
             win32_access |= DELETE;
         }
     
         let mut win32_access_share = 0;
-        if shared_access.contains(Permission::Read) {
+        if shared_access_perms.contains(Permission::Read) {
             win32_access_share |= FILE_SHARE_READ.0;
         }
-        if shared_access.contains(Permission::Write) || shared_access.contains(Permission::Append) {
+        if shared_access_perms.contains(Permission::Write) || shared_access_perms.contains(Permission::Append) {
             win32_access_share |= FILE_SHARE_WRITE.0;
         }
         // Do this is an assert, as the user should never pass Execture here
-        assert!(shared_access & Permission::Execute != Permission::Execute, "Cannot share file execute permission");
+        assert!(shared_access_perms & Permission::Execute != Permission::Execute, "Cannot share file execute permission");
 
         let win32_create_disposition = match open_mode {
             OpenMode::OpenOrCreate      => OPEN_ALWAYS,
@@ -284,17 +293,17 @@ impl FileHandle {
         };
 
         let mut win32_flags = 0;
-        if flags.contains(FileCreateFlags::ReadOnly)         { win32_flags |= FILE_ATTRIBUTE_READONLY.0; }
-        if flags.contains(FileCreateFlags::Hidden)           { win32_flags |= FILE_ATTRIBUTE_HIDDEN.0; }
-        if flags.contains(FileCreateFlags::AllowBackup)      { win32_flags |= FILE_ATTRIBUTE_ARCHIVE.0; }
-        if flags.contains(FileCreateFlags::Encrypted)        { win32_flags |= FILE_ATTRIBUTE_ENCRYPTED.0; }
-        if flags.contains(FileCreateFlags::DeleteOnClose)    { win32_flags |= FILE_FLAG_DELETE_ON_CLOSE.0; }
-        if flags.contains(FileCreateFlags::NoBuffering)      { win32_flags |= FILE_FLAG_NO_BUFFERING.0; }
-        if flags.contains(FileCreateFlags::SupportAsync)     { win32_flags |= FILE_FLAG_OVERLAPPED.0; }
-        if flags.contains(FileCreateFlags::RandomAccess)     { win32_flags |= FILE_FLAG_RANDOM_ACCESS.0; }
-        if flags.contains(FileCreateFlags::SequentialAccess) { win32_flags |= FILE_FLAG_SEQUENTIAL_SCAN.0; }
-        if flags.contains(FileCreateFlags::WriteThrough)     { win32_flags |= FILE_FLAG_WRITE_THROUGH.0; }
-        if flags.contains(FileCreateFlags::AllowBackup)      { win32_flags |= FILE_FLAG_BACKUP_SEMANTICS.0; }
+        if create_flags.contains(FileCreateFlags::ReadOnly)         { win32_flags |= FILE_ATTRIBUTE_READONLY.0; }
+        if create_flags.contains(FileCreateFlags::Hidden)           { win32_flags |= FILE_ATTRIBUTE_HIDDEN.0; }
+        if create_flags.contains(FileCreateFlags::AllowBackup)      { win32_flags |= FILE_ATTRIBUTE_ARCHIVE.0; }
+        if create_flags.contains(FileCreateFlags::Encrypted)        { win32_flags |= FILE_ATTRIBUTE_ENCRYPTED.0; }
+        if create_flags.contains(FileCreateFlags::DeleteOnClose)    { win32_flags |= FILE_FLAG_DELETE_ON_CLOSE.0; }
+        if access_flags.contains(FileAccessFlags::NoBuffering)      { win32_flags |= FILE_FLAG_NO_BUFFERING.0; }
+        if access_flags.contains(FileAccessFlags::SupportAsync)     { win32_flags |= FILE_FLAG_OVERLAPPED.0; }
+        if access_flags.contains(FileAccessFlags::RandomAccess)     { win32_flags |= FILE_FLAG_RANDOM_ACCESS.0; }
+        if access_flags.contains(FileAccessFlags::SequentialAccess) { win32_flags |= FILE_FLAG_SEQUENTIAL_SCAN.0; }
+        if access_flags.contains(FileAccessFlags::WriteThrough)     { win32_flags |= FILE_FLAG_WRITE_THROUGH.0; }
+        if create_flags.contains(FileCreateFlags::AllowBackup)      { win32_flags |= FILE_FLAG_BACKUP_SEMANTICS.0; }
 
         if open_link {
             win32_flags |= FILE_FLAG_OPEN_REPARSE_POINT.0;

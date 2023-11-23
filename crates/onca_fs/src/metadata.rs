@@ -2,6 +2,8 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use onca_common_macros::flags;
 
+use crate::EntryType;
+
 /// Flags for a filesystem entry's metadata.
 #[flags]
 pub enum FileFlags {
@@ -80,22 +82,6 @@ pub enum Permission {
     Delete,
 }
 
-/// File type.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum FileType {
-    /// Unknown.
-    #[default]
-    Unknown,
-    /// File (or hard-link on Windowns).
-    File,
-    /// Directory
-    Directory,
-    /// Symbolic link (or junction on Windows) to a file.
-    SymlinkFile,
-    /// Symbolic link (or junction on Windows) to a file.
-    SymlinkDirectory,
-}
-
 /// Volume and file id.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct VolumeFileId {
@@ -120,7 +106,7 @@ pub enum FileLinkCount {
 #[derive(Clone, Copy, Default)]
 pub struct Metadata {
     /// File type.
-    pub file_type:        FileType,
+    pub file_type:        EntryType,
     /// Flags.
     pub flags:            FileFlags,
     /// File permissions.
@@ -150,16 +136,16 @@ pub struct Metadata {
 impl Metadata {
     /// Check if the entry is a directory, or a symbolic link to one.
     pub fn is_dir(&self) -> bool {
-        self.file_type == FileType::Directory || self.file_type == FileType::SymlinkDirectory
+        self.file_type == EntryType::Directory || self.file_type == EntryType::SymlinkDirectory
     }
     
     /// Check if the entry is a file, or a symbolic link to one.
     pub fn is_file(&self) -> bool {
-        self.file_type == FileType::File || self.file_type == FileType::SymlinkFile
+        self.file_type == EntryType::File || self.file_type == EntryType::SymlinkFile
     }
     
     /// Check if the entry is a symbolic link.
     pub fn is_symlink(&self) -> bool {
-        self.file_type == FileType::SymlinkFile || self.file_type == FileType::SymlinkDirectory
+        self.file_type == EntryType::SymlinkFile || self.file_type == EntryType::SymlinkDirectory
     }
 }

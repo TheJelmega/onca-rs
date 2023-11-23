@@ -149,6 +149,10 @@ impl<'a> RootComponent<'a> {
     pub fn as_str(&self) -> &'a str {
         self.raw
     }
+
+    pub fn as_path(&self) -> &'a Path {
+        unsafe { Path::new_unchecked(self.raw) }
+    }
 }
 
 impl<'a> PartialEq for RootComponent<'a> {
@@ -758,7 +762,7 @@ impl FusedIterator for Ancestors<'_> {}
 /// 
 /// [`push`]: PathBuf::push
 /// [`set_extension`]: PathBuf::set_extension
-#[derive(Clone)]
+#[derive(Clone, Eq)]
 pub struct PathBuf(String);
 
 impl PathBuf {
@@ -924,54 +928,7 @@ impl PathBuf {
     /// 
     /// Returns an error if the path could not be normalized
     pub fn normalize(&mut self) -> io::Result<()> {
-        use fmt::Write;
-
-        let mut new_path = String::with_capacity(self.capacity());
- 
-        let mut components = self.components();
-        if components.has_root() {
-            match components.root.unwrap() {
-                Root::Drive(drive) => if cfg!(windows) {
-                    write!(&mut new_path, "{}:/", drive as char);
-                } else {
-                    return Err(io::Error::other("Cannot normalize a windows file path on a non-windows OS"));
-                },
-                Root::WinShare { server, share } => if cfg!(windows) {
-                    write!(&mut new_path, "//{server}/{share}/");
-                } else {
-                    return Err(io::Error::other("Cannot normalize a windows file path on a non-windows OS"));
-                },
-                Root::Common => if cfg!(windows) {
-                    return Err(io::Error::other("Cannot normalize a non-windows file path on windows"));
-                } else {
-                    new_path.push('/');
-                },
-                Root::VFS(_) => return Err(io::Error::other("Cannot normalize a virtual file system path without the virtual file system")),
-            }
-
-            // Pop root from the components.
-            components.next().unwrap();
-        } else {
-            let cur_dir = get_working_dir()?;
-            new_path.push_str(cur_dir.as_str());
-            new_path.push('/')
-        }
-
-        let mut new_path = PathBuf(new_path);
-        for comp in components {
-            match comp {
-                // Root is handled above
-                Component::Root(root) => unreachable!(),
-                Component::CurDir => (),
-                Component::ParentDir => _ = new_path.pop(),
-                Component::Normal(p) => new_path.push(unsafe { Path::new_unchecked(p) }),
-                Component::VFS(_) => return Err(io::Error::other("Cannot normalize a path that includes a macro without the virtual file system")),
-                Component::Wildcard(_) => return Err(io::Error::other("Cannot normalize a path that includes a wildcard")),
-            }
-        }
-        *self = new_path;
-
-        Ok(())
+        self.normalize_internal(false)
     }
 
     pub(crate) fn normalize_internal(&mut self, allow_vfs: bool) -> io::Result<()> {
@@ -1181,6 +1138,12 @@ impl fmt::Debug for PathBuf {
     }
 }
 
+impl fmt::Display for PathBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&**self, f)
+    }
+}
+
 impl Deref for PathBuf {
     type Target = Path;
 
@@ -1203,7 +1166,19 @@ impl Default for PathBuf {
 
 impl PartialEq for PathBuf {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.as_path() == other.as_path()
+    }
+}
+
+impl PartialOrd for PathBuf {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        self.as_path().partial_cmp(other.as_path())
+    }
+}
+
+impl Ord for PathBuf {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.as_path().cmp(other.as_path())
     }
 }
 
