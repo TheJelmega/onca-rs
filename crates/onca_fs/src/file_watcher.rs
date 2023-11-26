@@ -1,6 +1,6 @@
 use std::task::Poll;
 
-use onca_common::{io, sync::Mutex, event_listener::{EventListenerArray, EventListener}};
+use onca_common::{io, sync::Mutex, event_listener::{EventListenerArray, EventListener, EventListenerRef}};
 use onca_common_macros::flags;
 
 use crate::{
@@ -155,6 +155,8 @@ impl NameFilter {
 
 //------------------------------
 
+pub type FileWatcherEventListener = dyn EventListener<FileChangeInfo>;
+
 /// File watcher.
 /// 
 /// The file change watcher does not dispatch callbacks itself, as each watcher would needs it's own thread to be able to watch for a change.
@@ -197,6 +199,16 @@ impl Filewatcher {
             name_filter: NameFilter::new(name_filter),
             listeners: Mutex::new(EventListenerArray::new()),
         })
+    }
+
+    /// Register a file watcher even listener.
+    pub fn register_listener(&mut self, listener: EventListenerRef<FileWatcherEventListener>) {
+        self.listeners.lock().push(listener);
+    }
+    
+    /// Unregister a file watcher even listener.
+    pub fn unregister_listener(&mut self, listener: &EventListenerRef<FileWatcherEventListener>) {
+        self.listeners.lock().remove(listener);
     }
 
     /// Tick the file watcher and dispatch any notification if needed
