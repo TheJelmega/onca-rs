@@ -808,6 +808,11 @@ impl PathBuf {
         Ok(Self(string))
     }
 
+    /// Create a `PathBuf` directly from a string without any validation
+    pub unsafe fn from_raw(s: String) -> Self {
+        Self(s)
+    }
+
     /// Coerces to a [`Path`] slice
     #[must_use]
     #[inline]

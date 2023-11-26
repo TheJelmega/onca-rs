@@ -34,6 +34,7 @@ pub(crate) mod drive_volume;
 pub(crate) mod file;
 pub(crate) mod directory;
 pub(crate) mod link;
+pub(crate) mod file_watcher;
 
 pub(crate) fn get_working_dir() -> io::Result<PathBuf> {
     let expected_len = unsafe { GetCurrentDirectoryA(None) } as usize;

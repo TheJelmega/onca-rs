@@ -1,13 +1,14 @@
 use std::{
     collections::{HashMap, BTreeMap, VecDeque, HashSet},
     fmt,
-    sync::Arc,
+    sync::Arc, io::Seek,
 };
 
 use onca_common::{
     sync::{RwLock, MappedRwLockReadGuard, RwLockReadGuard},
     io,
 };
+use onca_common_macros::flags;
 
 use crate::*;
 
@@ -129,8 +130,8 @@ impl EntrySearchHandle for MultiRootEntrySearchHandle {
 pub struct VirtualFileSystem {
     mount_points:         RwLock<HashMap<String, MountPoint>>,
     macros:              RwLock<HashMap<String, PathBuf>>,
-    sub_system_creators: RwLock<HashMap<String, (Box<dyn Fn(&File) -> bool>, Box<dyn Fn(File) -> VirtualSubSystemHandle>)>>,
-    cached_sub_systems:  RwLock<HashMap<PathBuf, Arc<dyn VirtualSubSystem>>>,
+    sub_system_creators: RwLock<HashMap<String, (Box<dyn Fn(&mut File) -> io::Result<bool>>, Box<dyn Fn(File) -> VirtualSubSystemHandle>)>>,
+    cached_sub_systems:  RwLock<HashMap<PathBuf, Arc<dyn SubSystem>>>,
 }
 
 impl VirtualFileSystem {
@@ -300,7 +301,7 @@ impl VirtualFileSystem {
     /// Returns whether the sub-system creation closure was registered successfully,
     /// a value of `false` indicates another sub-system was registerd for the given extension
     pub fn register_sub_system<F0, F1>(&self, extension: &str, magic_chk: F0, creation_closure: F1) -> bool where
-        F0: Fn(&File) -> bool + 'static,
+        F0: Fn(&mut File) -> io::Result<bool> + 'static,
         F1: Fn(File) -> VirtualSubSystemHandle + 'static
     {
         let mut creators = self.sub_system_creators.write();
@@ -318,7 +319,7 @@ impl VirtualFileSystem {
     }
 
     // Should only be called it path points to a valid native file
-    pub fn get_or_create_subsystem<F>(&self, path: &Path, open_file: F) -> io::Result<Arc<dyn VirtualSubSystem>> where
+    pub fn get_or_create_subsystem<F>(&self, path: &Path, open_file: F) -> io::Result<Arc<dyn SubSystem>> where
         F: Fn(&Path) -> io::Result<File>
     {
         // If the current subsystem is cached, return it
@@ -329,7 +330,7 @@ impl VirtualFileSystem {
 
         // No sub-system has been found, so create a new one
         // Open the file, as it should exist if we get here
-        let file = open_file(path)?;
+        let mut file = open_file(path)?;
 
         let creators = self.sub_system_creators.read();
 
@@ -337,15 +338,17 @@ impl VirtualFileSystem {
         if let Some(extension) = file.path().extension() {
             if let Some(creator) = creators.get(extension) {
                 // check if magic is correct
-                if creator.0(&file) {
+                if let Ok(true) = creator.0(&mut file) {
+                    file.seek(io::SeekFrom::Start(0))?;
                     return Ok(creator.1(file));
                 }
             }
         }
-
+        
         // We didn't find the file type using a extenstion, so go over all creators and try to find one that works, based on the magic number
         for create in &*creators {
-            if create.1.0(&file) {
+            if let Ok(true) = create.1.0(&mut file) {
+                file.seek(io::SeekFrom::Start(0))?;
                 return Ok(create.1.1(file));
             }
         }
@@ -355,9 +358,9 @@ impl VirtualFileSystem {
     /// Query a filesystem operation
     /// 
     /// `is_read_op` indicated if the operation only read from the filesystem (does not create or remove), this is used to error for read-only subsystems, or multi-entry mount points.
-    fn query<F0, F1, T>(&self, path: &Path, is_read_op: bool, native_func: F0, sub_sys_func: F1) -> io::Result<T> where
+    fn query<F0, F1, T>(&self, path: &Path, needed_support: SubSystemSupport, native_func: F0, sub_sys_func: F1) -> io::Result<T> where
         F0: Fn(&Path) -> io::Result<T> + Copy,
-        F1: Fn(&Arc<dyn VirtualSubSystem>, &Path) -> io::Result<T> + Copy
+        F1: Fn(&Arc<dyn SubSystem>, &Path) -> io::Result<T> + Copy
     {
         let path = self.normalize_path(&path)?;
 
@@ -370,8 +373,8 @@ impl VirtualFileSystem {
 
         match root.kind() {
             Root::VFS(vfs) => if let Some(mount) = self.mount_points.read().get(vfs) {
-                if is_read_op || mount.num_entries() == 1 {
-                    mount.for_each(|_, root| self.query_from_root(root, comps.as_path(), is_read_op, native_func, sub_sys_func))
+                if needed_support.is_any() || mount.num_entries() == 1 {
+                    mount.for_each(|_, root| self.query_from_root(root, comps.as_path(), needed_support, native_func, sub_sys_func))
                 } else {
                     Err(io::Error::other(format!("vfs mount point `{vfs}` is a multi-entry mount point, and can therefore not do any modification to the filesystem itself")))
                 }
@@ -379,13 +382,13 @@ impl VirtualFileSystem {
             } else {
                 Err(io::Error::other("vfs mount point '{vfs}' does not exist"))
             },
-            _ => self.query_from_root(root.as_path(), comps.as_path(), is_read_op, native_func, sub_sys_func)
+            _ => self.query_from_root(root.as_path(), comps.as_path(), needed_support, native_func, sub_sys_func)
         }
     }
 
-    fn query_from_root<F0, F1, T>(&self, root: &Path, path: &Path, is_read_op: bool, native_func: F0, sub_sys_func: F1) -> io::Result<T> where
+    fn query_from_root<F0, F1, T>(&self, root: &Path, path: &Path, needed_support: SubSystemSupport, native_func: F0, sub_sys_func: F1) -> io::Result<T> where
         F0: Fn(&Path) -> io::Result<T>,
-        F1: Fn(&Arc<dyn VirtualSubSystem>, &Path) -> io::Result<T>
+        F1: Fn(&Arc<dyn SubSystem>, &Path) -> io::Result<T>
     {
         let root_len = root.len();
 
@@ -419,11 +422,11 @@ impl VirtualFileSystem {
                             FileAccessFlags::None
                         ))?;
 
-                        if !is_read_op && sub_system.is_read_only() {
-                            return Err(io::Error::other("Cannot perform a non-read operation on a read-only sub system"));
+                        if sub_system.get_support().contains(needed_support) {
+                            return Err(io::Error::other(format!("The virtual file sub-system for `{}` does not support the `{}` flag", sub_system.path(), needed_support)))
                         }
 
-                        return self.recursive_sub_system(sub_system, comps.as_path(), is_read_op, sub_sys_func);
+                        return self.recursive_sub_system(sub_system, comps.as_path(), needed_support, sub_sys_func);
                     } else {
                         // if this isn't a file, we can't continue, so return the error
                         return Err(io::Error::other(format!("Failed to get sub-system, expected file, found {}", entry.entry_type())))
@@ -437,8 +440,8 @@ impl VirtualFileSystem {
         Err(io::Error::other("file not found"))
     }
 
-    fn recursive_sub_system<T, F>(&self, sub_system: Arc<dyn VirtualSubSystem>, path: &Path, is_read_op: bool, func: F) -> io::Result<T> where
-        F: Fn(&Arc<dyn VirtualSubSystem>, &Path) -> io::Result<T>
+    fn recursive_sub_system<T, F>(&self, sub_system: Arc<dyn SubSystem>, path: &Path, needed_support: SubSystemSupport, func: F) -> io::Result<T> where
+        F: Fn(&Arc<dyn SubSystem>, &Path) -> io::Result<T>
     {
         // Try main sub-path
         match func(&sub_system, path) {
@@ -464,13 +467,13 @@ impl VirtualFileSystem {
                             FileAccessFlags::None
                         ))?;
 
-                        if !is_read_op && sub_system.is_read_only() {
-                            return Err(io::Error::other("Cannot perform a non-read operation on a read-only sub system"));
+                        if sub_system.get_support().contains(needed_support) {
+                            return Err(io::Error::other(format!("The virtual file sub-system for `{}` does not support the `{}` flag", sub_system.path(), needed_support)))
                         }
 
                         let sub_path = unsafe { Path::new_unchecked(&path.as_str()[cur_path.len() + 1..]) };
 
-                        return self.recursive_sub_system(sub_system, sub_path, is_read_op, func);
+                        return self.recursive_sub_system(sub_system, sub_path, needed_support, func);
                     } else {
                         // if this isn't a file, we can't continue, so return the error
                         return Err(io::Error::other(format!("Failed to get sub-system, expected file, found {}", entry.entry_type())))
@@ -490,7 +493,7 @@ impl VirtualFileSystem {
     /// Get the entry for a given path
     #[must_use]
     pub fn entry(&self, path: &Path) -> io::Result<Entry> {
-        self.query(path, true, |path| Entry::new(path), |sub_sys, path| sub_sys.entry(path))
+        self.query(path, SubSystemSupport::None, |path| Entry::new(path), |sub_sys, path| sub_sys.entry(path))
     }
 
     // Directory API
@@ -499,18 +502,18 @@ impl VirtualFileSystem {
     /// Check if the given path is valid and points to a directory.
     #[must_use]
     pub fn directory_exists<P: AsRef<Path>>(&self, path: P) -> bool {
-        self.query(path.as_ref(), true, |path| directory::exists_internal(path), |sub_sys, path| sub_sys.directory_exists(path)).unwrap_or(false)
+        self.query(path.as_ref(), SubSystemSupport::None, |path| directory::exists_internal(path), |sub_sys, path| sub_sys.directory_exists(path)).unwrap_or(false)
     }
 
     /// Read the contents of the directory and return an iterator over the content
     pub fn directory_read<P: AsRef<Path>>(&self, path: P) -> io::Result<EntryIter> {
-        self.directory_read_internal::<_, _, EntryIter>(path.as_ref(), false, |path| directory::read(path), |sub_sys, path| sub_sys.read_directory(path))
+        self.directory_read_internal::<_, _, EntryIter>(path.as_ref(), |path| directory::read(path), |sub_sys, path| sub_sys.read_directory(path))
     }
     
     // This one is a bit harder, as it needs to support an iterator over multiple directories (code is mostly a direct duplicate of `query()`)
-    fn directory_read_internal<F0, F1, T>(&self, path: &Path, is_read_op: bool, native_func: F0, sub_sys_func: F1) -> io::Result<EntryIter> where
+    fn directory_read_internal<F0, F1, T>(&self, path: &Path, native_func: F0, sub_sys_func: F1) -> io::Result<EntryIter> where
         F0: Fn(&Path) -> io::Result<EntryIter> + Copy,
-        F1: Fn(&Arc<dyn VirtualSubSystem>, &Path) -> io::Result<EntryIter> + Copy
+        F1: Fn(&Arc<dyn SubSystem>, &Path) -> io::Result<EntryIter> + Copy
     {
         let path = self.normalize_path(&path)?;
 
@@ -525,7 +528,7 @@ impl VirtualFileSystem {
             Root::VFS(vfs) => if let Some(mount) = self.mount_points.read().get(vfs) {
                 let mut iters = VecDeque::with_capacity(mount.num_entries());
                 _ = mount.for_each(|_, root| {
-                    match self.query_from_root(root, comps.as_path(), false, native_func, sub_sys_func) {
+                    match self.query_from_root(root, comps.as_path(), SubSystemSupport::None, native_func, sub_sys_func) {
                         Ok(iter) => iters.push_back(iter),
                         Err(_) => {},
                     }
@@ -542,7 +545,7 @@ impl VirtualFileSystem {
             } else {
                 Err(io::Error::other("vfs mount point '{vfs}' does not exist"))
             },
-            _ => self.query_from_root(root.as_path(), comps.as_path(), is_read_op, native_func, sub_sys_func)
+            _ => self.query_from_root(root.as_path(), comps.as_path(), SubSystemSupport::None, native_func, sub_sys_func)
         }
     }
 
@@ -559,7 +562,7 @@ impl VirtualFileSystem {
     /// - the root is a multi-entry mounting point.
     /// - the path includes a read-only sub-system.
     pub fn create_directory<P: AsRef<Path>>(&self, path: P, recursively: bool) -> io::Result<()> {
-        self.query(path.as_ref(), false, |path| directory::create(path, recursively), |sub_sys, path| sub_sys.create_directory(path, recursively))
+        self.query(path.as_ref(), SubSystemSupport::CreateDeleteDirectory, |path| directory::create(path, recursively), |sub_sys, path| sub_sys.create_directory(path, recursively))
     }
 
     /// remove a directory.
@@ -574,7 +577,7 @@ impl VirtualFileSystem {
     /// - the root is a multi-entry mounting point.
     /// - the path includes a read-only sub-system.
     pub fn remove_directory<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        self.query(path.as_ref(), false, |path| directory::remove(path), |sub_sys, path| sub_sys.remove_directory(path))
+        self.query(path.as_ref(), SubSystemSupport::CreateDeleteDirectory, |path| directory::remove(path), |sub_sys, path| sub_sys.remove_directory(path))
     }
 
     /// Remove a directory and all its contents.
@@ -587,7 +590,12 @@ impl VirtualFileSystem {
     /// - the directory or its contents could not be removed
     /// - the root is a multi-entry mounting point.
     pub fn remove_directory_all<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        self.query(path.as_ref(), false, |path| directory::remove_all(path), |sub_sys, path| sub_sys.remove_directory_all(path))
+        self.query(
+            path.as_ref(),
+            SubSystemSupport::CreateDeleteDirectory | SubSystemSupport::CreateDeleteDirectory,
+            |path| directory::remove_all(path),
+            |sub_sys, path| sub_sys.remove_directory_all(path)
+        )
     }
 
     // File API
@@ -604,7 +612,7 @@ impl VirtualFileSystem {
     ) -> io::Result<File> {
         self.query(
             path.as_ref(),
-            open_mode != OpenMode::OpenExisting,
+            if open_mode != OpenMode::OpenExisting { SubSystemSupport::None } else { SubSystemSupport::CreateDeleteFile },
             |path| file::File::create(path, open_mode, access_perms, shared_access_perms, create_flags, access_flags),
             |sub_sys, path| sub_sys.create_file(path, open_mode, access_perms, shared_access_perms, create_flags, access_flags)
         )
@@ -629,12 +637,48 @@ impl VirtualFileSystem {
 
     /// Delete a file
     pub fn delete_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        self.query(path.as_ref(), false, |path| file::delete(path), |sub_sys, path| sub_sys.delete_file(path))
+        self.query(path.as_ref(), SubSystemSupport::CreateDeleteFile, |path| file::delete(path), |sub_sys, path| sub_sys.delete_file(path))
+    }
+
+    // FileWatcher API
+    //------------------------------
+
+    /// Create a file watcher
+    /// 
+    /// # Note
+    /// 
+    /// The filewatcher ignores changes in nested subsystems, as they need their own filewatchers
+    pub fn watch_files(&self, path: &Path, watch_subtree: bool, filter: FileWatcherFilter, name_filter: Option<&str>) -> io::Result<Filewatcher> {
+        self.query(
+            path.as_ref(),
+            SubSystemSupport::Filewatcher,
+            |path| Filewatcher::new(path, watch_subtree, filter, name_filter),
+            |sub_sys, path| sub_sys.watch_files(path, watch_subtree, filter, name_filter)
+        )
     }
 
 }
 
 //--------------------------------------------------------------
+
+/// Virtual system support flags
+#[flags]
+pub enum SubSystemSupport {
+    /// Sub system support the creation and deletion of directories
+    CreateDeleteDirectory,
+    /// Sub system support the creation and deletion of files
+    CreateDeleteFile,
+    /// Sub system supports file watchers
+    Filewatcher,
+    /// Sub system support memory-mapped files
+    MemoryMappedFiles,
+}
+
+impl SubSystemSupport {
+    pub fn modifies_filesystem(self) -> bool {
+        self.contains(SubSystemSupport::CreateDeleteDirectory | SubSystemSupport::CreateDeleteFile)
+    }
+}
 
 /// A virtual sub-system.
 /// 
@@ -644,12 +688,12 @@ impl VirtualFileSystem {
 /// with the special case of "" refering to a file that's directly nested in the sub-system, e.g. a .tar file inside of a .tar.gz.
 /// 
 /// Sub-systems also do not support symlinks.
-pub trait VirtualSubSystem {
+pub trait SubSystem {
     /// Get the path to the virtual sub-system
     fn path(&self) -> &Path;
-
-    /// Is the sub-system read only?
-    fn is_read_only(&self) -> bool;
+    
+    /// Get the features supported by this subsystem
+    fn get_support(&self) -> SubSystemSupport;
 
     // Entry
     //------------------------------
@@ -707,9 +751,20 @@ pub trait VirtualSubSystem {
     /// 
     /// The file will keep existing until the last handle to it has been closed
     fn delete_file(&self, path: &Path) -> io::Result<()>;
+
+    
+    // FileWatcher
+    //------------------------------
+
+    /// Create a file watcher
+    /// 
+    /// # Note
+    /// 
+    /// The filewatcher ignores changes in nested subsystems, as they need their own filewatchers
+    fn watch_files(&self, path: &Path, watch_subtree: bool, filter: FileWatcherFilter, name_filter: Option<&str>) -> io::Result<Filewatcher>;
 }
 
-pub type VirtualSubSystemHandle = Arc<dyn VirtualSubSystem>;
+pub type VirtualSubSystemHandle = Arc<dyn SubSystem>;
 
 //--------------------------------------------------------------
 

@@ -102,21 +102,24 @@ pub enum FileLinkCount {
     Known(NonZeroU32),
 }
 
-// TODO: Filetime type
+/// File time.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
+pub struct FileTime(pub(crate) u64);
+
 #[derive(Clone, Copy, Default)]
 pub struct Metadata {
-    /// File type.
-    pub file_type:        EntryType,
+    /// Entry type.
+    pub entry_type:       EntryType,
     /// Flags.
     pub flags:            FileFlags,
     /// File permissions.
     pub permissions:      Permission,
     /// File creation time.
-    pub creation_time:    u64,
+    pub creation_time:    FileTime,
     /// File last access time.
-    pub last_access_time: u64,
+    pub last_access_time: FileTime,
     /// File last write time.
-    pub last_write_time:  u64,
+    pub last_write_time:  FileTime,
     /// Size of the (uncompressed) file.
     pub file_size:        u64,
     /// Amount of space allocated for the file.
@@ -131,21 +134,4 @@ pub struct Metadata {
     pub min_align:        u32,
     /// Volume and file id.
     pub volume_file_id:   VolumeFileId
-}
-
-impl Metadata {
-    /// Check if the entry is a directory, or a symbolic link to one.
-    pub fn is_dir(&self) -> bool {
-        self.file_type == EntryType::Directory || self.file_type == EntryType::SymlinkDirectory
-    }
-    
-    /// Check if the entry is a file, or a symbolic link to one.
-    pub fn is_file(&self) -> bool {
-        self.file_type == EntryType::File || self.file_type == EntryType::SymlinkFile
-    }
-    
-    /// Check if the entry is a symbolic link.
-    pub fn is_symlink(&self) -> bool {
-        self.file_type == EntryType::SymlinkFile || self.file_type == EntryType::SymlinkDirectory
-    }
 }

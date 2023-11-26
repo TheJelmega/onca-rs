@@ -22,6 +22,9 @@ pub use file::*;
 mod entry;
 pub use entry::*;
 
+mod file_watcher;
+pub use file_watcher::*;
+
 mod vfs;
 pub use vfs::*;
 

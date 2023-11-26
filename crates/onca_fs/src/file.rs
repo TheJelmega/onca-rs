@@ -1,8 +1,3 @@
-use std::{
-    future::Future,
-    pin::Pin
-};
-
 use onca_common::io;
 use onca_common_macros::flags;
 
@@ -150,6 +145,11 @@ pub struct File {
 }
 
 impl File {
+    /// Create a file from a handle and path
+    pub unsafe fn from_raw(handle: Box<dyn FileHandle>, path: PathBuf) -> Self {
+        Self { handle, path }
+    }
+
     /// Create/open a file.
     /// 
     /// # Note
@@ -390,19 +390,15 @@ pub fn delete<P: AsRef<Path>>(path: P) -> io::Result<()> {
 }
 
 /// Asynchronous read result
-pub struct AsyncReadResult(Box<dyn io::AsyncIOResult<Output = <Self as Future>::Output>>);
-
-impl Future for AsyncReadResult {
-    type Output = io::Result<Vec<u8>>;
- 
-    fn poll(mut self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
-        // SAFETY: we only pin so we can call the underlying `poll` implentation
-        let pin = unsafe { Pin::new_unchecked(&mut *self.0) };
-        pin.poll(cx)
-    }
-}
+pub struct AsyncReadResult(Box<dyn io::AsyncIOResult<Output = <Self as io::AsyncIOResult>::Output>>);
 
 impl io::AsyncIOResult for AsyncReadResult {
+    type Output = io::Result<Vec<u8>>;
+
+    fn poll(&mut self) -> core::task::Poll<Self::Output> {
+        self.0.poll()
+    }
+
     fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<Vec<u8>>> {
         self.0.wait(timeout)
     }
@@ -413,19 +409,15 @@ impl io::AsyncIOResult for AsyncReadResult {
 }
 
 /// Asynchronous write result
-pub struct AsyncWriteResult(Box<dyn io::AsyncIOResult<Output = <Self as Future>::Output>>);
-
-impl Future for AsyncWriteResult {
-    type Output = io::Result<u64>;
-
-    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        // SAFETY: we only pin so we can call the underlying `poll` implentation
-        let pin = unsafe { Pin::new_unchecked(&mut *self.0) };
-        pin.poll(cx)
-    }
-}
+pub struct AsyncWriteResult(Box<dyn io::AsyncIOResult<Output = <Self as io::AsyncIOResult>::Output>>);
 
 impl io::AsyncIOResult for AsyncWriteResult {
+    type Output = io::Result<u64>;
+
+    fn poll(&mut self) -> core::task::Poll<Self::Output> {
+        self.0.poll()
+    }
+
     fn wait(&mut self, timeout: u32) -> std::task::Poll<io::Result<u64>> {
         self.0.wait(timeout)
     }

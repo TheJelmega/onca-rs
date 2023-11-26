@@ -39,7 +39,7 @@ use windows::{
     core::{PCSTR, PSTR, PCWSTR}
 };
 
-use crate::{Metadata, EntryType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount, EntryHandle, EntrySearchHandle};
+use crate::{Metadata, EntryType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount, EntryHandle, EntrySearchHandle, FileTime};
 use super::{high_low_to_u64, dword_to_flags, file};
 
 //------------------------------
@@ -160,12 +160,12 @@ impl crate::entry::EntryHandle for NativeEntryHandle {
         let volume_file_id = VolumeFileId{ volume_id: file_id_info.VolumeSerialNumber, file_id: file_id_info.FileId.Identifier };
 
         Ok(Metadata {
-            file_type,
+            entry_type: file_type,
             flags,
             permissions,
-            creation_time: high_low_to_u64(win32_attribs.ftCreationTime.dwHighDateTime, win32_attribs.ftCreationTime.dwLowDateTime),
-            last_access_time: high_low_to_u64(win32_attribs.ftLastAccessTime.dwHighDateTime, win32_attribs.ftLastAccessTime.dwLowDateTime),
-            last_write_time: high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime),
+            creation_time: FileTime(high_low_to_u64(win32_attribs.ftCreationTime.dwHighDateTime, win32_attribs.ftCreationTime.dwLowDateTime)),
+            last_access_time: FileTime(high_low_to_u64(win32_attribs.ftLastAccessTime.dwHighDateTime, win32_attribs.ftLastAccessTime.dwLowDateTime)),
+            last_write_time: FileTime(high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime)),
             file_size: high_low_to_u64(win32_attribs.nFileSizeHigh, win32_attribs.nFileSizeLow),
             alloc_size,
             compressed_size: file::get_compressed_size_pathbuf(&self.path)?,

@@ -2,11 +2,11 @@ use std::{
     ffi::c_void,
     mem::{size_of, self},
     num::NonZeroU64,
-    sync::atomic::{AtomicU32, Ordering}, task::Poll, io::SeekFrom, future::Future,
+    sync::atomic::{AtomicU32, Ordering}, task::Poll, io::SeekFrom,
 };
 use onca_common::{
     prelude::*,
-    io,
+    io, sync::Mutex,
 };
 use windows::{
     Win32::{
@@ -359,6 +359,7 @@ impl Drop for FileHandle {
 //--------------------------------------------------------------
 
 /// Windoows async IO completion state
+#[derive(Clone, Copy)]
 enum AsyncIOCompletionState {
     /// Async operation is still in flight
     InFlight,
@@ -372,25 +373,21 @@ enum AsyncIOCompletionState {
 
 unsafe extern "system" fn io_completion_callback(error_code: u32, bytes_transfered: u32, overlapped: *mut OVERLAPPED) {
     let completion_data : &mut AsyncIOCompletionData = mem::transmute((*overlapped).hEvent);
+    let mut state = completion_data.state.lock();
     if error_code == ERROR_SUCCESS.0 {
-        completion_data.state = AsyncIOCompletionState::Completed(bytes_transfered as u64);
+        *state = AsyncIOCompletionState::Completed(bytes_transfered as u64);
     } else {
-        completion_data.state = AsyncIOCompletionState::Unsuccessful(error_code);
-    }
-
-    if let Some(waker) = completion_data.waker.take() {
-        waker.wake();
+        *state = AsyncIOCompletionState::Unsuccessful(error_code);
     }
 }
 
 struct AsyncIOCompletionData {
-    state : AsyncIOCompletionState,
-    waker : Option<core::task::Waker>
+    state : Mutex<AsyncIOCompletionState>,
 }
 
 impl AsyncIOCompletionData {
     fn new() -> AsyncIOCompletionData {
-        AsyncIOCompletionData { state: AsyncIOCompletionState::InFlight, waker: None }
+        AsyncIOCompletionData { state: Mutex::new(AsyncIOCompletionState::InFlight) }
     }
 }
 
@@ -401,31 +398,28 @@ pub(crate) struct AsyncReadResult {
     completion_data : Box<AsyncIOCompletionData>,
 }
 
-impl Future for AsyncReadResult {
+impl io::AsyncIOResult for AsyncReadResult {
     type Output = io::Result<Vec<u8>>;
 
-    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        match self.completion_data.state {
-            AsyncIOCompletionState::InFlight => {
-                self.completion_data.waker = Some(cx.waker().clone());
-                Poll::Pending
-            } 
+    fn poll(&mut self) -> core::task::Poll<Self::Output> {
+        let state = *self.completion_data.state.lock();
+        match state {
+            AsyncIOCompletionState::InFlight              => Poll::Pending,
             AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
             AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
             AsyncIOCompletionState::Exhausted             => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
         }
     }
-}
 
-impl io::AsyncIOResult for AsyncReadResult {
-    fn wait(&mut self, timeout: u32) -> Poll<<Self as Future>::Output> {
+    fn wait(&mut self, timeout: u32) -> Poll<Self::Output> {
         const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
         const TIMEOUT: WAIT_EVENT = WAIT_EVENT(ERROR_TIMEOUT.0);
 
         match unsafe { WaitForSingleObjectEx(self.file_handle, timeout, BOOL(1)) } {
             SUCCESS |
             TIMEOUT => {
-                match self.completion_data.state {
+                let state = *self.completion_data.state.lock();
+                match state {
                     AsyncIOCompletionState::InFlight              => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(self.take_buffer_and_exhaust(bytes_read))),
                     AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
@@ -444,7 +438,7 @@ impl io::AsyncIOResult for AsyncReadResult {
 
 impl AsyncReadResult {
     fn take_buffer_and_exhaust(&mut self, bytes_read: u64) -> Vec<u8> {
-        self.completion_data.state = AsyncIOCompletionState::Exhausted;
+        *self.completion_data.state.lock() = AsyncIOCompletionState::Exhausted;
         let mut buffer = mem::take(&mut self.buffer);
         unsafe { buffer.set_len(bytes_read as usize) };
         buffer
@@ -458,31 +452,26 @@ pub(crate) struct AsyncWriteResult {
     completion_data : Box<AsyncIOCompletionData>,
 }
 
-impl Future for AsyncWriteResult {
+impl io::AsyncIOResult for AsyncWriteResult {
     type Output = io::Result<u64>;
 
-    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        match self.completion_data.state {
-            AsyncIOCompletionState::InFlight => {
-                self.completion_data.waker = Some(cx.waker().clone());
-                Poll::Pending
-            } 
+    fn poll(&mut self) -> core::task::Poll<Self::Output> {
+        match *self.completion_data.state.lock() {
+            AsyncIOCompletionState::InFlight              => Poll::Pending, 
             AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(bytes_read)),
-            AsyncIOCompletionState::Unsuccessful(err) => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
-            AsyncIOCompletionState::Exhausted => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
+            AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
+            AsyncIOCompletionState::Exhausted             => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "Data was already taken from this result")))
         }
     }
-}
 
-impl io::AsyncIOResult for AsyncWriteResult {
-    fn wait(&mut self, timeout: u32) -> Poll<<Self as Future>::Output> {
+    fn wait(&mut self, timeout: u32) -> Poll<Self::Output> {
         const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
         const TIMEOUT: WAIT_EVENT = WAIT_EVENT(ERROR_TIMEOUT.0);
 
         match unsafe { WaitForSingleObjectEx(self.file_handle, timeout, BOOL(1)) } {
             SUCCESS |
             TIMEOUT => {
-                match self.completion_data.state {
+                match *self.completion_data.state.lock() {
                     AsyncIOCompletionState::InFlight              => Poll::Pending,
                     AsyncIOCompletionState::Completed(bytes_read) => Poll::Ready(Ok(bytes_read)),
                     AsyncIOCompletionState::Unsuccessful(err)     => Poll::Ready(Err(io::Error::from_raw_os_error(err as i32))),
