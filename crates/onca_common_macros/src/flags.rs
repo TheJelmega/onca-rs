@@ -14,11 +14,13 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	let flag_name = input_parsed.ident;
 	let enum_attrs = input_parsed.attrs;
 
+	// Extract the body
 	let body_data = match input_parsed.data {
 		Data::Enum(body) => body,
 		_ => return quote!( compile_error!("Not an enum"); )
 	};
 
+	// Define the u128 type to use
 	let u128_type = syn::parse_str::<Type>("u128").unwrap();
 	
 	let mut idents = Vec::<syn::Ident>::new();
@@ -28,6 +30,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut max_val : u128 = 0;
 	let mut has_zero = false;
 	
+	// Extract each variant and the data needed
 	for it in body_data.variants.into_iter() {
 		idents.push(it.ident);
 		attrs.push(it.attrs);
@@ -91,6 +94,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 		}
 	};
 
+	// Write out the new structure
 	quote!(
 
 		#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

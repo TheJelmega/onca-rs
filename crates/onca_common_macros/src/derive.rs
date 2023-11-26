@@ -84,7 +84,7 @@ pub fn enum_display(item: TokenStream) -> TokenStream {
     for variant in &body_data.variants {
         members.push(variant.ident.clone());
         let val = variant.attrs.iter()
-        .filter(|attr| attr.path.get_ident().map_or(false, |ident| ident.to_string() == "display"))
+        .filter(|attr| attr.path().get_ident().map_or(false, |ident| ident.to_string() == "display"))
         .map(|attr| attr.parse_args::<LitStr>().map_or(String::new(), |parsed| parsed.value()))
         .nth(0)
         .unwrap_or(variant.ident.to_string());
