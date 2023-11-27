@@ -2,7 +2,7 @@ use onca_common::{
     prelude::*,
     io, utils::is_flag_set,
 };
-use crate::{FileFlags, PathBuf};
+use crate::{EntryFlags, PathBuf};
 use windows::Win32::{
     Storage::FileSystem::{
         FILE_ATTRIBUTE_READONLY,
@@ -24,10 +24,6 @@ use windows::Win32::{
     },
     System::Environment::GetCurrentDirectoryA,
 };
-
-// Can't find these constants in windows headers, so create it here
-const MAX_PATH : usize = 260;
-const INVALID_FILE_SIZE : u32 = 0xFFFF_FFFF;
 
 pub(crate) mod entry;
 pub(crate) mod drive_volume;
@@ -59,23 +55,23 @@ fn high_low_to_u64(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | low as u64
 }
 
-fn dword_to_flags(dword: u32) -> FileFlags {
-    let mut flags = FileFlags::None;
-    if is_flag_set(dword, FILE_ATTRIBUTE_READONLY.0)              { flags |= FileFlags::ReadOnly; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_HIDDEN.0)                { flags |= FileFlags::Hidden; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_SYSTEM.0)                { flags |= FileFlags::System; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_DIRECTORY.0)             { flags |= FileFlags::Directory; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_ARCHIVE.0)               { flags |= FileFlags::Archive; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_DEVICE.0)                { flags |= FileFlags::Device; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_TEMPORARY.0)             { flags |= FileFlags::Temporary; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_SPARSE_FILE.0)           { flags |= FileFlags::Sparse; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_REPARSE_POINT.0)         { flags |= FileFlags::ReparsePoint; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_COMPRESSED.0)            { flags |= FileFlags::Compressed; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_OFFLINE.0)               { flags |= FileFlags::Offline; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED.0)   { flags |= FileFlags::NotContentIndexed; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_ENCRYPTED.0)             { flags |= FileFlags::Encrypted; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_VIRTUAL.0)               { flags |= FileFlags::Virtual; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_RECALL_ON_OPEN.0)        { flags |= FileFlags::RecallOnOpen; }
-    if is_flag_set(dword, FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS.0) { flags |= FileFlags::RecallOnDataAccess; }
+fn dword_to_flags(dword: u32) -> EntryFlags {
+    let mut flags = EntryFlags::None;
+    if is_flag_set(dword, FILE_ATTRIBUTE_READONLY.0)              { flags |= EntryFlags::ReadOnly; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_HIDDEN.0)                { flags |= EntryFlags::Hidden; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_SYSTEM.0)                { flags |= EntryFlags::System; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_DIRECTORY.0)             { flags |= EntryFlags::Directory; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_ARCHIVE.0)               { flags |= EntryFlags::Archive; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_DEVICE.0)                { flags |= EntryFlags::Device; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_TEMPORARY.0)             { flags |= EntryFlags::Temporary; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_SPARSE_FILE.0)           { flags |= EntryFlags::Sparse; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_REPARSE_POINT.0)         { flags |= EntryFlags::ReparsePoint; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_COMPRESSED.0)            { flags |= EntryFlags::Compressed; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_OFFLINE.0)               { flags |= EntryFlags::Offline; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED.0)   { flags |= EntryFlags::NotContentIndexed; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_ENCRYPTED.0)             { flags |= EntryFlags::Encrypted; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_VIRTUAL.0)               { flags |= EntryFlags::Virtual; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_RECALL_ON_OPEN.0)        { flags |= EntryFlags::RecallOnOpen; }
+    if is_flag_set(dword, FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS.0) { flags |= EntryFlags::RecallOnDataAccess; }
     flags
 }

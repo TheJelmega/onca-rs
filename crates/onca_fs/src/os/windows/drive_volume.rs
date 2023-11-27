@@ -1,4 +1,7 @@
-use std::{mem, num::NonZeroU32};
+use std::{
+    mem,
+    num::NonZeroU32
+};
 use onca_common::{
     prelude::*,
     io,
@@ -18,7 +21,7 @@ use windows::{
         System::WindowsProgramming::DRIVE_UNKNOWN,
     },
     Win32::{
-        Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_FILES},
+        Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_FILES, MAX_PATH},
         System::{
             WindowsProgramming::{DRIVE_NO_ROOT_DIR, DRIVE_REMOVABLE, DRIVE_FIXED, DRIVE_REMOTE, DRIVE_CDROM, DRIVE_RAMDISK},
             SystemServices::{FILE_CASE_SENSITIVE_SEARCH, FILE_CASE_PRESERVED_NAMES, FILE_UNICODE_ON_DISK, FILE_FILE_COMPRESSION, FILE_VOLUME_QUOTAS, FILE_SUPPORTS_SPARSE_FILES, FILE_SUPPORTS_REPARSE_POINTS, FILE_VOLUME_IS_COMPRESSED, FILE_SUPPORTS_ENCRYPTION, FILE_READ_ONLY_VOLUME}
@@ -26,7 +29,6 @@ use windows::{
     },
 };
 use crate::{PathBuf, DriveInfo, DriveType, VolumeInfo, FilesystemFlags, Path};
-use super::MAX_PATH;
 
 pub fn get_drive_info(path: &Path) -> io::Result<DriveInfo> {
     get_drive_info_internal(path)
@@ -205,7 +207,7 @@ fn get_drive_names_for_volume(guid: &[u8]) -> io::Result<Vec<PathBuf>> {
 fn get_volume_info_internal(path: PathBuf) -> io::Result<VolumeInfo> {
     let pwcstr = PCSTR(path.as_ptr());
 
-    const MAX_BUF_LEN : usize = MAX_PATH + 1;
+    const MAX_BUF_LEN : usize = MAX_PATH as usize + 1;
     let mut name = [0u8; MAX_BUF_LEN];
     let mut serial = 0u32;
     let mut max_comp_len = 0u32;

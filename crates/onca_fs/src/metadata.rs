@@ -6,7 +6,7 @@ use crate::EntryType;
 
 /// Flags for a filesystem entry's metadata.
 #[flags]
-pub enum FileFlags {
+pub enum EntryFlags {
     /// The entry is read-only. Applications can read the file, but cannot write to it or delete it.
     ReadOnly,
     /// The file or directory is hidden, meaning it is not included in an ordinary directory listing.
@@ -106,20 +106,55 @@ pub enum FileLinkCount {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
 pub struct FileTime(pub(crate) u64);
 
-#[derive(Clone, Copy, Default)]
-pub struct Metadata {
+/// Storage flags
+#[flags]
+pub enum StorageFlags {
+    /// The logical sectors of the storage devce are aligned to physical sector boundaries.
+    AlignedDevice,
+    /// The partition is algined to physical sector boundaries on the storage device
+    PartitionAlignedOnDevice,
+}
+
+/// File storage info
+#[derive(Clone, Copy, Debug)]
+pub struct StorageInfo {
+    /// Storage flags
+    pub flags: StorageFlags,
+    /// Logival bytes per sector reported by physical storage.
+    /// 
+    /// This is the smallest size for which uncached I/O is supported.
+    pub logical_bytes_per_sector: u32,
+    /// Bytes per sector for atomic writes.
+    /// 
+    /// Writes smaller than this may require a read before the entire block can be written atomically.
+    pub physical_bytes_per_sector_for_atomicity: u32,
+    /// Bytes per sector for optimal performance for writes.
+    pub physical_bytes_per_sector_for_performance: u32,
+    /// The size of the block used for atomicity by the file system.
+    /// 
+    /// This may be a trade-off between the optimial size of the physical media and one that is easier to adapt existing code and structures.
+    pub effective_physical_bytes_per_sector_for_atomicity: u32,
+    /// Logical sector offset within the first physical sector where the first logical sector is placed (in bytes).
+    pub byte_offset_per_sector_alignment: Option<u32>,
+    /// Offset used to align the partition to a physical sector boundary on the storage device (in bytes).
+    pub byte_offset_for_partition_alignment: Option<u32>,
+}
+
+/// File/directory metadata.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct MetaData {
     /// Entry type.
     pub entry_type:       EntryType,
     /// Flags.
-    pub flags:            FileFlags,
-    /// File permissions.
-    pub permissions:      Permission,
+    pub flags:            EntryFlags,
     /// File creation time.
     pub creation_time:    FileTime,
     /// File last access time.
     pub last_access_time: FileTime,
     /// File last write time.
     pub last_write_time:  FileTime,
+    /// File last change time.
+    pub last_change_time: FileTime,
     /// Size of the (uncompressed) file.
     pub file_size:        u64,
     /// Amount of space allocated for the file.
@@ -133,5 +168,7 @@ pub struct Metadata {
     /// Minimum alignment of the file (in bytes).
     pub min_align:        u32,
     /// Volume and file id.
-    pub volume_file_id:   VolumeFileId
+    pub volume_file_id:   VolumeFileId,
+    /// File storage info
+    pub storage_info:     Option<StorageInfo>,
 }

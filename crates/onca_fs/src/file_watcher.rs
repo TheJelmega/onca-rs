@@ -5,7 +5,7 @@ use onca_common_macros::flags;
 
 use crate::{
     os::os_imp,
-    PathBuf, Path, EntryType, FileFlags, FileTime,
+    PathBuf, Path, EntryType, EntryFlags, FileTime,
 };
 
 /// File watcher change filter
@@ -40,7 +40,7 @@ pub struct FileChangeMetadata {
     /// Entry type.
     pub entry_type:       EntryType,
     /// Flags.
-    pub flags:            FileFlags,
+    pub flags:            EntryFlags,
     /// File creation time.
     pub creation_time:    FileTime,
     /// File last access time.
@@ -262,7 +262,7 @@ impl Filewatcher {
     /// Calling this will terminate the filewatcher and cannot be restarted.
     /// 
     /// This function is mainly useful when calling it some time (i.e. 1 or more frames) before dropping the file watcher,
-    /// allowing the file watcher to be destroyed without having to wait for all I/O cancellation in the drop function
+    /// allowing the file watcher to be destroyed without having to wait for all I/O cancellation in the drop function.
     pub fn cancel(&self) -> io::Result<()> {
         self.handle.cancel()
     }

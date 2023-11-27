@@ -2,52 +2,34 @@ use std::{
     ffi::c_void,
     mem::{size_of, self},
     num::NonZeroU64,
-    sync::atomic::{AtomicU32, Ordering}, task::Poll, io::SeekFrom,
+    sync::{
+        atomic::{AtomicU32, Ordering, AtomicUsize},
+        Arc,
+    },
+    task::Poll,
+    io::SeekFrom,
 };
 use onca_common::{
     prelude::*,
-    io, sync::Mutex,
+    io, sync::Mutex, utils::is_flag_set,
 };
 use windows::{
     Win32::{
-        Storage::FileSystem::{
-            GetCompressedFileSizeA, 
-            CreateFileA, 
-            FILE_APPEND_DATA, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE, DELETE,
-            OPEN_ALWAYS, OPEN_EXISTING, CREATE_NEW, CREATE_ALWAYS, TRUNCATE_EXISTING,
-            DeleteFileA, 
-            ReadFile,  WriteFile, FlushFileBuffers,
-            SetFilePointerEx, SET_FILE_POINTER_MOVE_METHOD, FILE_BEGIN, FILE_CURRENT, FILE_END,
-            FILE_FLAGS_AND_ATTRIBUTES, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, FILE_FLAG_BACKUP_SEMANTICS,
-            SetFileInformationByHandle, GetFileInformationByHandleEx, FileBasicInfo,  FILE_BASIC_INFO, FileEndOfFileInfo, FILE_END_OF_FILE_INFO,
-            SetFileTime,  GetTempFileNameA, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ACCESS_RIGHTS, FILE_ATTRIBUTE_ENCRYPTED, FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_NO_BUFFERING, FILE_FLAG_OVERLAPPED, FILE_FLAG_RANDOM_ACCESS, FILE_FLAG_SEQUENTIAL_SCAN, FILE_FLAG_WRITE_THROUGH, FILE_ATTRIBUTE_ARCHIVE, ReadFileEx, WriteFileEx
+        Storage::FileSystem::*, 
+        Foundation::{GetLastError, HANDLE, CloseHandle, FILETIME, ERROR_SUCCESS, ERROR_TIMEOUT, WAIT_EVENT, BOOL, MAX_PATH},
+        System::{
+            IO::{OVERLAPPED, CancelIoEx, CancelIo},
+            Threading::{WaitForSingleObjectEx, SleepEx},
+            Memory::{CreateFileMappingA, PAGE_READONLY, PAGE_PROTECTION_FLAGS, PAGE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, MapViewOfFile, FILE_MAP_READ, FILE_MAP_WRITE, MEMORY_MAPPED_VIEW_ADDRESS, UnmapViewOfFile, FlushViewOfFile},
+            SystemInformation::{GetSystemInfo, SYSTEM_INFO},
         }, 
-        Foundation::{GetLastError, HANDLE, CloseHandle, FILETIME, ERROR_SUCCESS, ERROR_TIMEOUT, WAIT_EVENT, BOOL}, System::{IO::{OVERLAPPED, CancelIoEx, CancelIo}, Threading::WaitForSingleObjectEx}, 
     }, 
     core::PCSTR,
 };
 
-use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, os::windows::MAX_PATH, FileAsyncWriteResult, FileAsyncReadResult, FileAccessFlags};
+use crate::{Path, Permission, OpenMode, FileCreateFlags, PathBuf, FileAsyncWriteResult, FileAsyncReadResult, FileAccessFlags, MemoryMappedFileHandle, MappedViewAccess, MemoryMappedViewHandle};
 
-use super::{INVALID_FILE_SIZE, high_low_to_u64};
-
-/// Pathbuf must be null terminated
-pub(crate) fn get_compressed_size_pathbuf(path: &PathBuf) -> io::Result<Option<NonZeroU64>> {
-    scoped_alloc!(AllocId::TlsTemp);
-    
-    let path = path.to_path_buf();
-
-    let mut high = 0;
-    let low = unsafe { GetCompressedFileSizeA(PCSTR(path.as_ptr()), Some(&mut high)) };
-    if low == INVALID_FILE_SIZE {
-        match unsafe { GetLastError() } {
-            Ok(_)    => Ok(NonZeroU64::new(high_low_to_u64(high, low))),
-            Err(err) => Err(io::Error::from_raw_os_error(err.code().0)),
-        }
-    } else {
-        Ok(NonZeroU64::new(high_low_to_u64(high, low)))
-    }
-} 
+use super::{entry, high_low_to_u64};
 
 pub(crate) fn delete(path: &Path) -> io::Result<()> {
     scoped_alloc!(AllocId::TlsTemp);
@@ -57,7 +39,11 @@ pub(crate) fn delete(path: &Path) -> io::Result<()> {
     unsafe { DeleteFileA(PCSTR(path.as_ptr())) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
 }
 
-pub struct FileHandle(pub(crate) HANDLE);
+pub struct FileHandle{
+    pub(crate) handle: HANDLE,
+    pub(crate) async_op_count: Arc<AtomicUsize>,
+    pub(crate) permissions: Permission,
+}
 
 impl crate::file::FileHandle for FileHandle {
     fn flush_data(&mut self) -> io::Result<()> {
@@ -69,18 +55,18 @@ impl crate::file::FileHandle for FileHandle {
     }
 
     fn cancel_all_thread_async_io(&mut self) -> io::Result<()> {
-        unsafe { CancelIoEx(self.0, None) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
+        unsafe { CancelIoEx(self.handle, None) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 
     fn cancel_all_async_io(&mut self) -> io::Result<()> {
-        unsafe { CancelIo(self.0) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
+        unsafe { CancelIo(self.handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 
     fn set_len(&mut self, len: u64) -> io::Result<()> {
         let mut file_end_info = FILE_END_OF_FILE_INFO::default();
         file_end_info.EndOfFile = len as i64;
 
-        unsafe { SetFileInformationByHandle(self.0, FileEndOfFileInfo, &file_end_info as *const _ as *const c_void , size_of::<FILE_END_OF_FILE_INFO>() as u32) }
+        unsafe { SetFileInformationByHandle(self.handle, FileEndOfFileInfo, &file_end_info as *const _ as *const c_void , size_of::<FILE_END_OF_FILE_INFO>() as u32) }
             .map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 
@@ -89,7 +75,7 @@ impl crate::file::FileHandle for FileHandle {
         file_time.dwLowDateTime = time as u32;
         file_time.dwHighDateTime = (time >> 32) as u32;
 
-        unsafe { SetFileTime(self.0, None, None, Some(&file_time)) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
+        unsafe { SetFileTime(self.handle, None, None, Some(&file_time)) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 
     fn set_permissions(&mut self, permissions: Permission) -> io::Result<()> {
@@ -104,6 +90,10 @@ impl crate::file::FileHandle for FileHandle {
         self.set_attrib(FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, !content_indexed)
     }
 
+    fn get_metadata(&mut self) -> io::Result<crate::MetaData> {
+        entry::get_metadata(self.handle)
+    }
+
     fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         fn read_impl(handle: HANDLE, arr: &mut [u8]) -> io::Result<usize> {
             let mut bytes_read = 0;
@@ -112,7 +102,7 @@ impl crate::file::FileHandle for FileHandle {
         }
 
         if buf.len() <= u32::MAX as usize {
-            read_impl(self.0, &mut buf)
+            read_impl(self.handle, &mut buf)
 
         // While it's extremely unlikely someone will read >4GiB into memory, we still need to be able to do it
         } else {
@@ -122,7 +112,7 @@ impl crate::file::FileHandle for FileHandle {
 
             while bytes_read > 0 {
                 let to_read = buf.len().max(u32::MAX as usize);
-                bytes_read = read_impl(self.0, &mut buf[..to_read])?;
+                bytes_read = read_impl(self.handle, &mut buf[..to_read])?;
                 total_read += bytes_read;
                 buf = &mut buf[bytes_read..];
             }
@@ -134,7 +124,7 @@ impl crate::file::FileHandle for FileHandle {
     fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
         fn write_impl(handle: &mut FileHandle, buf: &[u8]) -> io::Result<usize> {
             let mut bytes_written = 0;
-            unsafe { WriteFile(handle.0, Some(buf), Some(&mut bytes_written), None) }
+            unsafe { WriteFile(handle.handle, Some(buf), Some(&mut bytes_written), None) }
             .map_or_else(|err| Err(io::Error::from_raw_os_error(err.code().0)), |_| Ok(bytes_written as usize))
         }
 
@@ -159,7 +149,7 @@ impl crate::file::FileHandle for FileHandle {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        unsafe { FlushFileBuffers(self.0) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
+        unsafe { FlushFileBuffers(self.handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
@@ -178,21 +168,21 @@ impl crate::file::FileHandle for FileHandle {
         overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
         overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
         
-        let completion_data = Box::new(AsyncIOCompletionData::new());
+        let completion_data = Box::new(AsyncIOCompletionData::new(self.async_op_count.clone()));
         overlapped.hEvent = unsafe { mem::transmute(&*completion_data) };
         
         
         let mut buffer = Vec::with_capacity(bytes_to_read as usize);
         unsafe { buffer.set_len(bytes_to_read as usize) };
         unsafe { ReadFileEx(
-            self.0,
+            self.handle,
             Some(&mut buffer),
             &mut *overlapped,
             Some(io_completion_callback)
         ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
         Ok(Box::new(AsyncReadResult{
-            file_handle: self.0,
+            file_handle: self.handle,
             buffer,
             overlapped,
             completion_data
@@ -206,22 +196,57 @@ impl crate::file::FileHandle for FileHandle {
         overlapped.Anonymous.Anonymous.Offset = cursor_pos as u32;
         overlapped.Anonymous.Anonymous.OffsetHigh = (cursor_pos >> 32) as u32;
 
-        let completion_data = Box::new(AsyncIOCompletionData::new());
+        let completion_data = Box::new(AsyncIOCompletionData::new(self.async_op_count.clone()));
         overlapped.hEvent = unsafe { mem::transmute(&*completion_data) };
 
         unsafe { WriteFileEx(
-            self.0,
+            self.handle,
             Some(&buf),
             &mut *overlapped,
             Some(io_completion_callback)
         ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
         Ok(Box::new(AsyncWriteResult{
-            file_handle: self.0,
+            file_handle: self.handle,
             _buffer: buf,
             overlapped,
             completion_data
         }))
+    }
+
+    fn map_memory(&mut self, mapped_size: Option<u64>) -> io::Result<Box<dyn MemoryMappedFileHandle>> {
+
+        let is_read = self.permissions.contains(Permission::Read);
+        let is_write = self.permissions.contains(Permission::Append | Permission::Write);
+        let is_exec = self.permissions.contains(Permission::Execute);
+
+        let protect = match (is_read, is_write, is_exec) {
+            (true, false, false) => PAGE_READONLY,
+            (true, true , false) => PAGE_READWRITE,
+            (true, false, true ) => PAGE_EXECUTE_READ,
+            (true, true , true ) => PAGE_EXECUTE_READWRITE,
+            _ => PAGE_PROTECTION_FLAGS(0),
+        };
+        
+        let (size_high, size_low) = mapped_size.map_or((0, 0), |size| ((size >> 32) as u32, size as u32));
+
+        let handle = unsafe { CreateFileMappingA(
+            self.handle,
+            None,
+            protect,
+            size_high,
+            size_low,
+            None,
+        ) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+        let mut sys_info = SYSTEM_INFO::default();
+        unsafe { GetSystemInfo(&mut sys_info) };
+
+        let mut file_info = BY_HANDLE_FILE_INFORMATION::default();
+        unsafe { GetFileInformationByHandle(self.handle, &mut file_info) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+        let size = high_low_to_u64(file_info.nFileSizeHigh, file_info.nFileSizeLow);
+        Ok(Box::new(MemoryMappedFile { handle, size, alloc_granularity: sys_info.dwAllocationGranularity }))
     }
 }
 
@@ -239,7 +264,7 @@ impl FileHandle {
         let mut path_buf = path.to_path_buf();
 
         if temporary {
-            let mut file_name = [0u8; MAX_PATH];
+            let mut file_name = [0u8; MAX_PATH as usize];
             let path_name = ['.' as u16, 0];
             let prefix_string = ['O' as u16, 'N' as u16, 'C' as u16, 'A' as u16, 0];
             static UUNIQUE : AtomicU32 = AtomicU32::new(1);
@@ -259,30 +284,23 @@ impl FileHandle {
         }
         
         let mut win32_access = FILE_ACCESS_RIGHTS(0);
-        if access_perms.contains(Permission::Read) {
-            win32_access |= FILE_GENERIC_READ;
-        }
-        if access_perms.contains(Permission::Write) {
-            win32_access |= FILE_GENERIC_WRITE;
-        } else if access_perms.contains(Permission::Append) {
-            win32_access |= FILE_APPEND_DATA;
-        }
-        if access_perms.contains(Permission::Execute) {
-            win32_access |= FILE_GENERIC_EXECUTE;
-        }
-        if access_perms.contains(Permission::Delete) {
-            win32_access |= DELETE;
-        }
+        if access_perms.contains(Permission::Read)    {  win32_access |= FILE_GENERIC_READ; }
+        if access_perms.contains(Permission::Write)   { win32_access |= FILE_GENERIC_WRITE; }
+        if access_perms.contains(Permission::Append)  { win32_access |= FILE_APPEND_DATA; }
+        if access_perms.contains(Permission::Execute) { win32_access |= FILE_GENERIC_EXECUTE; }
+        if access_perms.contains(Permission::Delete)  { win32_access |= DELETE; }
     
         let mut win32_access_share = 0;
-        if shared_access_perms.contains(Permission::Read) {
-            win32_access_share |= FILE_SHARE_READ.0;
+        if !access_flags.contains(FileAccessFlags::MemoryMappable) {
+            if shared_access_perms.contains(Permission::Read) {
+                win32_access_share |= FILE_SHARE_READ.0;
+            }
+            if shared_access_perms.contains(Permission::Write) || shared_access_perms.contains(Permission::Append) {
+                win32_access_share |= FILE_SHARE_WRITE.0;
+            }
+            // Do this is an assert, as the user should never pass Execute here
+            assert!(!is_flag_set(shared_access_perms, Permission::Execute), "Cannot share file execute permission");
         }
-        if shared_access_perms.contains(Permission::Write) || shared_access_perms.contains(Permission::Append) {
-            win32_access_share |= FILE_SHARE_WRITE.0;
-        }
-        // Do this is an assert, as the user should never pass Execture here
-        assert!(shared_access_perms & Permission::Execute != Permission::Execute, "Cannot share file execute permission");
 
         let win32_create_disposition = match open_mode {
             OpenMode::OpenOrCreate      => OPEN_ALWAYS,
@@ -304,13 +322,8 @@ impl FileHandle {
         if access_flags.contains(FileAccessFlags::SequentialAccess) { win32_flags |= FILE_FLAG_SEQUENTIAL_SCAN.0; }
         if access_flags.contains(FileAccessFlags::WriteThrough)     { win32_flags |= FILE_FLAG_WRITE_THROUGH.0; }
         if create_flags.contains(FileCreateFlags::AllowBackup)      { win32_flags |= FILE_FLAG_BACKUP_SEMANTICS.0; }
-
-        if open_link {
-            win32_flags |= FILE_FLAG_OPEN_REPARSE_POINT.0;
-        }
-        if temporary {
-            win32_flags |= FILE_ATTRIBUTE_TEMPORARY.0;
-        }
+        if open_link {  win32_flags |= FILE_FLAG_OPEN_REPARSE_POINT.0; }
+        if temporary {  win32_flags |= FILE_ATTRIBUTE_TEMPORARY.0; }
         
         let handle = unsafe { CreateFileA(
             PCSTR(path_buf.as_ptr()),
@@ -322,20 +335,20 @@ impl FileHandle {
             HANDLE::default()
         ) };
         match handle {
-            Ok(handle) => Ok((Box::new(FileHandle(handle)), path_buf)),
+            Ok(handle) => Ok((Box::new(FileHandle{ handle, permissions: access_perms, async_op_count: Arc::new(AtomicUsize::new(0)) }), path_buf)),
             Err(err) => Err(io::Error::from_raw_os_error(err.code().0))
         }
     }
 
     fn win32_seek(&mut self, dist: i64, method: SET_FILE_POINTER_MOVE_METHOD) -> io::Result<u64> {
         let mut cursor_pos = 0;
-        unsafe { SetFilePointerEx(self.0, dist, Some(&mut cursor_pos), method) }
+        unsafe { SetFilePointerEx(self.handle, dist, Some(&mut cursor_pos), method) }
             .map_or_else(|err| Err(io::Error::from_raw_os_error(err.code().0)), |_| Ok(cursor_pos as u64))
     }
 
     fn set_attrib(&mut self, attrib: FILE_FLAGS_AND_ATTRIBUTES, set: bool) -> io::Result<()> {
             let mut file_info = FILE_BASIC_INFO::default();
-            unsafe { GetFileInformationByHandleEx(self.0, FileBasicInfo, &mut file_info as *mut _ as *mut c_void, size_of::<FILE_BASIC_INFO>() as u32) }
+            unsafe { GetFileInformationByHandleEx(self.handle, FileBasicInfo, &mut file_info as *mut _ as *mut c_void, size_of::<FILE_BASIC_INFO>() as u32) }
                 .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
             if set {
@@ -343,16 +356,106 @@ impl FileHandle {
             } else {
                 file_info.FileAttributes |= attrib.0;
             }
-            unsafe { SetFileInformationByHandle(self.0, FileBasicInfo, &file_info as *const _ as *const c_void, size_of::<FILE_BASIC_INFO>() as u32) }
+            unsafe { SetFileInformationByHandle(self.handle, FileBasicInfo, &file_info as *const _ as *const c_void, size_of::<FILE_BASIC_INFO>() as u32) }
                 .map_err(|err| io::Error::from_raw_os_error(err.code().0))
     }
 }
 
 impl Drop for FileHandle {
     fn drop(&mut self) {
-        if !self.0.is_invalid() {
-            unsafe { _ = CloseHandle(self.0); }
+        if !self.handle.is_invalid() {
+            _ = unsafe { CancelIoEx(self.handle, None) };
+            while self.async_op_count.load(Ordering::Acquire) != 0 {
+                unsafe { SleepEx(1, true) };
+            }
+
+            unsafe { _ = CloseHandle(self.handle); }
         }
+    }
+}
+
+//--------------------------------------------------------------
+
+pub struct MemoryMappedFile {
+    handle:            HANDLE,
+    size:              u64,
+    alloc_granularity: u32
+}
+
+impl MemoryMappedFileHandle for MemoryMappedFile {
+    fn create_view(&self, access: MappedViewAccess, offset: u64, size: Option<NonZeroU64>) -> io::Result<Box<dyn crate::MemoryMappedViewHandle>> {
+        let access = match access {
+            MappedViewAccess::Read      => FILE_MAP_READ,
+            MappedViewAccess::ReadWrite => FILE_MAP_WRITE,
+        };
+
+        let size = size.map_or(0, |val| val.get());
+
+        let align_mask = self.alloc_granularity as u64 - 1;
+        let (offset, size) = if (offset & align_mask) != 0 {
+            let diff = offset & align_mask;
+            (offset - diff, if size == 0 { 0 } else { size + diff })
+        } else {
+            (offset, size)
+        };
+
+        let handle = unsafe { MapViewOfFile(
+            self.handle,
+            access,
+            (offset >> 32) as u32,
+            offset as u32,
+            size as usize,
+        ) };
+        if handle == MEMORY_MAPPED_VIEW_ADDRESS::default() {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(Box::new(MemoryMappedView {
+            handle,
+            offset,
+            size: if size == 0 { self.size - offset } else { size },
+        }))
+    }
+}
+
+impl Drop for MemoryMappedFile {
+    fn drop(&mut self) {
+        _ = unsafe { CloseHandle(self.handle) };
+    }
+}
+
+//--------------------------------------------------------------
+
+pub struct MemoryMappedView {
+    handle: MEMORY_MAPPED_VIEW_ADDRESS,
+    // store offset and size too, as are slightly different
+    offset: u64,
+    size:   u64
+}
+
+impl MemoryMappedViewHandle for MemoryMappedView {
+    fn get_slice(&self) -> &[u8] {
+        unsafe {
+            let ptr =  (self.handle.Value as *mut u8).add(self.offset as usize) ;
+            core::slice::from_raw_parts(ptr, self.size as usize)
+        }
+    }
+
+    fn get_mut_slice(&self) -> &mut [u8] {
+        unsafe {
+            let ptr =  (self.handle.Value as *mut u8).add(self.offset as usize) ;
+            core::slice::from_raw_parts_mut(ptr, self.size as usize)
+        }
+    }
+
+    fn flush(&self) -> io::Result<()> {
+        unsafe { FlushViewOfFile(self.handle.Value, self.size as usize) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))
+    }
+}
+
+impl Drop for MemoryMappedView {
+    fn drop(&mut self) {
+        _ = unsafe { UnmapViewOfFile(self.handle) };
     }
 }
 
@@ -379,17 +482,27 @@ unsafe extern "system" fn io_completion_callback(error_code: u32, bytes_transfer
     } else {
         *state = AsyncIOCompletionState::Unsuccessful(error_code);
     }
+    completion_data.async_op_count.fetch_sub(1, Ordering::Release);
 }
 
 struct AsyncIOCompletionData {
     state : Mutex<AsyncIOCompletionState>,
+    // The arc is used as a convenient type to store a reference count that can be shared across threads.
+    async_op_count: Arc<AtomicUsize>
 }
 
 impl AsyncIOCompletionData {
-    fn new() -> AsyncIOCompletionData {
-        AsyncIOCompletionData { state: Mutex::new(AsyncIOCompletionState::InFlight) }
+    fn new(async_op_count: Arc<AtomicUsize>) -> AsyncIOCompletionData {
+        async_op_count.fetch_add(1, Ordering::Release);
+        AsyncIOCompletionData {
+            state: Mutex::new(AsyncIOCompletionState::InFlight),
+            async_op_count
+        }
     }
 }
+
+const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
+const TIMEOUT: WAIT_EVENT = WAIT_EVENT(ERROR_TIMEOUT.0);
 
 pub(crate) struct AsyncReadResult {
     file_handle     : HANDLE, 
@@ -412,9 +525,14 @@ impl io::AsyncIOResult for AsyncReadResult {
     }
 
     fn wait(&mut self, timeout: u32) -> Poll<Self::Output> {
-        const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
-        const TIMEOUT: WAIT_EVENT = WAIT_EVENT(ERROR_TIMEOUT.0);
+        // Prevent waiting if the operation is already completed
+        if let Poll::Ready(val) = self.poll() {
+            return Poll::Ready(val);
+        }
 
+        
+
+        // We haven't been completed yet, so actually wait
         match unsafe { WaitForSingleObjectEx(self.file_handle, timeout, BOOL(1)) } {
             SUCCESS |
             TIMEOUT => {
@@ -465,9 +583,12 @@ impl io::AsyncIOResult for AsyncWriteResult {
     }
 
     fn wait(&mut self, timeout: u32) -> Poll<Self::Output> {
-        const SUCCESS: WAIT_EVENT = WAIT_EVENT(ERROR_SUCCESS.0);
-        const TIMEOUT: WAIT_EVENT = WAIT_EVENT(ERROR_TIMEOUT.0);
+        // Prevent waiting if the operation is already completed
+        if let Poll::Ready(val) = self.poll() {
+            return Poll::Ready(val);
+        }
 
+        // We haven't been completed yet, so actually wait
         match unsafe { WaitForSingleObjectEx(self.file_handle, timeout, BOOL(1)) } {
             SUCCESS |
             TIMEOUT => {

@@ -3,7 +3,7 @@ use onca_common_macros::EnumDisplay;
 
 use crate::{
     os::os_imp,
-    Path, PathBuf, Metadata, 
+    Path, PathBuf, MetaData, Permission, 
 };
 
 /// File system entry type.
@@ -50,7 +50,10 @@ pub trait EntryHandle {
     fn fully_qualified_path(&self) -> io::Result<PathBuf>;
 
     /// Get the file entry metadata.
-    fn metadata(&self) -> io::Result<Metadata>;
+    fn metadata(&self) -> io::Result<MetaData>;
+
+    /// Get the file permissions for the current user
+    fn permissions(&self) -> io::Result<Permission>;
 }
 
 //------------------------------
@@ -95,8 +98,16 @@ impl Entry {
 
     /// Get the metadata associated with the entry.
     #[must_use]
-    pub fn metadata(&self) -> io::Result<Metadata> {
+    pub fn metadata(&self) -> io::Result<MetaData> {
         self.handle.metadata()
+    }
+
+    /// Get the user's permissions for the entry
+    /// 
+    /// This is not included in the metadata, as this can be a much more complex function for some OS's.
+    #[must_use]
+    pub fn permissions(&self) -> io::Result<Permission> {
+        self.handle.permissions()
     }
 
     /// Get the file type of the entry.

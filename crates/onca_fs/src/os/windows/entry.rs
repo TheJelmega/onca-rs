@@ -1,29 +1,17 @@
 use std::{
     mem::size_of,
     ptr::null_mut,
-    ffi::c_void, num::NonZeroU32
+    ffi::c_void, num::{NonZeroU32, NonZeroU64}
 };
 use onca_common::{
     prelude::*,
-    io, utils::{self, is_flag_set},
+    io,
+    utils::{self, is_flag_set},
 };
 use windows::{
     Win32::{
         Foundation::{HANDLE, ERROR_INSUFFICIENT_BUFFER, PSID, LUID, CloseHandle},
-        Storage::FileSystem::{
-            GetFileInformationByHandleEx,
-            FileStandardInfo, FILE_STANDARD_INFO,
-            FindFirstFileA, WIN32_FIND_DATAA, 
-            FindClose, FindNextFileA,
-            WIN32_FILE_ATTRIBUTE_DATA,
-            GetFileAttributesExA, GetFileExInfoStandard, CreateFileA,
-            FILE_READ_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, FILE_ALIGNMENT_INFO,
-            FileAlignmentInfo,
-            FILE_ID_INFO,
-            FileIdInfo,
-            FILE_READ_DATA, FILE_WRITE_ATTRIBUTES, FILE_EXECUTE, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_WRITE_EA,
-            DELETE, FILE_GENERIC_READ, OPEN_ALWAYS, GetFinalPathNameByHandleA, FILE_NAME_NORMALIZED, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_DIRECTORY
-        }, 
+        Storage::FileSystem::*, 
         Security::{
             GetFileSecurityA, LookupAccountNameA, SID, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SID_NAME_USE, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
             Authorization::{
@@ -33,14 +21,14 @@ use windows::{
         },
         System::{
             SystemServices::MAXIMUM_ALLOWED, 
-            WindowsProgramming::GetUserNameA
+            WindowsProgramming::{GetUserNameA, STORAGE_INFO_FLAGS_ALIGNED_DEVICE, STORAGE_INFO_FLAGS_PARTITION_ALIGNED_ON_DEVICE}
         }, NetworkManagement::NetManagement::UNLEN,
     }, 
     core::{PCSTR, PSTR, PCWSTR}
 };
 
-use crate::{Metadata, EntryType, FileFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount, EntryHandle, EntrySearchHandle, FileTime};
-use super::{high_low_to_u64, dword_to_flags, file};
+use crate::{MetaData, EntryType, EntryFlags, Permission, Path, PathBuf, VolumeFileId, FileLinkCount, EntryHandle, EntrySearchHandle, FileTime, StorageInfo, StorageFlags};
+use super::dword_to_flags;
 
 //------------------------------
 
@@ -110,23 +98,7 @@ impl crate::entry::EntryHandle for NativeEntryHandle {
         Ok(PathBuf::from_str(&path).unwrap())
     }
 
-    fn metadata(&self) -> io::Result<Metadata> {
-        let mut win32_attribs = WIN32_FILE_ATTRIBUTE_DATA::default();
-        unsafe { GetFileAttributesExA(PCSTR(self.path.as_ptr()), GetFileExInfoStandard, &mut win32_attribs as *mut _ as *mut c_void) }
-            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-        
-        let mut flags = dword_to_flags(win32_attribs.dwFileAttributes);
-        let is_reparse_point = flags.contains(FileFlags::ReparsePoint);
-        let is_directory = flags.contains(FileFlags::Directory);
-        let file_type = match (is_reparse_point, is_directory) {
-            (true, true)   => EntryType::SymlinkDirectory,
-            (true, false)  => EntryType::SymlinkFile,
-            (false, true)  => EntryType::Directory,
-            (false, false) => EntryType::File,
-        };
-
-        let permissions = get_permissions_pcstr(PCSTR(self.path.as_ptr()))?;
-
+    fn metadata(&self) -> io::Result<MetaData> {
         // Open file to get remaining data
         let handle = unsafe { CreateFileA(
             PCSTR(self.path.as_ptr()),
@@ -138,47 +110,96 @@ impl crate::entry::EntryHandle for NativeEntryHandle {
             HANDLE::default()
         )}.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
 
+        let metadata = get_metadata(handle);
+        unsafe { CloseHandle(handle) }.map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+        metadata
+    }
 
-        let mut std_info = FILE_STANDARD_INFO::default();
-        unsafe { GetFileInformationByHandleEx(handle, FileStandardInfo, &mut std_info as *mut _ as *mut c_void, size_of::<FILE_STANDARD_INFO>() as u32) }
-            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-
-        let alloc_size = std_info.AllocationSize as u64;
-        let num_links = NonZeroU32::new(std_info.NumberOfLinks).map_or(FileLinkCount::Unknown, |count| FileLinkCount::Known(count));
-        if std_info.DeletePending.0 != 0 {
-            flags |= FileFlags::MarkedForDelete;
-        }
-
-        let mut align_info = FILE_ALIGNMENT_INFO::default();
-        unsafe { GetFileInformationByHandleEx(handle, FileAlignmentInfo, &mut align_info as *mut _ as * mut c_void, size_of::<FILE_ALIGNMENT_INFO>() as u32) }
-            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-        let min_align = align_info.AlignmentRequirement;
-
-        let mut file_id_info = FILE_ID_INFO::default();
-        unsafe { GetFileInformationByHandleEx(handle, FileIdInfo, &mut file_id_info as *mut _ as * mut c_void, size_of::<FILE_ID_INFO>() as u32) }
-            .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
-        let volume_file_id = VolumeFileId{ volume_id: file_id_info.VolumeSerialNumber, file_id: file_id_info.FileId.Identifier };
-
-        Ok(Metadata {
-            entry_type: file_type,
-            flags,
-            permissions,
-            creation_time: FileTime(high_low_to_u64(win32_attribs.ftCreationTime.dwHighDateTime, win32_attribs.ftCreationTime.dwLowDateTime)),
-            last_access_time: FileTime(high_low_to_u64(win32_attribs.ftLastAccessTime.dwHighDateTime, win32_attribs.ftLastAccessTime.dwLowDateTime)),
-            last_write_time: FileTime(high_low_to_u64(win32_attribs.ftLastWriteTime.dwHighDateTime, win32_attribs.ftLastWriteTime.dwLowDateTime)),
-            file_size: high_low_to_u64(win32_attribs.nFileSizeHigh, win32_attribs.nFileSizeLow),
-            alloc_size,
-            compressed_size: file::get_compressed_size_pathbuf(&self.path)?,
-            num_links,
-            min_align,
-            volume_file_id,
-        })
+    fn permissions(&self) -> io::Result<Permission> {
+        get_permissions_pcstr(PCSTR(self.path.as_ptr()))
     }
 }
 
 //------------------------------
 
-fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
+pub(crate) fn get_metadata(handle: HANDLE) -> io::Result<MetaData> {
+    let mut basic_info = FILE_BASIC_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileBasicInfo, &mut basic_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let mut flags = dword_to_flags(basic_info.FileAttributes);
+    let is_reparse_point = flags.contains(EntryFlags::ReparsePoint);
+    let is_directory = flags.contains(EntryFlags::Directory);
+    let enty_type = match (is_reparse_point, is_directory) {
+        (true, true)   => EntryType::SymlinkDirectory,
+        (true, false)  => EntryType::SymlinkFile,
+        (false, true)  => EntryType::Directory,
+        (false, false) => EntryType::File,
+    };
+
+    let mut standard_info = FILE_STANDARD_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileStandardInfo, &mut standard_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let mut compression_info = FILE_COMPRESSION_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileCompressionInfo, &mut compression_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let mut align_info = FILE_ALIGNMENT_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileAlignmentInfo, &mut align_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let mut storage_info = FILE_STORAGE_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileStorageInfo, &mut storage_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let mut storage_flags = StorageFlags::None;
+    storage_flags.set(StorageFlags::AlignedDevice, is_flag_set(storage_info.Flags, STORAGE_INFO_FLAGS_ALIGNED_DEVICE));
+    storage_flags.set(StorageFlags::PartitionAlignedOnDevice, is_flag_set(storage_info.Flags, STORAGE_INFO_FLAGS_PARTITION_ALIGNED_ON_DEVICE));
+
+    let storage_info = StorageInfo {
+        logical_bytes_per_sector: storage_info.LogicalBytesPerSector,
+        physical_bytes_per_sector_for_atomicity: storage_info.PhysicalBytesPerSectorForAtomicity,
+        physical_bytes_per_sector_for_performance: storage_info.PhysicalBytesPerSectorForPerformance,
+        flags: storage_flags,
+        effective_physical_bytes_per_sector_for_atomicity: storage_info.FileSystemEffectivePhysicalBytesPerSectorForAtomicity,
+        byte_offset_per_sector_alignment: if storage_info.ByteOffsetForSectorAlignment == u32::MAX { None } else { Some(storage_info.ByteOffsetForSectorAlignment) },
+        byte_offset_for_partition_alignment: if storage_info.ByteOffsetForPartitionAlignment == u32::MAX { None } else { Some(storage_info.ByteOffsetForPartitionAlignment) },
+    };
+
+
+    let mut id_info = FILE_ID_INFO::default();
+    unsafe { GetFileInformationByHandleEx(handle, FileIdInfo, &mut id_info as *mut _ as *mut _, size_of::<FILE_BASIC_INFO>() as u32) }
+        .map_err(|err| io::Error::from_raw_os_error(err.code().0))?;
+
+    let volume_file_id = VolumeFileId {
+        volume_id: id_info.VolumeSerialNumber,
+        file_id: id_info.FileId.Identifier,
+    };
+
+    let num_links = NonZeroU32::new(standard_info.NumberOfLinks).map_or(FileLinkCount::Unknown, |count| FileLinkCount::Known(count));
+    if standard_info.DeletePending.into() {
+        flags |= EntryFlags::MarkedForDelete;
+    }
+
+    Ok(MetaData {
+        entry_type: enty_type,
+        flags,
+        creation_time: FileTime(basic_info.CreationTime as u64),
+        last_access_time: FileTime(basic_info.LastAccessTime as u64),
+        last_write_time: FileTime(basic_info.LastWriteTime as u64),
+        last_change_time: FileTime(basic_info.ChangeTime as u64),
+        file_size: standard_info.EndOfFile as u64,
+        alloc_size: standard_info.AllocationSize as u64,
+        compressed_size: NonZeroU64::new(compression_info.CompressedFileSize as u64),
+        num_links,
+        min_align: align_info.AlignmentRequirement,
+        volume_file_id,
+        storage_info: Some(storage_info),
+    })
+}
+
+pub(crate) fn get_permissions_pcstr(pcstr: PCSTR) -> io::Result<Permission> {
     scoped_alloc!(AllocId::TlsTemp);
 
     // Get the SID of the current user, we will use this later to get the correct file permissions for the user

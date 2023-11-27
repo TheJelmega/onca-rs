@@ -19,7 +19,7 @@ use windows::{
     core::PCSTR
 };
 
-use crate::{FileWatcherHandle, FileWatcherFilter, PathBuf, FileChangeInfo, FileTime, FileChangeMetadata, EntryType, FileFlags};
+use crate::{FileWatcherHandle, FileWatcherFilter, PathBuf, FileChangeInfo, FileTime, FileChangeMetadata, EntryType, EntryFlags};
 
 use super::dword_to_flags;
 
@@ -55,8 +55,8 @@ unsafe extern "system" fn io_completion_callback(err_code: u32, number_of_bytes_
                 },
                 FILE_ACTION_MODIFIED => {
                     let flags = dword_to_flags(notify_info.FileAttributes);
-                    let is_reparse_point = flags.contains(FileFlags::ReparsePoint);
-                    let is_directory = flags.contains(FileFlags::Directory);
+                    let is_reparse_point = flags.contains(EntryFlags::ReparsePoint);
+                    let is_directory = flags.contains(EntryFlags::Directory);
                     let entry_type = match (is_reparse_point, is_directory) {
                         (true, true)   => EntryType::SymlinkDirectory,
                         (true, false)  => EntryType::SymlinkFile,
