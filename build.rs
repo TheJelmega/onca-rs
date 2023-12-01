@@ -147,6 +147,11 @@ fn main() {
     #[cfg(windows)]
     println!("cargo:rustc-link-arg=/DEF:D3D12\\agility.def");
 
+    // Link onca_alloc dylib
+    // TODO: filename is only for windows atm
+    println!("cargo:rustc-link-lib=onca_malloc{dylib_ext}");
+
+    // Setup rerun
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=data/shaders/");
 }
