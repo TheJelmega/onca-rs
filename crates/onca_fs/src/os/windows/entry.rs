@@ -6,7 +6,7 @@ use std::{
 use onca_common::{
     prelude::*,
     io,
-    utils::{self, is_flag_set},
+    utils::{self, is_flag_set}, guid::Guid,
 };
 use windows::{
     Win32::{
@@ -174,7 +174,7 @@ pub(crate) fn get_metadata(handle: HANDLE) -> io::Result<MetaData> {
 
     let volume_file_id = VolumeFileId {
         volume_id: id_info.VolumeSerialNumber,
-        file_id: id_info.FileId.Identifier,
+        file_id: unsafe { Guid::from_raw(id_info.FileId.Identifier) },
     };
 
     let num_links = NonZeroU32::new(standard_info.NumberOfLinks).map_or(FileLinkCount::Unknown, |count| FileLinkCount::Known(count));

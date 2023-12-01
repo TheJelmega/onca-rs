@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Link onca_malloc for tests
+build = "../../build_with_malloc.rs"
+
 [features]
 default = ["memory_tracking", "cached_interned_strings"]
 memory_tracking = []
@@ -30,7 +33,15 @@ windows = { version = "0.51.1", features = [
         "Win32_System_LibraryLoader",
         "Win32_System_SystemServices",
         "Win32_System_SystemInformation",
+        "Win32_System_Rpc",
         "Win32_Globalization",
         "Win32_System_Console",
         "Win32_System_Ole"
     ] }
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "hash"
+harness = false

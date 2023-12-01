@@ -38,6 +38,7 @@ pub mod time;
 pub mod sys;
 pub mod dynlib;
 
+pub mod guid;
 pub mod utils;
 pub mod hashing;
 

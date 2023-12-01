@@ -88,8 +88,7 @@ pub struct VolumeFileId {
     /// Volume id.
     pub volume_id : u64,
     /// File id.
-    // TODO: replace with Guid
-    pub file_id : [u8; 16],
+    pub file_id : Guid,
 }
 
 /// Number of file links.
