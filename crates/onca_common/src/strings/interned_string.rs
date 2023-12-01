@@ -44,7 +44,7 @@ impl InternedString {
 
         Self {
             id,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "cached_interned_strings")]
             cached: _cached,
         }
     }
@@ -53,11 +53,11 @@ impl InternedString {
     /// 
     /// When in debug, no value will be cached if the string has not yet been added to the interned string manager
     pub fn from_raw_id(id: StringId) -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "cached_interned_strings")]
         let cached = INTERNED_STRING_MANAGER.get_cached(id);
         Self {
             id,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "cached_interned_strings")]
             cached
         }
     }
