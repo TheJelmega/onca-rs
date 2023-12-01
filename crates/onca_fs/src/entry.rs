@@ -1,45 +1,9 @@
 use onca_common::io;
-use onca_common_macros::EnumDisplay;
 
 use crate::{
     os::os_imp,
-    Path, PathBuf, MetaData, Permission, 
+    Path, PathBuf, MetaData, Permission, EntryType, 
 };
-
-/// File system entry type.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, EnumDisplay)]
-pub enum EntryType {
-    /// Unknown.
-    #[default]
-    Unknown,
-    /// File (or hard-link on Windowns).
-    File,
-    /// Directory
-    Directory,
-    /// Symbolic link (or junction on Windows) to a file.
-    SymlinkFile,
-    /// Symbolic link (or junction on Windows) to a file.
-    SymlinkDirectory,
-}
-
-impl EntryType {
-    /// Check if the entry refers to a file, either directly or via a symlink
-    pub fn is_file(&self) -> bool {
-        matches!(*self, EntryType::File | EntryType::SymlinkFile)
-    }
-
-    /// Check if the entry refers to a directory, either directly or via a symlink
-    pub fn is_dir(&self) -> bool {
-        matches!(*self, EntryType::Directory | EntryType::SymlinkDirectory)
-    }
-
-    /// Check if the entry is a symlink, to either a file or directory
-    pub fn is_symlink(&self) -> bool {
-        matches!(*self, EntryType::SymlinkFile | EntryType::SymlinkDirectory)
-    }
-}
-
-//------------------------------
 
 /// A handle to a filesystem entry.
 pub trait EntryHandle {
