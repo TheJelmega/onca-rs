@@ -13,7 +13,7 @@ onca_common = { path = "../onca_common" }
 onca_logging = { path = "../onca_logging" }
 onca_ral = { path = "../onca_ral" }
 
-windows = { version = "0.51.1", features = [
+windows = { version = "0.52.0", features = [
     "Win32_Foundation",
     "Win32_System_WindowsProgramming",
     "Win32_Graphics_Dxgi",

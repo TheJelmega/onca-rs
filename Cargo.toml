@@ -39,7 +39,7 @@ onca_ral_vulkan = { path = "crates/onca_ral_vulkan" }
 onca_ral_software = { path = "crates/onca_ral_software" }
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.51.1", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security"] }
+windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security"] }
 onca_windows_utils = { path = "crates/onca_windows_utils" }
 
 [build-dependencies]
