@@ -28,22 +28,22 @@ pub enum GuidVariant {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay)]
 pub enum GuidVersion {
     /// Version 1: Time based version specified in RFC4122.
-    #[display = "Version 1: Time-based"]
+    #[display("Version 1: Time-based")]
     Version1,
     /// Version 2: DCE security version (with embedded POSIX UIDs).
-    #[display = "Version 2: DCE security"]
+    #[display("Version 2: DCE security")]
     Version2,
     /// Version 3: Named based version using MD5.
-    #[display = "Version 3: Name-based MD5"]
+    #[display("Version 3: Name-based MD5")]
     Version3,
     /// Version 4: Randomly or pseudo-randomly generated version.
-    #[display = "Version 4: Random"]
+    #[display("Version 4: Random")]
     Version4,
     /// Version 5: Name based version using SHA-1.
-    #[display = "Version 5: Name-based SHA-1"]
+    #[display("Version 5: Name-based SHA-1")]
     Version5,
     /// Version 6-16: Unknown.
-    #[display = "Version 6-16: Unknown"]
+    #[display("Version 6-16: Unknown")]
     Unknown,
 }
 

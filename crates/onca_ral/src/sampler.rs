@@ -55,19 +55,19 @@ pub enum SamplerAddressMode {
 pub enum Anisotropy {
     /// 1x anisotropy
     #[default]
-    #[display = "1x"]
+    #[display("1x")]
     X1  = 1,
     /// 2x anisotropy
-    #[display = "2x"]
+    #[display("2x")]
     X2  = 2,
     /// 4x anisotropy
-    #[display = "4x"]
+    #[display("4x")]
     X4  = 4,
     /// 8x anisotropy
-    #[display = "8x"]
+    #[display("8x")]
     X8  = 8,
     /// 16x anisotropy
-    #[display = "16x"]
+    #[display("16x")]
     X16 = 16,
 }
 
