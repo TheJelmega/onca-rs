@@ -32,6 +32,7 @@ pub mod mem;
 pub mod collections;
 pub mod strings;
 pub mod io;
+pub mod fmt;
 
 pub mod time;
 

@@ -1,7 +1,7 @@
 use std::ops::*;
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct BitSet<const COUNT: usize> 
 // We need a constraint here to make the compiler happy
 where
@@ -28,6 +28,15 @@ impl<const COUNT: usize> BitSet<COUNT> where
 
     pub fn new() -> Self {
         Self { bits: [0; (COUNT + 63) / 64] }
+    }
+
+    pub fn from_bits(bits: [u64; (COUNT + 63) / 64]) -> Self {
+        Self { bits }
+    }
+
+    /// Get the raw bitset representation
+    pub fn bits(&self) -> &[u64] {
+        &self.bits
     }
 
     /// Set the given bit.

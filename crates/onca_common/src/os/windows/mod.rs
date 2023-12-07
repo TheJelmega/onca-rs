@@ -23,6 +23,7 @@ pub mod time;
 pub mod thread;
 pub mod dynlib;
 pub mod misc;
+pub mod sys_info;
 
 pub(crate) fn errno() -> u32 {
     match unsafe { GetLastError() } {

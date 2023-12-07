@@ -5,6 +5,12 @@ use crate::os;
 pub mod thread_id;
 pub use thread_id::*;
 
+pub mod info;
+pub use info::*;
+
+pub mod arch;
+pub use arch::*;
+
 
 /// Get the current OS error
 pub fn errno() -> u32 {
