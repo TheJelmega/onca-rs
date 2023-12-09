@@ -11,7 +11,6 @@ use onca_common::{
     sync::{RwLock, Mutex},
     time::TimeStamp,
 };
-use onca_terminal::Terminal;
 
 struct LoggerPtr(*const Logger);
 
@@ -228,10 +227,6 @@ impl LoggerState {
 
     fn flush(&mut self) {
         if let Some(cache) = &mut self.cache {
-            if self.log_to_console {
-                _ = Terminal::write(&cache);
-            }
-
             for writer in &mut self.writers {
                 if let Some(writer) = writer {
                     _ = writer.write(cache.as_bytes());

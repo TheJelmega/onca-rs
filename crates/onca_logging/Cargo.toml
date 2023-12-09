@@ -8,6 +8,3 @@ edition = "2021"
 [dependencies]
 onca_common = { path = "../onca_common" }
 onca_common_macros = { path = "../onca_common_macros" }
-
-# Should eventually be removed, maybe when we have an stdout that's io::Write
-onca_terminal = { path = "../onca_terminal" }
