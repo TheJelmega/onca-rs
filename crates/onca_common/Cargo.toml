@@ -14,6 +14,7 @@ memory_tracking = []
 cached_interned_strings = []
 
 [dependencies]
+onca_base = { path = "../onca_base" }
 onca_common_macros = { path = "../onca_common_macros" }
 onca_malloc = { path = "../onca_malloc"}
 

@@ -18,7 +18,7 @@ pub fn enum_count(item: TokenStream) -> TokenStream {
     let count = body_data.variants.len();
 
     quote!{
-        impl onca_common::utils::EnumCountT for #ident {
+        impl onca_base::EnumCountT for #ident {
             const COUNT: usize = #count;
         }
     }
@@ -46,11 +46,18 @@ pub fn enum_from_index(item: TokenStream) -> TokenStream {
     }
 
     quote!{
-        impl onca_common::utils::EnumFromIndexT for #ident {
+        impl onca_base::EnumFromIndexT for #ident {
             fn from_idx(idx: usize) -> Option<Self> {
                 match idx {
                     #(#indices => Some(Self::#variants),)*
                     _ => None,
+                }
+            }
+            
+            fn from_idx_or(idx: usize, default: Self) -> Self {
+                match idx {
+                    #(#indices => Self::#variants,)*
+                    _ => default,
                 }
             }
 

@@ -128,25 +128,13 @@ impl fmt::Display for Manufacturer {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumDisplay, Default, EnumFromIndex)]
 pub enum ProcessorType {
     #[default]
     OEM,
     IntelOverdrive,
     DualProcessor,
     Reserved
-}
-
-impl ProcessorType {
-    fn from_idx(idx: u8) -> Self {
-        match idx {
-            0 => ProcessorType::OEM,
-            1 => ProcessorType::IntelOverdrive,
-            2 => ProcessorType::DualProcessor,
-            3 => ProcessorType::Reserved,
-            _ => unreachable!()
-        }
-    }
 }
 
 /// CPU family info
@@ -749,7 +737,7 @@ pub enum FeatureFlags5 {
     UcLockDisable,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, EnumDisplay)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, EnumDisplay, EnumFromIndex)]
 pub enum CacheTlbDescriptor {
     /// Null descriptor.
     #[display("Null descriptor")]
@@ -1610,6 +1598,8 @@ impl fmt::Display for CpuidInfo {
 unsafe fn get_features() -> CpuidInfo {
     use core::arch::x86_64::{__cpuid, __cpuid_count, __get_cpuid_max};
 
+    use onca_base::EnumFromIndexT;
+
     use crate::{utils::is_flag_set, KiB};
 
     let (highest_leaf, _) = __get_cpuid_max(0);
@@ -1673,7 +1663,7 @@ unsafe fn get_features() -> CpuidInfo {
 
         let family_id = if family_id == 15 { extended_family_id + family_id } else { family_id };
         
-        let processor_type = ProcessorType::from_idx(((res1.eax >> 12) & 0x3) as u8);
+        let processor_type = ProcessorType::from_idx_unchecked(((res1.eax >> 12) & 0x3) as usize);
         let stepping_id = (res1.eax & 0xF) as u8;
 
         let flags = ((res1.ecx as u64) << 32) | (res1.edx as u64);
@@ -1713,160 +1703,7 @@ unsafe fn get_features() -> CpuidInfo {
                 let idx = i & 0x3;
                 let byte = (reg << idx) & 0xFF;
 
-                descs[i - 1] = match byte {
-                    0x01 => CacheTlbDescriptor::Itlb32e4kp4a,
-                    0x02 => CacheTlbDescriptor::Itlb2e4mpFa,
-                    0x03 => CacheTlbDescriptor::Dtlb64e4kp4a,
-                    0x04 => CacheTlbDescriptor::Dtlb8e4mp4a,
-                    0x05 => CacheTlbDescriptor::Dtlb32e4mp4a,
-                    0x06 => CacheTlbDescriptor::L1i8k4a32l,
-                    0x08 => CacheTlbDescriptor::L1i16k4a32l,
-                    0x09 => CacheTlbDescriptor::L1i32k4a64l,
-                    0x0A => CacheTlbDescriptor::L1d8k2a32l,
-                    0x0B => CacheTlbDescriptor::Itlb4e4mpFa,
-                    0x0C => CacheTlbDescriptor::L1d16k4a32l,
-                    0x0D => CacheTlbDescriptor::L1d16k4a64l,
-                    0x0E => CacheTlbDescriptor::L1d24k6a64l,
-
-                    0x10 => CacheTlbDescriptor::L1d16k4a32lIA32,
-                    0x15 => CacheTlbDescriptor::L1i16k4a32lIA32,
-                    0x1A => CacheTlbDescriptor::L2c96k6a64lIA32,
-                    0x1D => CacheTlbDescriptor::L2c128k8a32lIA32,
-                    
-                    0x21 => CacheTlbDescriptor::L2c256k8a64l,
-                    0x22 => CacheTlbDescriptor::L3c512k4a64l2s,
-                    0x23 => CacheTlbDescriptor::L3c1m8a64l2s,
-                    0x24 => CacheTlbDescriptor::L2c1m16a64l,
-                    0x25 => CacheTlbDescriptor::L4c2m8a64l2d,
-                    0x26 => CacheTlbDescriptor::Reported26h,
-                    0x27 => CacheTlbDescriptor::Reported27h,
-                    0x28 => CacheTlbDescriptor::Reported28h,
-                    0x29 => CacheTlbDescriptor::L3c4m8a64l2s,
-                    0x2C => CacheTlbDescriptor::L1d32k8a64l,
-
-                    0x30 => CacheTlbDescriptor::L1i32k8a64l,
-                    0x39 => CacheTlbDescriptor::L2c128k8a64l2s,
-                    0x3A => CacheTlbDescriptor::L2c192k6a64l2s,
-                    0x3B => CacheTlbDescriptor::L2c128k2a64l2s,
-                    0x3C => CacheTlbDescriptor::L2c256k4a64l2s,
-                    0x3D => CacheTlbDescriptor::L2c384k6a64l2s,
-                    0x3E => CacheTlbDescriptor::L2c512k4a64l2s,
-
-                    0x40 => CacheTlbDescriptor::NoL3Present,
-                    0x41 => CacheTlbDescriptor::L2c128k4a32l,
-                    0x42 => CacheTlbDescriptor::L2c256k4a32l,
-                    0x43 => CacheTlbDescriptor::L2c512k4a32l,
-                    0x44 => CacheTlbDescriptor::L2c1m4a32l,
-                    0x45 => CacheTlbDescriptor::L2c2m4a32l,
-                    0x46 => CacheTlbDescriptor::L3c4m4a64l,
-                    0x47 => CacheTlbDescriptor::L3c8m8a64l,
-                    0x48 => CacheTlbDescriptor::L2c3m12a64l,
-                    0x49 => CacheTlbDescriptor::L23c4m16a64l,
-                    0x4A => CacheTlbDescriptor::L3c6m12a64l,
-                    0x4B => CacheTlbDescriptor::L3c8m16a64l,
-                    0x4C => CacheTlbDescriptor::L3c12m12a64l,
-                    0x4D => CacheTlbDescriptor::L3c16m16a64l,
-                    0x4E => CacheTlbDescriptor::L2c6m24a64l,
-                    0x4F => CacheTlbDescriptor::Itlb32e4kp,
-
-                    0x50 => CacheTlbDescriptor::Itlb64efa4k2m4mp,
-                    0x51 => CacheTlbDescriptor::Itlb128efa4k2m4mp,
-                    0x52 => CacheTlbDescriptor::Itlb256efa4k2m4mp,
-                    0x55 => CacheTlbDescriptor::Itlb7e2m4mpfa,
-                    0x56 => CacheTlbDescriptor::Dtlb16e4mp4a,
-                    0x57 => CacheTlbDescriptor::Dtlb16e4kp4a,
-                    0x59 => CacheTlbDescriptor::Dtlb16e4kpfa,
-                    0x5A => CacheTlbDescriptor::Dtlb32e2m4mp4a,
-                    0x5B => CacheTlbDescriptor::Dtlb64e4k4mpfa,
-                    0x5C => CacheTlbDescriptor::Dtlb128e4k4mpfa,
-                    0x5D => CacheTlbDescriptor::Dtlb256e4k4mpfa,
-
-                    0x60 => CacheTlbDescriptor::L1d16k8a64l,
-                    0x61 => CacheTlbDescriptor::Itlb48e4kpfa,
-                    0x63 => CacheTlbDescriptor::TwoDtlbs32e2M4Mp4a4e1GpFa,
-                    0x64 => CacheTlbDescriptor::Dtlb512e4kp4a,
-                    0x66 => CacheTlbDescriptor::L1d8k4a64l,
-                    0x67 => CacheTlbDescriptor::L1d16k4a64l2,
-                    0x68 => CacheTlbDescriptor::L1d32k4a64l,
-                    0x6A => CacheTlbDescriptor::Dtlb64e4kp8a,
-                    0x6B => CacheTlbDescriptor::Dtlb256e4kp8a,
-                    0x6C => CacheTlbDescriptor::Dtlb128e2m4mp8a,
-                    0x6D => CacheTlbDescriptor::Dtlb16e1gpfa,
-
-                    0x70 => CacheTlbDescriptor::Trace12kuops8a,
-                    0x71 => CacheTlbDescriptor::Trace16kuops8a,
-                    0x72 => CacheTlbDescriptor::Trace32kuops8a,
-                    0x73 => CacheTlbDescriptor::Trace64kuops8a,
-                    0x76 => CacheTlbDescriptor::Itlb8e2m4mpfa,
-                    0x77 => CacheTlbDescriptor::L1i16k4a64lIA32,
-                    0x78 => CacheTlbDescriptor::L2c1m4a64l,
-                    0x79 => CacheTlbDescriptor::L2c128k8a64l2s,
-                    0x7A => CacheTlbDescriptor::L2c256k8a64l2s,
-                    0x7B => CacheTlbDescriptor::L2C512k8a64l2s,
-                    0x7C => CacheTlbDescriptor::L2C1m8a64l2s,
-                    0x7D => CacheTlbDescriptor::L2C2m8a64l,
-                    0x7E => CacheTlbDescriptor::L2c256k8a128lIA32,
-                    0x7F => CacheTlbDescriptor::L2c512k2a64l,
-
-                    0x80 => CacheTlbDescriptor::L2c512k8a64l,
-                    0x81 => CacheTlbDescriptor::L2c128k8a32lIA32,
-                    0x82 => CacheTlbDescriptor::L2c256k8a32l,
-                    0x83 => CacheTlbDescriptor::L2c512k8a32l,
-                    0x84 => CacheTlbDescriptor::L2c1m8a32l,
-                    0x85 => CacheTlbDescriptor::L2c2m8a32l,
-                    0x86 => CacheTlbDescriptor::L2c512k4a64l,
-                    0x87 => CacheTlbDescriptor::L2c1m8a64l,
-                    0x88 => CacheTlbDescriptor::L3c2m4a64lIA32,
-                    0x89 => CacheTlbDescriptor::L3c4m4a64lIA32,
-                    0x8A => CacheTlbDescriptor::L3c8m4a64l,
-                    0x8D => CacheTlbDescriptor::L3c3m12a128l,
-
-                    0x90 => CacheTlbDescriptor::Itlb64efa4k256Mp,
-                    0x96 => CacheTlbDescriptor::Dtlb64efa4k256Mp,
-                    0x9B => CacheTlbDescriptor::Dtlb96efa4k256Mp,
-
-                    0xA0 => CacheTlbDescriptor::Dtlb32e4kpfa,
-
-                    0xB0 => CacheTlbDescriptor::Itlb128e4kp4a,
-                    0xB1 => CacheTlbDescriptor::Itlb8e2m4mp4a,
-                    0xB2 => CacheTlbDescriptor::Itlb64e4kp4a,
-                    0xB3 => CacheTlbDescriptor::Dtlb128e4kp4a,
-                    0xB4 => CacheTlbDescriptor::Dtlb256e4kp4a,
-                    0xB5 => CacheTlbDescriptor::Itlb64e4kp8a,
-                    0xB6 => CacheTlbDescriptor::Itlb128e4kp8a,
-                    0xBA => CacheTlbDescriptor::Dtlb64e4kp4a2,
-
-                    0xC0 => CacheTlbDescriptor::Dtlb8e4k4mp4a,
-                    0xC1 => CacheTlbDescriptor::L2tlb1024e4k2mp8a,
-                    0xC2 => CacheTlbDescriptor::Dtlb16e2m4mp4a,
-                    0xC3 => CacheTlbDescriptor::TwoL2tlb1536e4k2m6a16e1gp4a,
-                    0xC4 => CacheTlbDescriptor::Dtlb32e2m4mp4a2,
-                    0xCA => CacheTlbDescriptor::L2tlb512e4kp4a,
-
-                    0xD0 => CacheTlbDescriptor::L3c512k4a64l,
-                    0xD1 => CacheTlbDescriptor::L3c1m4a64l,
-                    0xD2 => CacheTlbDescriptor::L3c2m4a64l,
-                    0xD6 => CacheTlbDescriptor::L3c1m8a64l,
-                    0xD7 => CacheTlbDescriptor::L3c2m8a64l,
-                    0xD8 => CacheTlbDescriptor::L3c4m8a64l,
-                    0xDC => CacheTlbDescriptor::L3c15m12a64l,
-                    0xDD => CacheTlbDescriptor::L3c3m12a64l,
-                    0xDE => CacheTlbDescriptor::L3c6m12a64l2,
-
-                    0xE2 => CacheTlbDescriptor::L3c2m16a64l,
-                    0xE3 => CacheTlbDescriptor::L3c4m16a64l,
-                    0xE4 => CacheTlbDescriptor::L3c8m16a64l2,
-                    0xEA => CacheTlbDescriptor::L3c12m24a64l,
-                    0xEB => CacheTlbDescriptor::L3c18m24a64l,
-                    0xEC => CacheTlbDescriptor::L3c24m24a64l,
-
-                    0xF0 => CacheTlbDescriptor::Prefetch64,
-                    0xF1 => CacheTlbDescriptor::Prefetch128,
-                    0xFE => CacheTlbDescriptor::Leaf18,
-                    0xFF => CacheTlbDescriptor::Leaf4,
-
-                    _ => CacheTlbDescriptor::Null,
-                }
+                descs[i - 1] = CacheTlbDescriptor::from_idx_or(idx, CacheTlbDescriptor::Null);
             }
             Some(descs)
         } else {

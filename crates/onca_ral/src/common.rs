@@ -1,4 +1,9 @@
-use core::{fmt, ops::{RangeBounds, BitOr, BitOrAssign}, num::{NonZeroU8, NonZeroU64}, hash::Hash};
+use core::{
+    fmt,
+    ops::{RangeBounds, BitOr, BitOrAssign},
+    num::{NonZeroU8, NonZeroU64},
+    hash::Hash
+};
 use std::collections::HashSet;
 use onca_common::prelude::*;
 use onca_common_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
