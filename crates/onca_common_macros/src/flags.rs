@@ -48,7 +48,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 						has_zero = true;
 					} else {
 						max_val = max_val.max(int);
-						i = int.next_power_of_two();
+						i = int << 1u128;
 					}
 				}
 			},
