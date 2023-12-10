@@ -5,6 +5,7 @@ use core::{
     num::NonZeroU32,
     ptr::null_mut,
 };
+use std::str::FromStr;
 use onca_common::{
     prelude::*,
     time::Duration,
@@ -34,25 +35,25 @@ pub struct OSDevice {
 //------------------------------------------------------------------------------------------------------------------------------
 
 pub fn open_device(path: &str) -> Option<DeviceHandle> {
-    unsafe {
-        let name = PCSTR(path.as_ptr());
-        
-        let handle = CreateFileA(
-            name,
-            (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            FILE_FLAG_OVERLAPPED,
-            HANDLE::default()
-        );
-        match handle {
-            Ok(handle) => Some(DeviceHandle(handle.0 as usize)),
-            Err(err) => {
-                log_error!(LOG_HID_CAT, open_device, "Failed to open the HID device. (error: {:X})", err.code().0);
-                None
-            },
-        }
+    scoped_alloc!(AllocId::TlsTemp);
+    let mut path = String::from(path);
+    path.null_terminate();
+    
+    let handle = unsafe { CreateFileA(
+        PCSTR(path.as_ptr()),
+        (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None,
+        OPEN_EXISTING,
+        FILE_FLAG_OVERLAPPED,
+        HANDLE::default()
+    )};
+    match handle {
+        Ok(handle) => Some(DeviceHandle(handle.0 as usize)),
+        Err(err) => {
+            log_error!(LOG_HID_CAT, open_device, "Failed to open the HID device. (error: {:X})", err.code().0);
+            None
+        },
     }
 }
 
@@ -73,7 +74,7 @@ fn create_overlapped(err_kind: &str) -> Option<Box<OVERLAPPED>> {
     let read_event = match event {
         Ok(event) => event,
         Err(err) => {
-            log_error!(LOG_HID_CAT, create_os_device, "Failed to create a {} event for the HID device. (error: {:X})", err_kind, err.code().0);
+            log_error!(LOG_HID_CAT, create_overlapped, "Failed to create a {} event for the HID device. ({err})", err_kind);
             return None
         },
     };
@@ -155,9 +156,7 @@ pub fn get_vendor_string(handle: DeviceHandle) -> Option<String> {
 
     let res = unsafe { HidD_GetManufacturerString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
     if res {
-        let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-        let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
-        Some(String::from_utf16_lossy(str_slice))
+        Some(String::from_null_terminated_utf16_lossy(&buf))
     } else {
         if let Err(err) = unsafe { GetLastError() } { 
             log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
@@ -172,9 +171,7 @@ pub fn get_product_string(handle: DeviceHandle) -> Option<String> {
     let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
     let res = unsafe { HidD_GetProductString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
     if res {
-        let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-        let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
-        Some(String::from_utf16_lossy(str_slice))
+        Some(String::from_null_terminated_utf16_lossy(&buf))
     } else {
         if let Err(err) = unsafe { GetLastError() } { 
             log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
@@ -189,9 +186,7 @@ pub fn get_serial_number_string(handle: DeviceHandle) -> Option<String> {
         let mut buf = [0u16; MAX_HID_STRING_LEN + 1];
         let res = unsafe { HidD_GetSerialNumberString(handle, &mut buf as *mut _ as *mut c_void, MAX_HID_STRING_LEN as u32) }.as_bool();
         if res {
-            let null_term_idx = buf.iter().position(|&c| c == 0).unwrap_or(MAX_HID_STRING_LEN);
-            let str_slice = unsafe { slice::from_raw_parts(buf.as_ptr(), null_term_idx) };
-            Some(String::from_utf16_lossy(str_slice))
+            Some(String::from_null_terminated_utf16_lossy(&buf))
         } else {
             if let Err(err) = unsafe { GetLastError() } { 
                 log_warning!(LOG_HID_CAT, "Failed to retrieve hid vendor string. ({err})");
@@ -421,7 +416,6 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
 
     let mut caps = Vec::with_capacity(num_caps as usize);
     for cap in win_caps {
-
         let (usage, data_index) = if cap.IsRange.as_bool() {
             ((UsageId::new(cap.Anonymous.Range.UsageMin)..=UsageId::new(cap.Anonymous.Range.UsageMax)).into(),
              (cap.Anonymous.Range.DataIndexMin..=cap.Anonymous.Range.DataIndexMax).into())
@@ -472,13 +466,13 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
 pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollection<'a>> {
     let preparse_data = dev.preparse_data.get_address() as isize;
 
-    let scoped_alloc = ScopedAlloc::new(AllocId::TlsTemp);
-
+    
     let num_collection_nodes = dev.capabilities.num_collection_nodes;
-    let mut win_nodes = Vec::with_capacity(num_collection_nodes as usize);
+    let mut win_nodes = {
+        scoped_alloc!(AllocId::TlsTemp);
+        Vec::with_capacity(num_collection_nodes as usize)
+    };
     unsafe { win_nodes.set_len(num_collection_nodes as usize) };
-
-    drop(scoped_alloc);
 
     let mut len = num_collection_nodes as u32;
     let err =  unsafe {HidP_GetLinkCollectionNodes(win_nodes.as_mut_ptr(), &mut len, PHIDP_PREPARSED_DATA(preparse_data)) }.ok();
@@ -519,12 +513,10 @@ fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &
                 let node_idx = nodes.len() - 1;
 
                 if let Some(parent_idx) = parent_idx {
-                    children.resize_with(parent_idx + 1, || Vec::new());
+                    if children.len() < parent_idx + 1 {
+                        children.resize_with(parent_idx + 1, || Vec::new());
+                    }
                     children[parent_idx].push(node_idx as u16);
-                }
-
-                if node.FirstChild != 0 {
-                    process_collection_nodes(&win_nodes, nodes, children, node.FirstChild as usize, Some(node_idx));
                 }
             
                 nodes.push(CollectionNode {
@@ -533,13 +525,15 @@ fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &
                     kind: kind,
                     children: Vec::new()
                 });
+
+                if node.FirstChild != 0 {
+                    process_collection_nodes(&win_nodes, nodes, children, node.FirstChild as usize, Some(node_idx));
+                }
             },
             None => {
                 log_error!(LOG_HID_CAT, process_collection_nodes, "Invalid collection type: '{kind_u8}'");
             },
         };
-
-        // TODO: what about `node.UserContext`
 
         if node.NextSibling == 0 {
             break;
@@ -605,7 +599,7 @@ pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<I
         }
     }
 
-    dev.read_pending = true;
+    dev.read_pending = false;
     match unsafe { GetOverlappedResult(handle, overlapped, &mut bytes_read, true)} {
         Ok(_) if bytes_read > 0 => {
             unsafe { dev.read_buffer.set_len(bytes_read as usize) };
@@ -635,6 +629,7 @@ pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Re
     
 
     if write_pending {
+        // TODO: don't wait here, but check time since last pending write, if it still hasn't been written after 1 sec, fail
         // Wait for about a second, if we failed writing at that point, we fail
         let res = unsafe { WaitForSingleObject(event, 1000) };
         if res != WAIT_OBJECT_0 {
@@ -678,7 +673,7 @@ pub fn set_feature_report<'a>(dev: &mut Device, report: FeatureReport<'a>) -> Re
         Ok(())
     } else {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report ({err})");
+            log_error!(LOG_HID_CAT, write_output_report, "Failed to set feature report ({err})");
         }
         Err(report)
     }

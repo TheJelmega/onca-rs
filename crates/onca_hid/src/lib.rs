@@ -14,9 +14,9 @@ use onca_common::prelude::*;
 use onca_logging::{LogCategory, log_warning};
 
 mod os;
+use os::OSDevice;
 
 mod vendor_device;
-use os::OSDevice;
 pub use vendor_device::{UsbVendorId, UsbVendor, UsbDeviceId, UsbDevice, VendorProduct};
 
 mod hid_usages;
@@ -48,6 +48,7 @@ impl fmt::Display for Identifier {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Capabilities {
 	pub input_report_byte_len    : u16,
 	pub output_report_byte_len   : u16,
@@ -414,82 +415,82 @@ pub struct FeatureReport<'a> {
 impl FeatureReport<'_> {
 	/// Get the usage of all button that are currently set to 'on'
 	pub fn get_buttons(&self) -> Option<Vec<Usage>> {
-		os::get_buttons(self.device, 0, ReportType::Input, self.data.get_data())
+		os::get_buttons(self.device, 0, ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific collection
 	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
-		os::get_buttons(self.device, collection_id, ReportType::Input, self.data.get_data())
+		os::get_buttons(self.device, collection_id, ReportType::InpFeatureut, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page
 	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<Vec<UsageId>> {
-		os::get_buttons_for_page(self.device, page, 0, ReportType::Input, self.data.get_data())
+		os::get_buttons_for_page(self.device, page, 0, ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection
 	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<Vec<UsageId>> {
-		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Input, self.data.get_data())
+		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get the raw value(s) for the given usage
 	pub fn get_raw_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<RawValue> {
-		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
+		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get the scaled value and its logical range for the given usage
 	pub fn get_scaled_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<i32> {
-		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
+		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get data from the report, this will return all buttons that are on and all values
 	pub fn get_data(&self) -> Option<Vec<Data>> {
-		os::get_data(self.device, ReportType::Input, self.data.get_data())
+		os::get_data(self.device, ReportType::Feature, self.data.get_data())
 	}
 
 	/// Set buttons in the report
 	pub fn set_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
-		os::set_buttons(self.device, page, 0, usages, ReportType::Output, self.data.get_mut_data())
+		os::set_buttons(self.device, page, 0, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
 	/// Set buttons in the report
 	pub fn set_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
-		os::set_buttons(self.device, page, collection_id, usages, ReportType::Output, self.data.get_mut_data())
+		os::set_buttons(self.device, page, collection_id, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
 	/// Unet buttons in the report
 	pub fn unset_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
-		os::unset_buttons(self.device, page, 0, usages, ReportType::Output, self.data.get_mut_data())
+		os::unset_buttons(self.device, page, 0, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
 	/// Unset buttons in the report
 	pub fn unset_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
-		os::unset_buttons(self.device, page, collection_id, usages, ReportType::Output, self.data.get_mut_data())
+		os::unset_buttons(self.device, page, collection_id, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
 	/// Set a value in the report
 	pub fn set_value(&mut self, usage: Usage, raw_value: u32) {
-		os::set_value(self.device, usage, 0, raw_value, ReportType::Output, self.data.get_mut_data());
+		os::set_value(self.device, usage, 0, raw_value, ReportType::Feature, self.data.get_mut_data());
 	}
 
 	/// Set a value in the report
 	pub fn set_value_for_collection(&mut self, usage: Usage, collection_id: u16, raw_value: u32) {
-		os::set_value(self.device, usage, collection_id, raw_value, ReportType::Output, self.data.get_mut_data());
+		os::set_value(self.device, usage, collection_id, raw_value, ReportType::Feature, self.data.get_mut_data());
 	}
 
 	/// Set a value in the report
 	pub fn set_values(&mut self, usage: Usage, raw_values: &[u8]) {
-		os::set_values(self.device, usage, 0, raw_values, ReportType::Output, self.data.get_mut_data());
+		os::set_values(self.device, usage, 0, raw_values, ReportType::Feature, self.data.get_mut_data());
 	}
 
 	/// Set a value in the report
 	pub fn set_values_for_collection(&mut self, usage: Usage, collection_id: u16, raw_values: &[u8]) {
-		os::set_values(self.device, usage, collection_id, raw_values, ReportType::Output, self.data.get_mut_data());
+		os::set_values(self.device, usage, collection_id, raw_values, ReportType::Feature, self.data.get_mut_data());
 	}
 
 	/// Set data in the report
 	pub fn set_data(&mut self, data: &[Data]) {
-		os::set_data(self.device, data, ReportType::Output, self.data.get_mut_data())
+		os::set_data(self.device, data, ReportType::Feature, self.data.get_mut_data())
 	}
 }
 
@@ -841,8 +842,4 @@ impl Drop for Device {
 			os::close_handle(self.handle);
 		}
     }
-}
-
-pub fn iterator_devices() {
-
 }
