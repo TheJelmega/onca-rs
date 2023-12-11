@@ -5,7 +5,6 @@ use core::{
     num::NonZeroU32,
     ptr::null_mut,
 };
-use std::str::FromStr;
 use onca_common::{
     prelude::*,
     time::Duration,
