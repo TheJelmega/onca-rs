@@ -420,7 +420,7 @@ impl FeatureReport<'_> {
 
 	/// Get the usage of all button that are currently set to 'on', for a specific collection
 	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
-		os::get_buttons(self.device, collection_id, ReportType::InpFeatureut, self.data.get_data())
+		os::get_buttons(self.device, collection_id, ReportType::Feature, self.data.get_data())
 	}
 
 	/// Get the usage of all button that are currently set to 'on', for a specific usage page
