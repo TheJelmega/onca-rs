@@ -1,5 +1,5 @@
 use onca_common::utils::is_flag_set;
-use onca_logging::log_error;
+
 use windows::Win32::UI::{
         Input::{
             KeyboardAndMouse::*, RAWKEYBOARD,
@@ -7,7 +7,7 @@ use windows::Win32::UI::{
         WindowsAndMessaging::RI_KEY_BREAK
     };
 
-use crate::{LOG_INPUT_CAT, input_devices::*};
+use crate::input_devices::*;
 
 pub struct OSKeyboard; 
 
