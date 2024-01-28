@@ -91,7 +91,7 @@ impl Settings {
         let mut settings = Settings::default();
 
         if let Some(toml::Item::Table(common)) = toml.get("common") {
-            if let Some(toml::Item::String(api)) = common.get("api") {
+            if let Some(toml::Item::String(api)) = common.get_item("api") {
                 settings.api = match api.as_str() {
                     "dx12"     => RalApi::DX12,
                     "vulkan"   => RalApi::Vulkan,
@@ -105,28 +105,28 @@ impl Settings {
         }
 
         if let Some(toml::Item::Table(debug_table)) = toml.get("debug") {
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("enable") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("enable") {
                 settings.debug_enabled = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("validation") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("validation") {
                 settings.debug_validation = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("performance") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("performance") {
                 settings.debug_performance = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("gpu-based-validation") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("gpu-based-validation") {
                 settings.debug_gbv = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("gbv-state-tracking") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("gbv-state-tracking") {
                 settings.debug_gbv_state_tracking = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("dcqs") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("dcqs") {
                 settings.debug_dcqs = true;
             }
-            if let Some(toml::Item::Boolean(true)) = debug_table.get("auto-naming") {
+            if let Some(toml::Item::Boolean(true)) = debug_table.get_item("auto-naming") {
                 settings.debug_auto_naming = true;
             }
-            if let Some(toml::Item::String(level)) = debug_table.get("log-level") {
+            if let Some(toml::Item::String(level)) = debug_table.get_item("log-level") {
                 settings.debug_log_level = match level.as_str() {
                     "verbose" => LogLevel::Verbose,
                     "info"    => LogLevel::Info,
