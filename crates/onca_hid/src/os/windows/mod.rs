@@ -29,6 +29,12 @@ pub struct OSDevice {
     write_overlapped : Box<OVERLAPPED>
 }
 
+impl core::fmt::Debug for OSDevice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OSDevice").finish()
+    }
+}
+
 //------------------------------------------------------------------------------------------------------------------------------
 // DEVICE_CREATION
 //------------------------------------------------------------------------------------------------------------------------------
@@ -275,7 +281,7 @@ pub fn get_capabilities(preparse_data: &PreparseData) -> Option<Capabilities> {
    
 }
 
-pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ButtonCaps>; NUM_REPORT_TYPES]> {
+pub fn get_button_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ButtonCaps>; ReportType::COUNT]> {
     let preparse_data = preparse_data.get_address() as isize;
 
     let input_caps = if caps.num_input_button_caps > 0 {
@@ -364,7 +370,7 @@ fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isi
     Some(caps)
 }
 
-pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ValueCaps>; NUM_REPORT_TYPES]> {
+pub fn get_value_capabilities(preparse_data: &PreparseData, caps: &Capabilities) -> Option<[Vec<ValueCaps>; ReportType::COUNT]> {
     unsafe {
         let preparse_data = preparse_data.get_address() as isize;
 

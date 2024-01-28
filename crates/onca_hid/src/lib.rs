@@ -7,10 +7,12 @@ use core::{
 	fmt,
 	ops::{self, RangeInclusive, RangeBounds},
 };
+use std::fmt::Write;
 
-use onca_common::time::Duration;
+use onca_common::{time::Duration, fmt::Indenter};
 
 use onca_common::prelude::*;
+use onca_common_macros::{EnumDisplay, EnumCount, EnumFromIndex};
 use onca_logging::{LogCategory, log_warning};
 
 mod os;
@@ -65,6 +67,27 @@ pub struct Capabilities {
 	pub num_feature_data_indices : u16,
 }
 
+impl fmt::Display for Capabilities {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "capabilities:")?;
+
+		let mut indenter = Indenter::new(f);
+		writeln!(indenter, "input report byte len:    {}", self.input_report_byte_len)?;
+		writeln!(indenter, "output report byte len:   {}", self.output_report_byte_len)?;
+		writeln!(indenter, "feature report byte len:  {}", self.feature_report_byte_len)?;
+		writeln!(indenter, "num collection nodes:     {}", self.num_collection_nodes)?;
+		writeln!(indenter, "num input button caps:    {}", self.num_input_button_caps)?;
+		writeln!(indenter, "num input value caps:     {}", self.num_input_value_caps)?;
+		writeln!(indenter, "num input data indices:   {}", self.num_input_data_indices)?;
+		writeln!(indenter, "num output button caps:   {}", self.num_output_button_caps)?;
+		writeln!(indenter, "num output value caps:    {}", self.num_output_value_caps)?;
+		writeln!(indenter, "num output data indices:  {}", self.num_output_data_indices)?;
+		writeln!(indenter, "num feature button caps:  {}", self.num_feature_button_caps)?;
+		writeln!(indenter, "num feature value caps:   {}", self.num_feature_value_caps)?;
+		write!  (indenter, "num feature data indices: {}", self.num_feature_data_indices)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceHandle(usize);
 
@@ -84,12 +107,14 @@ impl fmt::Debug for DeviceHandle {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum PreparseDataInternal {
 	Address(usize),
 	Blob(Vec<u8>)
 }
 
 /// Hid preparsed data
+#[derive(Debug)]
 pub struct PreparseData(pub(crate) PreparseDataInternal);
 
 impl PreparseData {
@@ -125,6 +150,13 @@ impl VendorCollectionType {
 	}
 }
 
+impl fmt::Display for VendorCollectionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CollectionKind {
 	/// Collection containing physically related values, e.g. group of axes.
 	Physical,
@@ -158,6 +190,21 @@ impl CollectionKind {
 			vendor => Some(Self::Vendor(unsafe { VendorCollectionType::new_unchecked(vendor) }))
 		}
 	}
+}
+
+impl fmt::Display for CollectionKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CollectionKind::Physical      => write!(f, "Physical"),
+            CollectionKind::Application   => write!(f, "Application"),
+            CollectionKind::Logical       => write!(f, "Logical"),
+            CollectionKind::Report        => write!(f, "Report"),
+            CollectionKind::NamedArray    => write!(f, "NamedArray"),
+            CollectionKind::UsageSwitch   => write!(f, "UsageSwitch"),
+            CollectionKind::UsageModified => write!(f, "UsageModify"),
+            CollectionKind::Vendor(vend)  => write!(f, "Vendor({vend})"),
+        }
+    }
 }
 
 /// Hid top-level collection
@@ -229,10 +276,10 @@ impl CollectionNode<'_> {
 }
 
 /// Inclusive range (wihout taking the space for the additional bool in RangeInclusive)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ValueRange<T> {
-	pub start : T,
-	pub end   : T,
+	pub start: T,
+	pub end:   T,
 }
 
 impl<T> ValueRange<T> {
@@ -263,6 +310,12 @@ impl<T: Copy> From<ops::RangeInclusive<T>> for ValueRange<T> {
     }
 }
 
+impl<T: fmt::Display> fmt::Display for ValueRange<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}:{}]", self.start, self.end)
+    }
+}
+
 /// The value stored in a data element
 pub enum DataValue {
 	/// Button
@@ -278,13 +331,12 @@ pub struct Data {
 }
 
 /// Hid report types
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumCount, EnumDisplay, EnumFromIndex)]
 pub enum ReportType {
 	Input,
 	Output,
 	Feature
 }
-pub(crate) const NUM_REPORT_TYPES : usize = ReportType::Feature as usize + 1;
 
 pub(crate) enum ReportData<'a> {
 	Slice(&'a [u8]),
@@ -495,6 +547,7 @@ impl FeatureReport<'_> {
 }
 
 /// Button capabilities (report descriptor)
+#[derive(Debug)]
 pub struct ButtonCaps {
 	/// Usage page for all usages
 	pub usage_page    : UsagePageId,
@@ -518,7 +571,26 @@ pub struct ButtonCaps {
 	pub is_absolute   : bool,
 }
 
+impl fmt::Display for ButtonCaps {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Button caps:")?;
+
+		let mut indenter = Indenter::new(f);
+		writeln!(indenter, "usage page:    {}", self.usage_page)?;
+		writeln!(indenter, "report id:     {}", self.report_id)?;
+		writeln!(indenter, "data fields:   {}", self.data_fields)?;
+		writeln!(indenter, "collection id: {}", self.collection_id)?;
+		writeln!(indenter, "report count:  {}", self.report_count)?;
+		writeln!(indenter, "usages:        {}", self.usage)?;
+		writeln!(indenter, "string index:  {}", self.string_index)?;
+		writeln!(indenter, "designator:    {}", self.designator)?;
+		writeln!(indenter, "data index:    {}", self.data_index)?;
+		write!  (indenter, "is absolute:   {}", self.is_absolute)
+    }
+}
+
 /// Value capabilities (report descriptor)
+#[derive(Debug)]
 pub struct ValueCaps {
 	/// Usage page for all usages
 	pub usage_page     : UsagePageId,
@@ -553,6 +625,32 @@ pub struct ValueCaps {
 	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value
 	pub is_absolute    : bool,
 }
+
+
+impl fmt::Display for ValueCaps {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Value caps:")?;
+
+		let mut indenter = Indenter::new(f);
+		writeln!(indenter, "usage page:     {}", self.usage_page)?;
+		writeln!(indenter, "report id:      {}", self.report_id)?;
+		writeln!(indenter, "data fields:    {}", self.data_fields)?;
+		writeln!(indenter, "collection id:  {}", self.collection_id)?;
+		writeln!(indenter, "has null:       {}", self.has_null)?;
+		writeln!(indenter, "unit exp:       {}", self.unit_exp)?;
+		writeln!(indenter, "units:          {}", self.units)?;
+		writeln!(indenter, "logical range:  {}", self.logical_range)?;
+		writeln!(indenter, "physical range: {}", self.physical_range)?;
+		writeln!(indenter, "bit size:       {}", self.bit_size)?;
+		writeln!(indenter, "report count:   {}", self.report_count)?;
+		writeln!(indenter, "usages:         {}", self.usage)?;
+		writeln!(indenter, "string index:   {}", self.string_index)?;
+		writeln!(indenter, "designator:     {}", self.designator)?;
+		writeln!(indenter, "data index:     {}", self.data_index)?;
+		write!  (indenter, "is absolute:    {}", self.is_absolute)
+    }
+}
+
 
 impl ValueCaps {
 	/// Get the maximum value of the raw value (raw value in in range `0..=max`)
@@ -601,14 +699,15 @@ impl RawValue {
 }
 
 /// HID device
+#[derive(Debug)]
 pub struct Device {
 	os_dev        : OSDevice,
 	handle        : DeviceHandle,
 	identifier    : Identifier,
 	preparse_data : PreparseData,
 	capabilities  : Capabilities,
-	button_caps   : [Vec<ButtonCaps>; NUM_REPORT_TYPES],
-	value_caps    : [Vec<ValueCaps>; NUM_REPORT_TYPES],
+	button_caps   : [Vec<ButtonCaps>; ReportType::COUNT],
+	value_caps    : [Vec<ValueCaps>; ReportType::COUNT],
 	read_buffer   : Vec<u8>,
 	owns_handle   : bool,
 	read_pending  : bool,
@@ -841,5 +940,57 @@ impl Drop for Device {
 		if self.owns_handle {
 			os::close_handle(self.handle);
 		}
+    }
+}
+
+/*
+
+/// HID device
+#[derive(Debug)]
+pub struct Device {
+	os_dev        : OSDevice,
+	handle        : DeviceHandle,
+	identifier    : Identifier,
+	preparse_data : PreparseData,
+	capabilities  : Capabilities,
+	button_caps   : [Vec<ButtonCaps>; NUM_REPORT_TYPES],
+	value_caps    : [Vec<ValueCaps>; NUM_REPORT_TYPES],
+	read_buffer   : Vec<u8>,
+	owns_handle   : bool,
+	read_pending  : bool,
+}
+*/
+
+impl fmt::Display for Device {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "HID device:")?;
+
+		let mut indenter = Indenter::new(f);
+		writeln!(indenter, "Identifier: {}", self.identifier)?;
+		writeln!(indenter, "{}", self.capabilities)?;
+
+		for (idx, caps) in self.button_caps.iter().enumerate() {
+			let report_type = unsafe { ReportType::from_idx_unchecked(idx) };
+			writeln!(indenter, "{} button caps: [", report_type)?;
+			indenter.set_spaces(8);
+			for cap in caps {
+				writeln!(indenter, "{cap}")?;
+			}
+			indenter.set_spaces(4);
+			writeln!(indenter, "]")?;
+		}
+
+		for (idx, caps) in self.value_caps.iter().enumerate() {
+			let report_type = unsafe { ReportType::from_idx_unchecked(idx) };
+			writeln!(indenter, "{} value caps: [", report_type)?;
+			indenter.set_spaces(8);
+			for cap in caps {
+				writeln!(indenter, "{cap}")?;
+			}
+			indenter.set_spaces(4);
+			writeln!(indenter, "]")?;
+		}
+
+		Ok(())
     }
 }

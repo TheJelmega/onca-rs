@@ -133,10 +133,10 @@ impl fmt::Display for VendorProduct {
             Some(vendor) => {
                 match vendor.get_device(self.device) {
                     Some(device) => f.write_fmt(format_args!("{{ {} {} }}", vendor.name, device.name)),
-                    None => f.write_fmt(format_args!("{{ vendor: {}, product: {:04X} }}", vendor.name, self.device.0)),
+                    None => f.write_fmt(format_args!("{{ vendor: {}, product: 0x{:04X} }}", vendor.name, self.device.0)),
                 }
             },
-            None => f.write_fmt(format_args!("{{ vendor: {:04X}, product: {:04X} }}", self.vendor.0, self.device.0)),
+            None => f.write_fmt(format_args!("{{ vendor: 0x{:04X}, product: 0x{:04X} }}", self.vendor.0, self.device.0)),
         }
     }
 }

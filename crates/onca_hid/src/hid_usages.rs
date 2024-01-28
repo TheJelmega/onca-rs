@@ -17,7 +17,13 @@ impl UsagePageId {
 
 impl fmt::Debug for UsagePageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("HidUsageId").field(&format_args!("{:X}", self.0)).finish()
+        f.debug_tuple("HidUsageId").field(&format_args!("0x{:X}", self.0)).finish()
+    }
+}
+
+impl fmt::Display for UsagePageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{:X}", self.0)
     }
 }
 
@@ -36,7 +42,13 @@ impl UsageId {
 
 impl fmt::Debug for UsageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("HidUsageId").field(&format_args!("{:X}", self.0)).finish()
+        f.debug_tuple("HidUsageId").field(&format_args!("0x{:X}", self.0)).finish()
+    }
+}
+
+impl fmt::Display for UsageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{:X}", self.0)
     }
 }
 
