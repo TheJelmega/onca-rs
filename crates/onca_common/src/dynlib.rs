@@ -1,6 +1,6 @@
 use core::mem::{ManuallyDrop, size_of};
 
-use crate::{os::dynlib as os, prelude::{ScopedAlloc, AllocId}, strings::{ToString, StringExtensions}};
+use crate::{os::dynlib as os, prelude::{ScopedAlloc, AllocId}, strings::{ToString, StringExtensions}, scoped_alloc};
 
 /// Dynamic library
 pub struct DynLib {
@@ -14,8 +14,7 @@ impl DynLib {
     /// 
     /// If a dynamic library could not be loaded, an error with an OS error will be returned
     pub fn load(path: &str) -> Result<DynLib, i32> {
-        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
-        // Go via a `String` to make sure it is null-terminated
+        scoped_alloc!(AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
         let mut path = path.to_string();
         path.null_terminate();
@@ -39,11 +38,21 @@ impl DynLib {
             return None;
         }
 
-        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+        scoped_alloc!(AllocId::TlsTemp);
         // Go via a `String` to make sure it is null-terminated
         let mut proc_name = proc_name.to_string();
         proc_name.null_terminate();
         let addr = os::get_proc_address(self.handle, &proc_name);
+        addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })
+    }
+
+    pub fn get_indexed<T: Copy>(&self, idx: usize) -> Option<T> {
+        // This is probably the best we can do to insure that `T` is a function pointer
+        if size_of::<T>() != size_of::<fn()>() {
+            return None;
+        }
+
+        let addr = os::get_proc_address_indexed(self.handle, idx);
         addr.map(|addr| unsafe { *(core::mem::transmute::<_, *const T>(&addr)) })
     }
 }

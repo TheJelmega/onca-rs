@@ -42,3 +42,10 @@ pub(crate) fn get_proc_address(handle: DynLibHandle, proc_name: &str) -> Option<
         proc.map(|proc| core::mem::transmute(proc))
     }
 }
+
+pub(crate) fn get_proc_address_indexed(handle: DynLibHandle, idx: usize) -> Option<fn()> {
+    unsafe {
+        let proc = GetProcAddress(handle.0, PCSTR(idx as *const u8));
+        proc.map(|proc| core::mem::transmute(proc))
+    }
+}

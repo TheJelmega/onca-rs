@@ -99,6 +99,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 		#(#enum_attrs)*
+		#[repr(transparent)]
 		#vis struct #flag_name {
 			bits : #base_type
 		}
