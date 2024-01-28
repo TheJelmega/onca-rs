@@ -56,7 +56,7 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
     match handle {
         Ok(handle) => Some(DeviceHandle(handle.0 as usize)),
         Err(err) => {
-            log_error!(LOG_HID_CAT, open_device, "Failed to open the HID device. (error: {:X})", err.code().0);
+            log_error!(LOG_HID_CAT, open_device, "Failed to open the HID device `{}`. ({})", path, err);
             None
         },
     }
@@ -758,10 +758,11 @@ pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type
             },
         }
     } else {
-        let mut values = Vec::with_capacity(report_count as usize);
-        unsafe { values.set_len(report_count as usize) };
+        let size = (report_count as usize * bit_size as usize + 7) / 8;
+        let mut values = Vec::with_capacity(size);
+        unsafe { values.set_len(size) };
 
-        let res = unsafe { HidP_GetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.page.as_u16(), &mut values, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
+        let res = unsafe { HidP_GetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), &mut values, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
         match res {
             Ok(_) => Some(RawValue::Array(values, bit_size)),
             Err(err) => {

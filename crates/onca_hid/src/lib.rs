@@ -593,39 +593,38 @@ impl fmt::Display for ButtonCaps {
 #[derive(Debug)]
 pub struct ValueCaps {
 	/// Usage page for all usages
-	pub usage_page     : UsagePageId,
+	pub usage_page:     UsagePageId,
 	/// Report id
-	pub report_id      : u8,
+	pub report_id:      u8,
 	/// Data fields associated with the main item
-	pub data_fields    : u16,
+	pub data_fields:    u16,
 	/// Index of the collection the capabilites are part of.
-	pub collection_id  : u16,
+	pub collection_id:  u16,
 	/// Does the value have a 'null' state
-	pub has_null       : bool,
+	pub has_null:       bool,
 	/// Unit exponent
-	pub unit_exp       : u32,
+	pub unit_exp:       u32,
 	/// Unit type
-	pub units          : u32,
+	pub units:          u32,
 	/// Logical value range (raw value range)
-	pub logical_range  : ValueRange<i32>,
+	pub logical_range:  ValueRange<i32>,
 	/// Physical value range (after scaling)
-	pub physical_range : ValueRange<i32>,
+	pub physical_range: ValueRange<i32>,
 	/// Bit size of each field
-	pub bit_size       : u16,
+	pub bit_size:       u16,
 	/// Number of reports
-	pub report_count   : u16,
+	pub report_count:   u16,
 	/// Usages, if the report count is higher that the usage `range`, the last usage is used for all subsequent reports
-	pub usage          : ValueRange<UsageId>,
+	pub usage:          ValueRange<UsageId>,
 	/// String indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
-	pub string_index   : ValueRange<u16>,
+	pub string_index:   ValueRange<u16>,
 	/// Designators, if the report count is higher that the designator `range`, the last designator is used for all subsequent reports
-	pub designator     : ValueRange<u16>,
+	pub designator:     ValueRange<u16>,
 	/// data indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
-	pub data_index     : ValueRange<u16>,
+	pub data_index:     ValueRange<u16>,
 	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value
-	pub is_absolute    : bool,
+	pub is_absolute:    bool,
 }
-
 
 impl fmt::Display for ValueCaps {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -672,27 +671,27 @@ pub enum RawValue {
 }
 
 impl RawValue {
-	/// Get the first value
-	pub fn first(&self) -> u32 {
+	/// Get a value for a given report
+	pub fn get_value(&self, report: u16) -> u32 {
 		match self {
 		    RawValue::Single(val, _) => *val,
 		    RawValue::Array(arr, bit_size) => {
-				// Unlikely to happen
-				if arr.len() == 0 {
-					return 0;
+				let offset = report * bit_size;
+				let offset_byte = offset as usize / 8;
+				let offset_bit = offset & 0x7;
+
+				let end = offset + bit_size;
+				let end_byte = end as usize / 8;
+				let count = end_byte - offset_byte;
+
+				let mut val = 0;
+				for i in 0..count {
+					let byte = arr[offset_byte + i] as usize;
+					val |= (byte << (i * 8)) >> offset_bit;
 				}
 
-				let mask = 0xFFFF_FFFF >> (32 - bit_size);
-				if arr.len() >= mem::size_of::<u32>() {
-					return unsafe { *(arr.as_ptr() as *const u32) & mask };
-				}
-
-				match bit_size {
-					0 ..=8  => { arr[0] as u32 & mask }
-					0 ..=16 => unsafe { *(arr.as_ptr() as *const u16) as u32 & mask }
-					17..=24 => unsafe { (*(arr.as_ptr() as *const u16) as u32 | (arr[3] as u32) << 16) & mask }
-					_ => unreachable!()
-				}
+				let mask = 0xFFFF_FFFFu32 >> (32 - bit_size);
+				val as u32 & mask
 			},
 		}
 	}
