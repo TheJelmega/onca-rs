@@ -1,12 +1,12 @@
-use std::{ffi::c_void, cell::OnceCell, sync::OnceLock};
+use std::ffi::c_void;
 
-use onca_common::{dynlib::DynLib, sys::x86_64};
+use onca_common::dynlib::DynLib;
 use onca_hid as hid;
-use onca_logging::{log_verbose, log_warning};
+use onca_logging::log_warning;
 use onca_math::Vec2;
 use windows::Win32::UI::Input::XboxController::*;
 
-use crate::{Gamepad, NativeDeviceHandle, InputDevice, GamepadReleaseCurve, LOG_EVENT_CAT, LOG_INPUT_CAT, DPadDirection, GamepadButton};
+use crate::{Gamepad, NativeDeviceHandle, InputDevice, GamepadReleaseCurve, LOG_INPUT_CAT, DPadDirection, GamepadButton};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -37,7 +37,7 @@ impl XInputContext {
         }
     }
 
-    pub fn xinput_get_capabilities_ex(&self, user_id: u32, flags: u32) -> XInputCapabilitiesEx {
+    fn xinput_get_capabilities_ex(&self, user_id: u32, flags: u32) -> XInputCapabilitiesEx {
         let mut result = unsafe { core::mem::zeroed() };
         (self.xinput_get_capabilities_ex)(1, user_id, flags, &mut result as *mut _ as *mut _);
         result
@@ -81,7 +81,7 @@ impl XInputGamepad {
 }
 
 impl InputDevice for XInputGamepad {
-    fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(crate::InputAxisId)) {
+    fn tick(&mut self, _dt: f32, notify_rebind: &mut dyn FnMut(crate::InputAxisId)) {
         let mut state = XINPUT_STATE::default();
         unsafe { XInputGetState(self.xinput_idx, &mut state) };
 
@@ -162,11 +162,11 @@ impl InputDevice for XInputGamepad {
         }
     }
 
-    fn handle_hid_input(&mut self, input_report: &[u8]) {
+    fn handle_hid_input(&mut self, _input_report: &[u8]) {
         // Nothing to do here
     }
 
-    fn handle_native_input(&mut self, native_data: *const c_void) {
+    fn handle_native_input(&mut self, _native_data: *const c_void) {
         // Nothing to do here
     }
 

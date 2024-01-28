@@ -9,7 +9,7 @@ use onca_window::Window;
 use windows::{Win32::{
     UI::{
         WindowsAndMessaging::{RIM_INPUT, GIDC_ARRIVAL, GIDC_REMOVAL},
-        Input::{GetRawInputData, HRAWINPUT, RAWINPUTHEADER, RID_INPUT, RAWINPUT, RIM_TYPEMOUSE, RIM_TYPEKEYBOARD, RIM_TYPEHID, RAWINPUTDEVICELIST, GetRawInputDeviceList, GetRawInputDeviceInfoA, RIDI_DEVICENAME, RID_DEVICE_INFO, RIDI_DEVICEINFO, RAWINPUTDEVICE, RegisterRawInputDevices, RIDEV_DEVNOTIFY}
+        Input::{GetRawInputData, HRAWINPUT, RAWINPUTHEADER, RID_INPUT, RAWINPUT, RIM_TYPEMOUSE, RIM_TYPEKEYBOARD, RIM_TYPEHID, GetRawInputDeviceInfoA, RIDI_DEVICENAME, RID_DEVICE_INFO, RIDI_DEVICEINFO, RAWINPUTDEVICE, RegisterRawInputDevices, RIDEV_DEVNOTIFY}
     },
     Foundation::{WPARAM, LPARAM, GetLastError, HANDLE, HWND}
 }, core::HRESULT};
@@ -129,20 +129,6 @@ impl OSInput {
                     RIMTYPE_HID => {
                         let raw_report = core::slice::from_raw_parts(rawinput.data.hid.bRawData.as_ptr(), rawinput.data.hid.dwSizeHid as usize);
                         manager.handle_hid_input(handle, raw_report);
-
-                        
-
-                        //#[cfg(feature = "raw_input_logging")]
-                        // {
-                        //     let mut report = "[ ".to_string();
-                        //     for byte in raw_report {
-                        //         use core::fmt::Write;
-                        //         _ = write!(report, "{byte:>3}, ");
-                        //     }
-
-                        //     report.push_str(" ]");
-                        //     log_verbose!(LOG_EVENT_CAT, "HID event with {} elements, data: {report:?}", rawinput.data.hid.dwCount);
-                        // }
                     },
                     invalid => log_error!(LOG_EVENT_CAT, OSInput::process_window_event, "Received an invalid RAWINPUT type: {invalid}"),
                 }

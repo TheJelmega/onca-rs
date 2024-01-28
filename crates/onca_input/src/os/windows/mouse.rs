@@ -1,4 +1,3 @@
-use core::mem;
 use onca_common::utils::is_flag_set;
 use windows::Win32::{
     UI::{ 
@@ -8,9 +7,7 @@ use windows::Win32::{
     Devices::HumanInterfaceDevice::{MOUSE_MOVE_ABSOLUTE, MOUSE_VIRTUAL_DESKTOP}
 };
 
-use onca_logging::log_error;
-use crate::{LOG_INPUT_CAT, Mouse, MouseButton, MouseScroll, MousePosition, MouseDelta};
-
+use crate::{Mouse, MouseButton, MouseScroll, MousePosition, MouseDelta};
 
 pub(crate) struct OSMouse;
 

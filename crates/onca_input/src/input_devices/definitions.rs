@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use onca_common_macros::{EnumDisplay, flags};
+use onca_common_macros::flags;
 use onca_hid::{self as hid, VendorProduct};
 use onca_logging::{log_error, log_warning};
 use onca_toml::{self as toml, Toml};

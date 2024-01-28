@@ -255,15 +255,15 @@ impl InputDevice for Mouse {
         if !state.delta.is_zero() {
             log_verbose!(LOG_INPUT_CAT, "Mouse moved to position {} and delta {}", state.position, state.delta);
         }
-        // #[cfg(feature = "raw_input_logging")]
-        // {
-        //     if !change_state.scroll.x.is_zero() {
-        //         log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", change_state.scroll.x);
-        //     }
-        //     if !change_state.scroll.y.is_zero() {
-        //         log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", change_state.scroll.y);
-        //     }
-        // }
+        #[cfg(feature = "mouse_scroll_logging")]
+        {
+            if !change_state.scroll.x.is_zero() {
+                log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", change_state.scroll.x);
+            }
+            if !change_state.scroll.y.is_zero() {
+                log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", change_state.scroll.y);
+            }
+        }
 
         state.scroll += change_state.scroll;
         if !change_state.scroll.is_zero() {

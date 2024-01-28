@@ -1,7 +1,4 @@
-use core::{
-    ptr::null_mut,
-    num::NonZeroU8,
-};
+use core::num::NonZeroU8;
 use std::{collections::HashMap, sync::{Arc, atomic::{AtomicBool, Ordering}}, ffi::c_void};
 
 use onca_common::{
@@ -9,12 +6,12 @@ use onca_common::{
     sync::{Mutex, RwLock, MutexGuard},
     event_listener::EventListener,
     time::DeltaTime,
-    sys::{self, is_on_main_thread},
+    sys,
 };
 use onca_hid as hid;
 use onca_logging::{log_verbose, log_error, log_warning, log_info};
 use onca_toml::Toml;
-use onca_window::{WindowManager, WindowId};
+use onca_window::WindowManager;
 
 use crate::{
     os::{self, OSInput},
@@ -144,8 +141,6 @@ type CreateDevicePtr = Box<dyn Fn(NativeDeviceHandle) -> Result<Box<dyn InputDev
 /// All processing for the input manager is handled by the main thread
 pub struct InputManager {
     pub(crate) os_input:     Mutex<os::OSInput>,
-    pub(crate) mouse:        Option<Mouse>,
-    pub(crate) keyboard:     Option<Keyboard>,
     device_store:            RwLock<DeviceStorage>,
     raw_input_listener:      Arc<Mutex<RawInputListener>>,
 
@@ -177,10 +172,8 @@ impl InputManager {
         };
         
         let os_input = os::OSInput::new(main_window)?;
-        let mut ptr = Arc::new(Self {
+        let ptr = Arc::new(Self {
             os_input: Mutex::new(os_input),
-            mouse: None,
-            keyboard: None,
             device_store: RwLock::new(DeviceStorage::new()),
             raw_input_listener: Arc::new(Mutex::new(RawInputListener::new())),
             device_product_creators: Mutex::new(HashMap::new()),

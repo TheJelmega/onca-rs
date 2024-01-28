@@ -9,7 +9,7 @@ use onca_common::{
     sync::{Mutex, RwLock}
 };
 use onca_common_macros::{EnumCount, EnumFromIndex, EnumDisplay};
-use onca_hid as hid;
+
 #[cfg(feature = "raw_input_logging")]
 use onca_logging::log_verbose;
 use onca_logging::log_warning;
@@ -461,7 +461,7 @@ impl InputDevice for Gamepad {
                 notify_rebind(InputAxisId::new(self.get_axes()[BUTTON_OFFSET + button_idx].path));
             }
 
-            //#[cfg(raw_input_logging)]
+            #[cfg(raw_input_logging)]
             if state.buttons.get(button_idx) != change.pressed {
                 log_verbose!(LOG_INPUT_CAT, "Gamepad button {} {}", change.button, if change.pressed {"pressed"} else {"released"});
             }
@@ -528,7 +528,7 @@ impl InputDevice for Gamepad {
         if *dpad_time == 0f32 {
             state.dpad = DPadDirection::Neutral;
         } else {
-            //#[cfg(raw_input_logging)]
+            #[cfg(raw_input_logging)]
             if state.dpad != *dpad {
                 log_verbose!(LOG_INPUT_CAT, "Dpad moved to {dpad}");
             }
@@ -551,101 +551,8 @@ impl InputDevice for Gamepad {
         }
     }
 
-    fn handle_hid_input(&mut self, input_report: &[u8]) {
-        // TODO: There is no generic way to do this yet without the input_devices.toml file, so just return and come back to this later
-
-        // //Buttons
-        // let button_usage_page = hid::UsagePageId::new(9);
-        // if let Some(hid_buttons) = input_report.get_buttons() {
-        //     if let Some(button_caps) = hid_device.get_button_capabilities_for_page(hid::ReportType::Input, button_usage_page, None) {
-        //         let range_start = button_caps.usage.start;
-                
-        //         for hid_button in hid_buttons {
-        //             let button_idx = hid_button.usage.as_u16() - range_start.as_u16();
-        //             if let Some(button) = GamepadButton::from_idx(button_idx as usize) {
-        //                 self.press_button(button, f32::MAX);
-        //             }
-
-        //             #[cfg(feature = "raw_input_logging")]
-        //             if let Some(button_enum) = GamepadButton::from_idx(button_idx as usize) {
-        //                 //log_verbose!(LOG_INPUT_CAT, "Pressed gamepad button '{button_enum:?}'");
-        //             }
-        //         }
-
-        //     }
-        // }
-
-        // const LEFT_STICK_X_USAGE: hid::Usage = hid::Usage::from_u16(1, 48);
-        // const LEFT_STICK_Y_USAGE: hid::Usage = hid::Usage::from_u16(1, 49);
-        // const RIGHT_STICK_X_USAGE: hid::Usage = hid::Usage::from_u16(1, 51);
-        // const RIGHT_STICK_Y_USAGE: hid::Usage = hid::Usage::from_u16(1, 52);
-        // const COMBINED_TRIGGERS_USAGE: hid::Usage = hid::Usage::from_u16(1, 50);
-        // const DPAD_USAGE: hid::Usage = hid::Usage::from_u16(1, 57);
-
-        // // Left joystick
-        // if let Some(x) = input_report.get_raw_value(LEFT_STICK_X_USAGE, None) &&
-        //     let Some(x_caps) = hid_device.get_value_capabilities_for_usage(hid::ReportType::Input, LEFT_STICK_X_USAGE, None) &&
-        //     let Some(y) = input_report.get_raw_value(LEFT_STICK_Y_USAGE, None) &&
-        //     let Some(y_caps) = hid_device.get_value_capabilities_for_usage(hid::ReportType::Input, LEFT_STICK_Y_USAGE, None)
-        // {
-        //     let normalized_x = x.first() as f32 / x_caps.physical_range.end as u32 as f32;
-        //     let normalized_y = y.first() as f32 / y_caps.physical_range.end as u32 as f32;
-
-        //     // Normalized values are in the range 0..=1, we need them in the range -1..=1
-        //     let x = normalized_x * 2f32 - 1f32;
-        //     let y = normalized_y * 2f32 - 1f32;
-
-        //     self.move_stick(false, f32v2{ x, y }, f32::MAX, GamepadReleaseCurve::Instant);
-
-        //     // 12
-        // }
-
-        // // Right joystick
-        // if let Some(x) = input_report.get_raw_value(RIGHT_STICK_X_USAGE, None) &&
-        //     let Some(x_caps) = hid_device.get_value_capabilities_for_usage(hid::ReportType::Input, RIGHT_STICK_X_USAGE, None) &&
-        //     let Some(y) = input_report.get_raw_value(RIGHT_STICK_Y_USAGE, None) &&
-        //     let Some(y_caps) = hid_device.get_value_capabilities_for_usage(hid::ReportType::Input, RIGHT_STICK_Y_USAGE, None)
-        // {
-        //     let normalized_x = x.first() as f32 / x_caps.physical_range.end as u32 as f32;
-        //     let normalized_y = y.first() as f32 / y_caps.physical_range.end as u32 as f32;
-
-        //     // Normalized values are in the range 0..=1, we need them in the range -1..=1
-        //     let x = normalized_x * 2f32 - 1f32;
-        //     let y = normalized_y * 2f32 - 1f32;
-
-        //     self.move_stick(true, f32v2{ x, y }, f32::MAX, GamepadReleaseCurve::Instant);
-
-        //     // #[cfg(feature = "raw_input_logging")]
-        //     // log_verbose!(LOG_INPUT_CAT, "Right stick moved to {}", f32v2{ x, y });
-        // }
-
-        // // D-pad
-        // if let Some(val) = input_report.get_raw_value(DPAD_USAGE, None) {
-        //    let dir = unsafe { DPadDirection::from_idx_unchecked(val.first() as usize) };
-        //    self.move_dpad(dir, f32::MAX);
-        // //    #[cfg(feature = "raw_input_logging")]
-        // //    log_verbose!(LOG_INPUT_CAT, "DPad moved to {dir}");
-        // }
-
-        // // Triggers
-        // // 
-        // // With a standard HID trigger, we seem to currently be limited to having them on a single access, see top comment
-        // if let Some(trigger_axis) = input_report.get_raw_value(COMBINED_TRIGGERS_USAGE, None) &&
-        //     let Some(caps) = hid_device.get_value_capabilities_for_usage(hid::ReportType::Input, COMBINED_TRIGGERS_USAGE, None)
-        // {
-        //     let normalized = trigger_axis.first() as f32 / caps.physical_range.end as u32 as f32;
-
-        //     let combined = normalized * 2f32 - 1f32;
-
-        //     if combined < 0f32 {
-        //         self.move_trigger(false, -combined, f32::MAX, GamepadReleaseCurve::Instant);
-        //         self.move_trigger(true ,  0f32    , f32::MAX, GamepadReleaseCurve::Instant);
-        //     } else {
-        //         self.move_trigger(false,  0f32    , f32::MAX, GamepadReleaseCurve::Instant);
-        //         self.move_trigger(true ,  combined, f32::MAX, GamepadReleaseCurve::Instant);
-        //     }
-
-        // }
+    fn handle_hid_input(&mut self, _input_report: &[u8]) {
+        // Nothing to do here
     }
 
     fn handle_native_input(&mut self, _native_data: *const std::ffi::c_void) {

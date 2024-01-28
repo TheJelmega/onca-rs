@@ -1,8 +1,8 @@
-use core::fmt::{self, Write};
+use core::fmt;
 use std::ffi::c_void;
-use hid::{VendorProduct, HidUsage};
-use onca_common::{prelude::*, fmt::Indenter};
-use onca_common_macros::flags;
+use hid::VendorProduct;
+use onca_common::prelude::*;
+
 use onca_hid as hid;
 use crate::{os, AxisValue, AxisType};
 

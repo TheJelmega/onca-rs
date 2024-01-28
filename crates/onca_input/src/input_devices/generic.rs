@@ -1,10 +1,7 @@
-use std::collections::HashMap;
-
 use onca_base::{EnumFromIndexT, EnumCountT};
 use onca_hid as hid;
-use onca_logging::{log_verbose, log_warning};
 use onca_math::f32v2;
-use crate::{InputDevice, InputDeviceDefinition, NativeDeviceHandle, Mouse, InputAxisDefinition, InputAxisId, Gamepad, DefinitionKind, LOG_EVENT_CAT, GamepadReleaseCurve, DefinitionDPad, DPadDirection, GamepadButton, DefinitionAxis, UsageDef};
+use crate::{InputDevice, InputDeviceDefinition, NativeDeviceHandle, InputAxisDefinition, Gamepad, DefinitionKind, GamepadReleaseCurve, DefinitionDPad, DPadDirection, GamepadButton, DefinitionAxis, UsageDef};
 
 
 struct GamepadMapping {
