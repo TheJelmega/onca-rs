@@ -44,6 +44,15 @@ impl fmt::Debug for Table {
     }
 }
 
+impl<'a> IntoIterator for &'a Table {
+    type Item = (&'a str, &'a Item);
+    type IntoIter = TableIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl Table {
 	pub fn new() -> Self {
 		Self { items: Vec::new(), mapping: HashMap::new() }
@@ -101,8 +110,12 @@ impl Table {
 	}
 
 	/// Get an element from the toml
-	pub fn get(&self, key: &str) -> Option<&Item> {
+	pub fn get_item(&self, key: &str) -> Option<&Item> {
 		self.mapping.get(&key.to_string()).map(|idx| &self.items[*idx])
+	}
+
+	pub fn get<T: FromTomlItem>(&self, key: &str) -> Option<&T> {
+		self.get_item(key).map_or(None, |item| T::from_item(item))
 	}
 
 	/// Get a mutable element from the toml
@@ -154,6 +167,13 @@ impl Table {
 			Some(idx) => {
 				match &mut self.items[*idx] {
 					Item::Table(table) => Ok(table),
+					Item::Array(arr) => {
+						if let Some(Item::Table(table)) = arr.last_mut() {
+							Ok(table)
+						} else {
+							Err(0)
+						}
+					}
 					// Non table item, so we can't add this
 					_ => return Err(0),
 				}
@@ -172,7 +192,28 @@ impl Table {
 	pub fn to_toml(self) -> Toml {
 		Toml { table: self }
 	}
+
+	pub fn iter(&self) -> TableIter<'_> {
+		TableIter { table: self, iter: self.mapping.iter() }
+	}
 }
+
+
+pub struct TableIter<'a> {
+	table: &'a Table,
+	iter: std::collections::hash_map::Iter<'a, String, usize>,
+}
+
+impl<'a> Iterator for TableIter<'a> {
+    type Item = (&'a str, &'a Item);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let key = self.iter.next()?;
+		Some((key.0, &self.table.items[*key.1]))
+    }
+}
+
+
 
 #[derive(Clone, Debug)]
 pub struct Toml {
@@ -213,7 +254,7 @@ impl Toml {
 
 	/// Get an element from the toml
 	pub fn get(&self, key: &str) -> Option<&Item> {
-		self.table.get(key)
+		self.table.get_item(key)
 	}
 	
 	/// Get a mutable element from the toml
@@ -358,7 +399,7 @@ impl<'a> Parser<'a> {
 			'{' => self.parse_inline_table(),
 			// Numbers
 			ch if ch.is_numeric() || ch == '-' || ch == '+' => {
-				let s = self.parser.extract_until(|ch: char| ch.is_whitespace() || ch == '\n' || ch == ',');
+				let s = self.parser.extract_until(|ch: char| !ch.is_alphanumeric() && ch != '-' && ch != '_' && ch != '.');
 				// remove `_`
 				let mut s = s.to_string();
 				s.retain(|ch| ch != '_');
@@ -501,3 +542,34 @@ impl<'a> Parser<'a> {
 		err
 	}
 }
+
+
+pub trait FromTomlItem {
+	fn from_item(item: &Item) -> Option<&Self>;
+}
+
+impl FromTomlItem for Item {
+    fn from_item(item: &Item) -> Option<&Self> {
+        Some(item)
+    }
+}
+
+macro_rules! impl_from_toml_item {
+	($ty:ty => $iden:ident) => {
+		impl FromTomlItem for $ty {
+			fn from_item(item: &Item) -> Option<&Self> {
+				if let Item::$iden(s) = item {
+					Some(s)
+				} else {
+					None
+				}
+			}
+		}
+	};
+}
+impl_from_toml_item!(String => String);
+impl_from_toml_item!(i64 => Integer);
+impl_from_toml_item!(f64 => Float);
+impl_from_toml_item!(bool => Boolean);
+impl_from_toml_item!(Vec<Item> => Array);
+impl_from_toml_item!(Table => Table);
