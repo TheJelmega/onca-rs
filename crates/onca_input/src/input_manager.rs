@@ -2,91 +2,119 @@ use core::{
     ptr::null_mut,
     num::NonZeroU8,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, atomic::{AtomicBool, Ordering}}, ffi::c_void};
 
 use onca_common::{
     prelude::*,
-    sync::{Mutex, RwLock},
+    sync::{Mutex, RwLock, MutexGuard},
     event_listener::EventListener,
     time::DeltaTime,
-    sys,
+    sys::{self, is_on_main_thread},
 };
 use onca_hid as hid;
 use onca_logging::{log_verbose, log_error, log_warning, log_info};
-use onca_window::WindowManager;
+use onca_toml::Toml;
+use onca_window::{WindowManager, WindowId};
 
-use crate::{os::{self, OSInput}, input_devices::{Keyboard, InputDevice}, LOG_INPUT_CAT, Mouse, Gamepad, ControlScheme, User, DeviceHandle, DeviceType, AxisValue, ControlSchemeID, InputAxisId, MappingContext};
+use crate::{
+    os::{self, OSInput},
+    input_devices::{Keyboard, InputDevice},
+    LOG_INPUT_CAT, Mouse, Gamepad, ControlScheme, User, DeviceType, AxisValue, ControlSchemeID, InputAxisId, MappingContext, NativeDeviceHandle, Handle, parse_definitions, GenericDevice
+};
+
+
 
 // TODO: Register device with custom API, so would ignore `InputDevice::handleInput` and manage it in `InputDevice::tick`
 struct DeviceStorage {
-    devices        : Vec<Option<(Box<hid::Device>, Box<dyn InputDevice>)>>,
-    device_mapping : HashMap<hid::DeviceHandle, usize>,
+    devices: Vec<(u8, Option<Box<dyn InputDevice>>)>,
 }
 
 impl DeviceStorage {
     fn new() -> Self {
-        Self { devices: Vec::new(), device_mapping: HashMap::new() }
+        Self { devices: Vec::new() }
     }
 
-    fn get_device_mut(&mut self, handle: hid::DeviceHandle) -> Option<(&mut hid::Device, &mut dyn InputDevice)> {
-        let idx = self.device_mapping.get(&handle)?;
-        let (hid_dev, dev) = self.devices[*idx].as_mut()?;
-        Some((hid_dev.as_mut(), dev.as_mut()))
+    fn get_device_mut(&mut self, handle: Handle) -> Option<&mut dyn InputDevice> {
+        let idx = handle.id as usize;
+        if idx >= self.devices.len() ||
+            self.devices[idx].0 != handle.lifetime
+        {
+            return None;
+        }
+
+        if let Some(dev) = &mut self.devices[idx].1 {
+            Some(dev.as_mut())
+        } else {
+            None
+        }
     }
 
-    fn get_device(&self, handle: hid::DeviceHandle) -> Option<(&hid::Device, &dyn InputDevice)> {
-        let idx = self.device_mapping.get(&handle)?;
-        let (hid_dev, dev) = self.devices[*idx].as_ref()?;
-        Some((hid_dev.as_ref(), dev.as_ref()))
+    fn get_device(&self, handle: Handle) -> Option<&dyn InputDevice> {
+        let idx = handle.id as usize;
+        if idx >= self.devices.len() ||
+            self.devices[idx].0 != handle.lifetime
+        {
+            return None;
+        }
+
+        if let Some(dev) = &self.devices[idx].1 {
+            Some(dev.as_ref())
+        } else {
+            None
+        }
     }
 
-    fn get_device_type(&self, handle: hid::DeviceHandle) -> DeviceType {
-        self.get_device(handle).map_or(DeviceType::Other("<unknown>".to_string()), |(_, dev)| dev.get_device_type())
+    fn get_device_types(&self, handle: Handle) -> DeviceType {
+        self.get_device(handle).map_or(DeviceType::Other("<unknown>".to_string()), |dev| dev.get_device_type())
     }
 
-    fn get_axis_value(&self, handle: hid::DeviceHandle, path: &InputAxisId) -> Option<AxisValue> {
-        let (_, dev) = self.get_device(handle)?;
-        dev.get_axis_value(path)
+    fn has_device(&self, handle: Handle) -> bool {
+        self.get_device(handle).is_some()
     }
 
-    fn has_device(&self, handle: hid::DeviceHandle) -> bool {
-        self.device_mapping.contains_key(&handle)
-    }
-
-    fn add_device(&mut self, hid_dev: Box<hid::Device>, dev: Box<dyn InputDevice>) {
-        let handle = hid_dev.handle();
-        let idx = match self.devices.iter().position(|opt| opt.is_none()) {
+    fn add_device(&mut self, dev: Box<dyn InputDevice>) -> Handle {
+        match self.devices.iter().position(|(_, opt)| opt.is_none()) {
             Some(idx) => {
-                self.devices[idx] = Some((hid_dev, dev));
-                idx
+                self.devices[idx].0 += 1;
+                self.devices[idx].1 = Some(dev);
+                Handle { id: idx as u8, lifetime: self.devices[idx].0 }
             },
             None => {
                 let idx = self.devices.len();
-                self.devices.push(Some((hid_dev, dev)));
-                idx
+                self.devices.push((0, Some(dev)));
+                Handle { id: idx as u8, lifetime: 0 }
             },
-        };
-        self.device_mapping.insert(handle, idx);
+        }
     }
 
-    fn remove_device(&mut self, handle: hid::DeviceHandle) {
-        if let Some(idx) = self.device_mapping.remove(&handle) {
-            self.devices[idx] = None;
+    fn remove_device(&mut self, handle: Handle) -> Option<NativeDeviceHandle> {
+        let dev = core::mem::take(&mut self.devices[handle.id as usize].1);
+        if let Some(mut dev) = dev {
+            Some(dev.take_native_handle())
+        } else {
+            None
         }
     }
 
     fn tick(&mut self, dt: f32, rebind_notify: &mut dyn FnMut(InputAxisId)) {
-        for opt in &mut self.devices {
-            if let Some((_, dev)) = opt {
+        for (_, opt) in &mut self.devices {
+            if let Some(dev) = opt {
                 dev.tick(dt, rebind_notify);
             }
         }
     }
 
-    fn handle_hid_input(&mut self, handle: hid::DeviceHandle, raw_report: &[u8]) {
-        if let Some((hid_dev, input_dev)) = self.get_device_mut(handle) {
-            let input_report = unsafe { hid::InputReport::from_raw_slice(raw_report, &hid_dev) };
-            input_dev.handle_hid_input(&*hid_dev, input_report);
+    fn handle_hid_input(&mut self, handle: Handle, raw_report: &[u8]) {
+        if let Some(dev) = self.get_device_mut(handle) {
+            dev.handle_hid_input(raw_report);
+        } else {
+            log_error!(LOG_INPUT_CAT, DeviceStorage::handle_hid_input, "Failed to find device to process hid report")
+        }
+    }
+
+    fn handle_native_input(&mut self, handle: Handle, native_data: *const c_void) {
+        if let Some(dev) = self.get_device_mut(handle) {
+            dev.handle_native_input(native_data);
         } else {
             log_error!(LOG_INPUT_CAT, DeviceStorage::handle_hid_input, "Failed to find device to process hid report")
         }
@@ -109,38 +137,48 @@ struct RebindContext {
     rebind_callback : Box<dyn Fn(InputAxisId) -> RebindResult>,
 }
 
-type CreateDevicePtr = Box<dyn Fn() -> Option<Box<dyn InputDevice>>>;
+type CreateDevicePtr = Box<dyn Fn(NativeDeviceHandle) -> Result<Box<dyn InputDevice>, NativeDeviceHandle>>;
 
 /// Manager for all input: devices, bindings, events, etc
 /// 
 /// All processing for the input manager is handled by the main thread
 pub struct InputManager {
-    pub(crate) os_input     : os::OSInput,
-    pub(crate) mouse        : Option<Mouse>,
-    pub(crate) keyboard     : Option<Keyboard>,
-    device_store            : RwLock<DeviceStorage>,
-    raw_input_listener      : Arc<Mutex<RawInputListener>>,
+    pub(crate) os_input:     Mutex<os::OSInput>,
+    pub(crate) mouse:        Option<Mouse>,
+    pub(crate) keyboard:     Option<Keyboard>,
+    device_store:            RwLock<DeviceStorage>,
+    raw_input_listener:      Arc<Mutex<RawInputListener>>,
 
-    device_product_creators : Mutex<HashMap<hid::VendorProduct, CreateDevicePtr>>,
-    device_custom_creators  : Mutex<Vec<(Box<dyn Fn(&hid::Identifier) -> bool>, CreateDevicePtr)>>,
-    device_usage_creators   : Mutex<HashMap<hid::Usage, CreateDevicePtr>>,
+    device_custom_creators:  Mutex<Vec<(Box<dyn Fn(&hid::Identifier, &str) -> bool>, CreateDevicePtr)>>,
+    device_product_creators: Mutex<HashMap<hid::VendorProduct, CreateDevicePtr>>,
+    device_usage_creators:   Mutex<HashMap<hid::Usage, CreateDevicePtr>>,
 
-    mapping_contexts        : Mutex<Vec<MappingContext>>,
+    mapping_contexts:        Mutex<Vec<MappingContext>>,
 
-    control_schemes         : RwLock<Vec<ControlScheme>>,
-    users                   : RwLock<Vec<User>>,
+    control_schemes:         RwLock<Vec<ControlScheme>>,
+    users:                   RwLock<Vec<User>>,
 
-    unused_devices          : Vec<DeviceHandle>,
+    unused_devices:          Mutex<Vec<Handle>>,
+    has_init_devices:        AtomicBool,
 
-    rebind_context          : Option<RebindContext>
+    rebind_context:          Mutex<Option<RebindContext>>
 }
 
 impl InputManager {
-    pub fn new(window_manager: &Box<WindowManager>) -> Box<Self> {
+    pub fn new(window_manager: &Box<WindowManager>) -> Result<Arc<Self>, i32> {
         assert!(sys::is_on_main_thread(), "The input manager should only be created on the main thread");
 
-        let mut ptr = Box::new(Self {
-            os_input: os::OSInput::new(),
+        let main_window = match window_manager.get_main_window() {
+            Some(window) => window,
+            None => {
+                log_error!(LOG_INPUT_CAT, Self::new, "Cannot create the window manager before the main window is created");
+                return Err(0);
+            },
+        };
+        
+        let os_input = os::OSInput::new(main_window)?;
+        let mut ptr = Arc::new(Self {
+            os_input: Mutex::new(os_input),
             mouse: None,
             keyboard: None,
             device_store: RwLock::new(DeviceStorage::new()),
@@ -150,27 +188,37 @@ impl InputManager {
             device_usage_creators: Mutex::new(HashMap::new()),
             mapping_contexts: Mutex::new(Vec::new()),
             control_schemes: RwLock::new(Vec::new()),
-            users: RwLock::new(Vec::new()),
-            unused_devices: Vec::new(),
-            rebind_context: None,
+            // Make sure that there is 1 user
+            users: RwLock::new(vec![User::new()]),
+            has_init_devices: AtomicBool::new(false),
+            unused_devices: Mutex::new(Vec::new()),
+            rebind_context: Mutex::new(None),
         });
         ptr.raw_input_listener.lock().init(&ptr);
-
         window_manager.register_raw_input_listener(ptr.raw_input_listener.clone());
 
-        // Try to register all devices we can
-        ptr.init_devices();
+        os::register_input_devices(&ptr);
 
-        // Make sure that there is 1 user
-        ptr.users.write().resize_with(1, || User::new());
-
-        ptr
+        Ok(ptr)
     }
 
+    /// Register an input device createor for custom logic, e.g. controllers that support a custom API
+    pub fn register_custom_create_device<P, F>(&self, pred: P, usages: &[hid::Usage], create_dev: F)
+    where
+        P: Fn(&hid::Identifier, &str) -> bool + 'static,
+        F: Fn(NativeDeviceHandle) -> Result<Box<dyn InputDevice>, NativeDeviceHandle> + 'static
+    {
+        {
+            let mut dev_custom_creators = self.device_custom_creators.lock();
+            dev_custom_creators.push((Box::new(pred), Box::new(create_dev)));
+        }
+        self.os_input.lock().register_device_usages(usages);
+    }
+    
     /// Register an input device creator for a specific device, including the hid usages it needs to have registered
     pub fn register_product_create_device<F>(&self, vendor_product: hid::VendorProduct, usages: &[hid::Usage], create_dev: F)
     where
-        F : Fn() -> Option<Box<dyn InputDevice>> + 'static
+        F: Fn(NativeDeviceHandle) -> Result<Box<dyn InputDevice>, NativeDeviceHandle> + 'static
     {
         {
             let mut dev_prod_creators = self.device_product_creators.lock();
@@ -180,30 +228,13 @@ impl InputManager {
                 log_warning!(LOG_INPUT_CAT, "Device creation has already been registered for vendor and product: {vendor_product}");
             }
         }
-        for usage in usages {
-            self.os_input.register_device_usage(*usage);
-        }
+        self.os_input.lock().register_device_usages(usages);
     }
 
-    /// Register an input device createor for custom logic, e.g. controllers that support a custom API
-    pub fn register_custom_create_device<P, F>(&self, pred: P, usages: &[hid::Usage], create_dev: F)
-    where
-        P : Fn(&hid::Identifier) -> bool + 'static,
-        F : Fn() -> Option<Box<dyn InputDevice>> + 'static
-    {
-        {
-            let mut dev_custom_creators = self.device_custom_creators.lock();
-            dev_custom_creators.push((Box::new(pred), Box::new(create_dev)));
-        }
-        for usage in usages {
-            self.os_input.register_device_usage(*usage);
-        }
-    }
-    
     /// Register a generic input device creator for a specific usage
     pub fn register_usage_creator_device<F>(&self, usage: hid::Usage, create_dev: F)
     where
-    F : Fn() -> Option<Box<dyn InputDevice>> + 'static
+        F: Fn(NativeDeviceHandle) -> Result<Box<dyn InputDevice>, NativeDeviceHandle> + 'static
     {
         {
             let mut usage_creators = self.device_usage_creators.lock();
@@ -213,7 +244,19 @@ impl InputManager {
                 log_warning!(LOG_INPUT_CAT, "Device creation has already been registered for usage: {usage}");
             }
         }
-        self.os_input.register_device_usage(usage);
+        self.os_input.lock().register_device_usages(&[usage]);
+    }
+
+    pub fn register_generic_hid_definitions(&self, toml: &Toml) {
+        let defs = parse_definitions(toml);
+        for def in defs {
+            self.register_product_create_device(def.vendor_product, &[], move |handle| GenericDevice::new(handle, &def).map(|x| {
+                // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
+                // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
+                let res: Box<dyn InputDevice> = Box::new(x);
+                res
+            }));
+        }
     }
 
     /// Register a mapping context.
@@ -280,33 +323,36 @@ impl InputManager {
     where
         F : Fn(InputAxisId) -> RebindResult + 'static
     {
-        if self.rebind_context.is_some() {
+        let mut rebind_context = self.rebind_context.lock();
+        if rebind_context.is_some() {
             log_warning!(LOG_INPUT_CAT, "Trying to start rebind when rebind is still in progress");
             return;
         }
 
-        self.rebind_context = Some(RebindContext {
+        *rebind_context = Some(RebindContext {
             binding_name: binding_name.to_string(),
             context_name: mapping_context_identifier.map(|s| s.to_string()),
             rebind_callback: Box::new(rebind_callback)
         })
     }
   
-    pub fn tick(&mut self, dt: DeltaTime) {
+    pub fn tick(&self, dt: DeltaTime) {
         assert!(sys::is_on_main_thread(), "The input manager should only be ticked on the main thread");
 
-        let _scope_alloc = ScopedAlloc::new(AllocId::TlsTemp);
+        // Initialize devices that are already connected on the initial tick
+        if !self.has_init_devices.load(Ordering::SeqCst) {
+            self.init_devices();
+        }
+
+        scoped_alloc!(AllocId::TlsTemp);
+
+        // Update OS input
+        self.os_input.lock().tick();
         
         // Update devices
         let mut rebind_axes = Vec::new();
-        let mut callback = |input: InputAxisId| if self.rebind_context.is_none() { rebind_axes.push(input) };
+        let mut callback = |input: InputAxisId| if self.rebind_context.lock().is_none() { rebind_axes.push(input) };
         
-        if let Some(mouse) = &mut self.mouse {
-            mouse.tick(dt.get_dt(), &mut callback);
-        }
-        if let Some(kb) = &mut self.keyboard {
-            kb.tick(dt.get_dt(), &mut callback);
-        }
         self.device_store.write().tick(dt.get_dt(), &mut callback);
         
         for axis in rebind_axes {
@@ -317,19 +363,20 @@ impl InputManager {
         let mut users = self.users.write();
         if users.len() != 1 {
             let schemes = self.control_schemes.read();
+            let mut unused_devices = self.unused_devices.lock();
             // If there are users that don't have a control set, try to generate them
             for (user_idx, user) in users.iter_mut().enumerate() {
-                if !self.unused_devices.is_empty() && user.control_set().is_none() {
+                if !unused_devices.is_empty() && user.control_set().is_none() {
                     for scheme in &*schemes {
                         // The first control scheme that can be created will be used
-                        if let Some(control_set) = scheme.create_control_set(&self.unused_devices, |handle| self.get_device_type(handle)) {
-                            self.unused_devices.retain(|handle| !control_set.devices().contains(handle));
+                        if let Some(control_set) = scheme.create_control_set(&unused_devices, |handle| device_store.get_device_types(handle)) {
+                            unused_devices.retain(|handle| !control_set.devices().contains(handle));
                             user.set_control_set(control_set);
                             break;
                         }
                     }
                 }
-                user.process_input(dt, user_idx as u8, |user, axis| self.get_input_for_user(user, axis, &device_store));
+                user.process_input(dt, user_idx as u8, |user, axis| Self::get_input_for_user(user, axis, &device_store));
             }
         } else {
             assert!(users.len() == 1);
@@ -337,19 +384,11 @@ impl InputManager {
         }
     }
 
-    pub fn keyboard(&self) -> Option<&Keyboard> {
-        self.keyboard.as_ref()
-    }
-
-    pub fn mouse(&self) -> Option<&Mouse> {
-        self.mouse.as_ref()
-    }
-
     /// Set the maximum number of users that can be created.4
     /// 
     /// If `1` is passed, all input devices will be consumed by user 0, regardless of control scheme.
     /// If more than `1` is passed, each user will only ever have a single active control scheme, which cannot be switched without removing the user first.
-    pub fn set_max_users(&mut self, max_users: NonZeroU8) {
+    pub fn set_max_users(&self, max_users: NonZeroU8) {
         self.users.write().resize_with(max_users.get() as usize, || User::new());
     }
 
@@ -360,7 +399,7 @@ impl InputManager {
     }
 
     /// Remove a control scheme
-    pub fn remove_control_scheme(&mut self, identifier: &ControlSchemeID) {
+    pub fn remove_control_scheme(&self, identifier: &ControlSchemeID) {
         let mut control_schemes = self.control_schemes.write();
         if let Some(idx) = control_schemes.iter().position(|scheme| scheme.identifier() == identifier) {
             control_schemes.remove(idx);
@@ -370,8 +409,8 @@ impl InputManager {
         }
     }
 
-    pub(crate) fn has_device(&mut self, hid_handle: hid::DeviceHandle) -> bool {
-        self.device_store.read().has_device(hid_handle)
+    pub(crate) fn has_device(&self, handle: Handle) -> bool {
+        self.device_store.read().has_device(handle)
     }
 
     pub(crate) fn can_create_device_for(&self, hid_iden: hid::Identifier) -> bool {
@@ -379,51 +418,106 @@ impl InputManager {
             self.device_usage_creators.lock().contains_key(&hid_iden.usage)
     }
 
-    pub(crate) fn add_device(&mut self, device: hid::Device) {
-        let device = Box::new(device);
-        let handle = DeviceHandle::Hid(device.handle());
-        if let Some(input_dev) = self.create_input_device_for(*device.identifier()) {
-            let usage = device.identifier().usage;
-            let vendor_product = device.get_vendor_string().unwrap_or_default() + " " + &device.get_product_string().unwrap_or_default();
+    pub(crate) fn add_device(&self, iden: hid::Identifier, native_handle: NativeDeviceHandle) -> Option<Handle> {
+        //log_info!(LOG_INPUT_CAT, "Trying to add device {device}");
 
-            log_info!(LOG_INPUT_CAT, "Added new input device '{vendor_product}' for usage {usage}");
+        if let Some(input_dev) = self.create_input_device_for(iden, native_handle) {
+            
+            let usage = iden.usage;
+            let vendor = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
+                || String::new(),
+                |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.vendor.to_string())
+            );
+            let product = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
+                || String::new(),
+                |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.device.to_string())
+            );
 
-            self.device_store.write().add_device(device, input_dev);
+            if vendor.is_empty() || product.is_empty() {
+                log_info!(LOG_INPUT_CAT, "Added new input device '{}' for usage {usage}", input_dev.get_hid_identifier().vendor_device);
+            } else {
+                log_info!(LOG_INPUT_CAT, "Added new input device '{{ vendor: {vendor}, product: {product} }}' for usage {usage}");
+            }
+            
+            let mut store = self.device_store.write();
+            let handle = store.add_device(input_dev);
+
+            let dev = store.get_device(handle).unwrap();
+            self.os_input.lock().notify_device_added(handle, dev.get_native_handle());
 
             // First check if any user had this device disconnected, if so, give it the device and try to create the control scheme
             for user in &mut *self.users.write() {
-                if let None = user.control_set() && user.try_reconnect_device(handle) {
-                    return;
+                if let None = user.control_set() && user.try_reconnect_device(handle, dev.get_native_handle()) {
+                    return Some(handle);
                 }
             }
             // Otherwise, add to the available devices
-            self.unused_devices.push(handle)
+            self.unused_devices.lock().push(handle);
+            Some(handle)
+        } else {
+            None
         }
     }
 
-    pub(crate) fn handle_hid_input(&self, handle: hid::DeviceHandle, raw_report: &[u8]) {
+    pub(crate) fn handle_hid_input(&self, handle: Handle, raw_report: &[u8]) {
         self.device_store.write().handle_hid_input(handle, raw_report);
     }
 
-    pub(crate) fn remove_device(&self, handle: hid::DeviceHandle) {
-        self.device_store.write().remove_device(handle);
+    pub (crate) fn handle_native_input(&self, handle: Handle, native_data: *const c_void) {
+        self.device_store.write().handle_native_input(handle, native_data);
+    }
+
+    pub(crate) fn remove_device(&self, handle: Handle) {
+        let mut store = self.device_store.write();
+
+        if !store.has_device(handle) {
+            return;
+        }
+
+        let input_dev = store.get_device(handle).unwrap();
+        let iden = input_dev.get_hid_identifier();
+        let usage = iden.usage;
+        let vendor = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
+            || String::new(),
+            |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.vendor.to_string())
+        );
+        let product = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
+            || String::new(),
+            |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.device.to_string())
+        );
+
+        if vendor.is_empty() || product.is_empty() {
+            log_info!(LOG_INPUT_CAT, "Removed input device '{}' for usage {usage}", input_dev.get_hid_identifier().vendor_device);
+        } else {
+            log_info!(LOG_INPUT_CAT, "Removed input device '{{ vendor: {vendor}, product: {product} }}' for usage {usage}");
+        }
+
+        let mut native_handle = match store.remove_device(handle) {
+            Some(handle) => handle,
+            None => return,
+        };
 
         let mut users = self.users.write();
         for (idx, user) in users.iter_mut().enumerate() {
-            if user.notify_device_removed(DeviceHandle::Hid(handle)) {
-                if user.get_currently_held_devices().is_empty() {
-                    // We can safely remove the value at the index and invalidate the iterator, as we don't use it anymore
-                    users.remove(idx);
-                }
+            native_handle = match user.notify_device_removed(handle, native_handle) {
+                Ok(_) => {
+                    if user.get_currently_held_devices().is_empty() {
+                        // We can safely remove the value at the index and invalidate the iterator, as we don't use it anymore
+                        users.remove(idx);
+                    }
 
-                // Only one user can hold a device, so we don't need to check any other ones
-                break;
+                    // Only one user can hold a device, so we don't need to check any other ones
+                    break;
+                },
+                Err(handle) => handle,
             }
         }
     }
 
-    pub(crate) fn notify_rebind(&mut self, input: InputAxisId) {
-        if let Some(ctx) = &mut self.rebind_context {
+    pub(crate) fn notify_rebind(&self, input: InputAxisId) {
+        let mut rebind_context = self.rebind_context.lock();
+
+        if let Some(ctx) = &mut *rebind_context {
             match (ctx.rebind_callback)(input) {
                 RebindResult::Continue => (),
                 RebindResult::Accept(input) => {
@@ -432,8 +526,6 @@ impl InputManager {
                         if let Some(ident) = &ctx.context_name && mapping_context.identifier != *ident {
                             continue;
                         }
-
-                        
                     }
 
                     // Propagate to context instances
@@ -443,47 +535,103 @@ impl InputManager {
                     }
                 },
                 // We can safely set it to `None` as we won't be using ctx after this
-                RebindResult::Cancel => self.rebind_context = None,
+                RebindResult::Cancel => *rebind_context = None,
             }
         }
     }
 
-    fn init_devices(&mut self) {
-        self.mouse = Mouse::new();
-        self.keyboard = Keyboard::new();
+    pub(crate) fn get_os_input(&self) -> MutexGuard<OSInput> {
+        self.os_input.lock()
+    }
+
+    fn init_devices(&self) {
+        // Register:
+        let default_usages = [
+            // - Pointer
+            //hid::Usage::from_u16(1, 1),
+            // - Mouse
+            hid::Usage::from_u16(1, 2),
+            // - Gamepad
+            hid::Usage::from_u16(1, 4),
+            // - Joystick
+            //hid::Usage::from_u16(1, 5),
+            // - Keyboard
+            hid::Usage::from_u16(1, 6),
+            // - Keypad
+            //hid::Usage::from_u16(1, 7),
+
+            // - External Pen Device
+            //hid::Usage::from_u16(13, 1),
+            // - Integrated Pen Device
+            //hid::Usage::from_u16(13, 2),
+            // - Touchscreen
+            //hid::Usage::from_u16(13, 4),
+            // - Precision Touchpad
+            //hid::Usage::from_u16(13, 5),
+        ];
+
+
+        self.os_input.lock().register_device_usages(&default_usages);
 
         // Register built-in device creators
-        let gamepad_usage = hid::Usage::from_u16(1, 5);
-        self.register_usage_creator_device(gamepad_usage, || Gamepad::new().map(|x| {
+        self.register_usage_creator_device(hid::Usage::from_u16(1, 2), |handle| Mouse::new(handle).map(|x| {
             // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
             // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
-            let res : Box<dyn InputDevice> = Box::new(x);
+            let res: Box<dyn InputDevice> = Box::new(x);
             res
         }));
+        self.register_usage_creator_device(hid::Usage::from_u16(1, 6), |handle| Keyboard::new(handle).map(|x| {
+            // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
+            // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
+            let res: Box<dyn InputDevice> = Box::new(x);
+            res
+        }));
+
+        let gamepad_usage = hid::Usage::from_u16(1, 5);
+        self.register_usage_creator_device(gamepad_usage, |handle| Gamepad::new(handle).map(|x| {
+            // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
+            // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
+            let res: Box<dyn InputDevice> = Box::new(x);
+            res
+        }));
+
+        // Create devices for unloaded devices
+        //let native_dev_handles = self.os_input.get_devices().unwrap();
+        //for handle in native_dev_handles {
+        //    self.add_device(*handle.native.get_hid_identifier(), handle);
+        //}
+
+        self.has_init_devices.store(true, Ordering::SeqCst);
     }
 
-    fn create_input_device_for(&self, ident: hid::Identifier) -> Option<Box<dyn InputDevice>> {
+    fn create_input_device_for(&self, ident: hid::Identifier, mut handle: NativeDeviceHandle) -> Option<Box<dyn InputDevice>> {
         // Find the best fitting, registered device
         //
-        // 1) any device that matches the specific vendor and product
-        if let Some(create) = self.device_product_creators.lock().get(&ident.vendor_device) {
-            if let Some(ptr) = create() {
-                return Some(ptr);
-            }
+        // 1) any device that matches custom logic
+        let hid_iden = handle.get_hid_identifier();
+        let unique_iden = handle.get_unique_identifier();
+
+        if let Some(create) = self.device_custom_creators.lock().iter().find(|(fun, _)| fun(hid_iden, unique_iden)) {
+            handle = match create.1(handle) {
+                Ok(ptr) => return Some(ptr),
+                Err(handle) => handle,
+            };
         }
 
-        // 2) any device that matches custom logic
-        if let Some(create) = self.device_custom_creators.lock().iter().find(|(fun, _)| fun(&ident)) {
-            if let Some(ptr) = create.1() {
-                return Some(ptr);
-            }
+        // 2) any device that matches the specific vendor and product
+        if let Some(create) = self.device_product_creators.lock().get(&ident.vendor_device) {
+            handle = match create(handle) {
+                Ok(ptr) => return Some(ptr),
+                Err(handle) => handle,
+            };
         }
 
         // 3) any device that matches the usage
         if let Some(create) = self.device_usage_creators.lock().get(&ident.usage) {
-            if let Some(ptr) = create() {
-                return Some(ptr);
-            }
+            _ = match create(handle) {
+                Ok(ptr) => return Some(ptr),
+                Err(handle) => handle,
+            };
         }
 
         // If we have not match for either a product or usage, we don't know about this input device
@@ -492,25 +640,8 @@ impl InputManager {
     }
     
     fn get_input_for_any(&self, axis_path: &InputAxisId, device_store: &DeviceStorage) -> AxisValue {
-        // try the keyboard first
-        let kb_input = match &self.keyboard {
-            Some(kb) => kb.get_axis_value(axis_path),
-            None => None,
-        };
-        if let Some(kb_input) = kb_input {
-            return kb_input;
-        }
-        // then try the mouse
-        let mouse_input = match &self.mouse {
-            Some(mouse) => mouse.get_axis_value(axis_path),
-            None => None,
-        };
-        if let Some(mouse_input) = mouse_input {
-            return mouse_input;
-        }
-        // then try the other input devices
         for opt in &device_store.devices {
-            if let Some((_, dev)) = opt {
+            if let (_, Some(dev)) = opt {
                 if let Some(val) = dev.get_axis_value(axis_path) {
                     return val;
                 }
@@ -520,11 +651,12 @@ impl InputManager {
         AxisValue::Digital(false)
     }
 
-    fn get_input_for_user(&self, user: &User, axis_path: &InputAxisId, device_store: &DeviceStorage) -> AxisValue {
+    fn get_input_for_user(user: &User, axis_path: &InputAxisId, device_store: &DeviceStorage) -> AxisValue {
         match user.control_set() {
             Some(control_set) => {
                 for handle in control_set.devices() {
-                    if let Some(val) = self.get_axis_value_from_handle(*handle, axis_path, device_store) {
+                    let store = device_store;
+                    if let Some(val) = store.get_device(*handle).and_then(|dev| dev.get_axis_value(axis_path)) {
                         return val;
                     }
                 }
@@ -533,25 +665,6 @@ impl InputManager {
             None => AxisValue::Digital(false),
         }
     }
-
-    fn get_axis_value_from_handle(&self, handle: DeviceHandle, axis_path: &InputAxisId, device_store: &DeviceStorage) -> Option<AxisValue> {
-        match handle {
-            DeviceHandle::Invalid => None,
-            DeviceHandle::Mouse => self.mouse.as_ref().and_then(|mouse| mouse.get_axis_value(axis_path)),
-            DeviceHandle::Keyboard => self.keyboard.as_ref().and_then(|keyboard| keyboard.get_axis_value(axis_path)),
-            DeviceHandle::Hid(handle) => device_store.get_axis_value(handle, axis_path),
-        }
-    }
-
-    fn get_device_type(&self, handle: DeviceHandle) -> DeviceType {
-        match handle {
-            DeviceHandle::Invalid => DeviceType::Other("<unknown>".to_string()),
-            DeviceHandle::Mouse => DeviceType::Mouse,
-            DeviceHandle::Keyboard => DeviceType::Keyboard,
-            DeviceHandle::Hid(hid_handle) => self.device_store.read().get_device_type(hid_handle),
-        }
-    }
-
 }
 
 impl Drop for InputManager {
@@ -561,20 +674,20 @@ impl Drop for InputManager {
 }
 
 struct RawInputListener {
-    manager : *mut InputManager
+    manager : Option<Arc<InputManager>>
 }
 
 impl RawInputListener {
     pub(crate) fn new() -> Self {
-        Self { manager: null_mut() }
+        Self { manager: None }
     }
 
-    pub(crate) fn init(&mut self, manager: &Box<InputManager>) {
-        self.manager = &**manager as *const _ as *mut _;
+    pub(crate) fn init(&mut self, manager: &Arc<InputManager>) {
+        self.manager = Some(manager.clone());
     }
 
     pub(crate) fn shutdown(&mut self) {
-        self.manager = null_mut();
+        self.manager = None;
     }
 }
 
@@ -582,8 +695,8 @@ impl EventListener<onca_window::RawInputEvent> for RawInputListener {
     fn notify(&mut self, event: &onca_window::RawInputEvent) {
         // SAFETY: `process_window_event`: We know the implementation to be safe
         // SAFETY: deref: Events can only be sent via the main thread (via the window manager), so our deref here is not causing mutability over multiple threads
-        if self.manager != null_mut() {
-            unsafe { OSInput::process_window_event(&mut *self.manager, event) };
+        if let Some(manager) = &mut self.manager {
+            unsafe { OSInput::process_window_event(&**manager, event) };
         }
     }
 }

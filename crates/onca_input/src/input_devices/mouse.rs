@@ -1,51 +1,37 @@
-use core::fmt;
 use onca_common::{
+    prelude::*,
     collections::BitSet,
     sync::{RwLock, Mutex},
 };
+use onca_common_macros::{EnumCount, EnumFromIndex, EnumDisplay};
 use onca_logging::log_verbose;
 use onca_math::*;
+use windows::Win32::UI::Input::RAWMOUSE;
 
-use crate::{InputDevice, os, LOG_INPUT_CAT, InputAxisDefinition, AxisValue, AxisType, DeviceType, InputAxisId};
+use crate::{InputDevice, os::{self, OSMouse}, LOG_INPUT_CAT, InputAxisDefinition, AxisValue, AxisType, DeviceType, InputAxisId, NativeDeviceHandle};
 
 
 /// Mouse button
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumCount, EnumFromIndex, EnumDisplay)]
 #[allow(unused)]
 pub enum MouseButton {
+    /// Left mouse button
+    #[display("left button")]
     Left,
+    /// Middle mouse button
+    #[display("middle button")]
     Middle,
+    /// Right mouse button
+    #[display("right button")]
     Right,
+    /// Side mouse button 0
+    #[display("side button 0")]
     Side0,
+    /// Side mouse button 1
+    #[display("side button 1")]
     Side1,
 }
-const NUM_BUTTONS : usize = MouseButton::Side1 as usize + 1;
-const MOUSE_BUTTON_BITS : usize = NUM_BUTTONS.next_power_of_two();
-
-impl MouseButton {
-    pub fn from_idx(idx: usize) -> Option<MouseButton> {
-        match idx {
-            0 => Some(Self::Left),
-            1 => Some(Self::Middle),
-            2 => Some(Self::Right),
-            3 => Some(Self::Side0),
-            4 => Some(Self::Side1),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for MouseButton {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MouseButton::Left   => f.write_str("left button"),
-            MouseButton::Middle => f.write_str("middle button"),
-            MouseButton::Right  => f.write_str("right button"),
-            MouseButton::Side0  => f.write_str("side button 0"),
-            MouseButton::Side1  => f.write_str("side button 1"),
-        }
-    }
-}
+const MOUSE_BUTTON_BITS: usize = MouseButton::COUNT.next_power_of_two();
 
 /// Button state
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -76,19 +62,18 @@ pub type MouseScroll = f32v2;
 
 
 struct ButtonChange {
-    button  : MouseButton,
-    time    : f32,
-    pressed : bool,
+    button:  MouseButton,
+    time:    f32,
+    pressed: bool,
 }
 
-
 struct MouseState {
-    pressed  : BitSet<MOUSE_BUTTON_BITS>,
-    down     : BitSet<MOUSE_BUTTON_BITS>,
-    released : BitSet<MOUSE_BUTTON_BITS>,
-    position : MousePosition,
-    delta    : MouseDelta,
-    scroll   : MouseScroll
+    pressed:  BitSet<MOUSE_BUTTON_BITS>,
+    down:     BitSet<MOUSE_BUTTON_BITS>,
+    released: BitSet<MOUSE_BUTTON_BITS>,
+    position: MousePosition,
+    delta:    MouseDelta,
+    scroll:   MouseScroll
 }
 
 impl MouseState {
@@ -109,14 +94,14 @@ impl MouseState {
     }
 
     pub fn press(&mut self, idx: usize) {
-        self.pressed.set(idx, true);
-        self.down.set(idx, true);
+        self.pressed.enable(idx);
+        self.down.enable(idx);
     }
 
     pub fn release(&mut self, idx: usize) {
-        self.pressed.set(idx, false);
-        self.down.set(idx, false);
-        self.released.set(idx, true);
+        self.pressed.disable(idx);
+        self.down.disable(idx);
+        self.released.enable(idx);
     }
 
     pub fn get_button_state(&self, button: MouseButton) -> ButtonState {
@@ -138,80 +123,97 @@ impl MouseState {
     }
 }
 
+struct MouseChangeState {
+    buttons:  Vec<ButtonChange>,
+    mouse_pos: MousePosition,
+    scroll:   MouseScroll,
+}
+
+impl MouseChangeState {
+    pub fn new() -> Self {
+        Self {
+            buttons: Vec::new(),
+            mouse_pos: MousePosition::zero(),
+            scroll: MouseScroll::zero(),
+        }
+    }
+}
+
 pub struct Mouse {
-    _os_mouse        : os::OSMouse,
-    state            : RwLock<MouseState>,
-    button_changes   : Mutex<Vec<ButtonChange>>,
-    move_pos         : Mutex<MousePosition>,
-    scroll           : Mutex<MouseScroll>,
-    button_timers    : [f32; NUM_BUTTONS]
+    _os_mouse:      os::OSMouse,
+    handle:         Option<NativeDeviceHandle>,
+    state:          RwLock<MouseState>,
+    change_state:   Mutex<MouseChangeState>,
+    button_timers:  [f32; MouseButton::COUNT]
 }
 
 impl Mouse {
-    // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    pub const XY_STR            : &'static str = "Mouse XY 2D-Axis";
-    pub const X_STR             : &'static str = "Mouse X";
-    pub const Y_STR             : &'static str = "Mouse Y";
-    pub const WHEEL_STR         : &'static str = "Mouse Wheel Axis";
-    pub const WHEEL_UP_STR      : &'static str = "Mouse Wheel Up";
-    pub const WHEEL_DOWN_STR    : &'static str = "Mouse Wheel Down";
-    pub const HWHEEL_STR        : &'static str = "Mouse Wheel Horizontal Axis";
-    pub const HWHEEL_LEFT_STR   : &'static str = "Mouse Mouse Wheel Left";
-    pub const HWHEEL_RIGHT_STR  : &'static str = "Mouse Wheel Right";
-    pub const LEFT_BUTTON_STR   : &'static str = "Mouse Left Button";
-    pub const MIDDLE_BUTTON_STR : &'static str = "Mouse Middle Button";
-    pub const RIGHT_BUTTON_STR  : &'static str = "Mouse Right Button";
-    pub const SIDE0_BUTTON_STR  : &'static str = "Mouse Side Button0";
-    pub const SIDE1_BUTTON_STR  : &'static str = "Mouse Side Button1";
+    pub const XY_STR:            &'static str = "Mouse XY";
+    pub const X_STR:             &'static str = "Mouse X";
+    pub const Y_STR:             &'static str = "Mouse Y";
+    pub const WHEEL_STR:         &'static str = "Mouse Wheel Axis";
+    pub const WHEEL_UP_STR :     &'static str = "Mouse Wheel Up";
+    pub const WHEEL_DOWN_STR:    &'static str = "Mouse Wheel Down";
+    pub const HWHEEL_STR:        &'static str = "Mouse Wheel Horizontal Axis";
+    pub const HWHEEL_LEFT_STR:   &'static str = "Mouse Wheel Left";
+    pub const HWHEEL_RIGHT_STR:  &'static str = "Mouse Wheel Right";
+    pub const LEFT_BUTTON_STR:   &'static str = "Mouse Left Button";
+    pub const MIDDLE_BUTTON_STR: &'static str = "Mouse Middle Button";
+    pub const RIGHT_BUTTON_STR:  &'static str = "Mouse Right Button";
+    pub const SIDE0_BUTTON_STR:  &'static str = "Mouse Side Button 0";
+    pub const SIDE1_BUTTON_STR:  &'static str = "Mouse Side Button 1";
 
-    pub const XY            : InputAxisId = InputAxisId::new(Self::XY_STR           );
-    pub const X             : InputAxisId = InputAxisId::new(Self::X_STR            );
-    pub const Y             : InputAxisId = InputAxisId::new(Self::Y_STR            );
-    pub const WHEEL         : InputAxisId = InputAxisId::new(Self::WHEEL_STR        );
-    pub const WHEEL_UP      : InputAxisId = InputAxisId::new(Self::WHEEL_UP_STR     );
-    pub const WHEEL_DOWN    : InputAxisId = InputAxisId::new(Self::WHEEL_DOWN_STR   );
-    pub const HWHEEL        : InputAxisId = InputAxisId::new(Self::HWHEEL_STR       );
-    pub const HWHEEL_LEFT   : InputAxisId = InputAxisId::new(Self::HWHEEL_LEFT_STR  );
-    pub const HWHEEL_RIGHT  : InputAxisId = InputAxisId::new(Self::HWHEEL_RIGHT_STR );
-    pub const LEFT_BUTTON   : InputAxisId = InputAxisId::new(Self::LEFT_BUTTON_STR  );
-    pub const MIDDLE_BUTTON : InputAxisId = InputAxisId::new(Self::MIDDLE_BUTTON_STR);
-    pub const RIGHT_BUTTON  : InputAxisId = InputAxisId::new(Self::RIGHT_BUTTON_STR );
-    pub const SIDE0_BUTTON  : InputAxisId = InputAxisId::new(Self::SIDE0_BUTTON_STR );
-    pub const SIDE1_BUTTON  : InputAxisId = InputAxisId::new(Self::SIDE1_BUTTON_STR );
+    pub const XY:            InputAxisId = InputAxisId::new(Self::XY_STR           );
+    pub const X:             InputAxisId = InputAxisId::new(Self::X_STR            );
+    pub const Y:             InputAxisId = InputAxisId::new(Self::Y_STR            );
+    pub const WHEEL:         InputAxisId = InputAxisId::new(Self::WHEEL_STR        );
+    pub const WHEEL_UP:      InputAxisId = InputAxisId::new(Self::WHEEL_UP_STR     );
+    pub const WHEEL_DOWN:    InputAxisId = InputAxisId::new(Self::WHEEL_DOWN_STR   );
+    pub const HWHEEL:        InputAxisId = InputAxisId::new(Self::HWHEEL_STR       );
+    pub const HWHEEL_LEFT:   InputAxisId = InputAxisId::new(Self::HWHEEL_LEFT_STR  );
+    pub const HWHEEL_RIGHT:  InputAxisId = InputAxisId::new(Self::HWHEEL_RIGHT_STR );
+    pub const LEFT_BUTTON:   InputAxisId = InputAxisId::new(Self::LEFT_BUTTON_STR  );
+    pub const MIDDLE_BUTTON: InputAxisId = InputAxisId::new(Self::MIDDLE_BUTTON_STR);
+    pub const RIGHT_BUTTON:  InputAxisId = InputAxisId::new(Self::RIGHT_BUTTON_STR );
+    pub const SIDE0_BUTTON:  InputAxisId = InputAxisId::new(Self::SIDE0_BUTTON_STR );
+    pub const SIDE1_BUTTON:  InputAxisId = InputAxisId::new(Self::SIDE1_BUTTON_STR );
+
     /// Create a new mouse.
-    pub fn new() -> Option<Self> {
-        os::OSMouse::new().map(|os_mouse| Self {
-            _os_mouse: os_mouse,
-            state: RwLock::new(MouseState::new()),
-            button_changes: Mutex::new(Vec::new()),
-            move_pos: Mutex::new(MousePosition::zero()),
-            scroll: Mutex::new(MouseScroll::zero()),
-            button_timers: [0f32; NUM_BUTTONS]
-         })
+    pub fn new(handle: NativeDeviceHandle) -> Result<Self, NativeDeviceHandle> {
+        match os::OSMouse::new() {
+            Some(os_mouse) => Ok(Self {
+                _os_mouse: os_mouse,
+                handle: Some(handle),
+                state: RwLock::new(MouseState::new()),
+                change_state: Mutex::new(MouseChangeState::new()),
+                button_timers: [0f32; MouseButton::COUNT]
+             }),
+            None => Err(handle),
+        }
     }
 
     /// Emulate a mouse button press.
     pub fn press_button(&self, button: MouseButton, time: f32) {
-        self.button_changes.lock().push(ButtonChange { button, time, pressed: true });
+        self.change_state.lock().buttons.push(ButtonChange { button, time, pressed: true });
     }
 
     /// Emulate a mouse button release.
     pub fn release_button(&self, button: MouseButton) {
-        self.button_changes.lock().push(ButtonChange { button, time: 0f32, pressed: false });
+        self.change_state.lock().buttons.push(ButtonChange { button, time: 0f32, pressed: false });
     }
 
     pub fn set_mouse_pos(&self, pos: MousePosition) {
-        *self.move_pos.lock() = pos;
+        self.change_state.lock().mouse_pos = pos;
     }
 
     /// Emulate a mouse movement.
     pub fn move_mouse(&self, delta: MouseDelta) {
-        *self.move_pos.lock() += delta;
+        self.change_state.lock().mouse_pos += delta;
     }
 
     /// Emulate a mouse wheel scroll
     pub fn scroll_wheel(&self, delta: MouseScroll) {
-        *self.scroll.lock() += delta;
+        self.change_state.lock().scroll += delta;
     }
 
     /// Get the button state for a given button
@@ -235,59 +237,59 @@ impl Mouse {
 }
 
 impl InputDevice for Mouse {
+    fn get_native_handle(&self) -> &crate::NativeDeviceHandle {
+        self.handle.as_ref().unwrap()
+    }
+
     fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(InputAxisId)) {
-
-        let mouse_pos = self.move_pos.lock();
-        let mut scroll = self.scroll.lock();
-
-        let mut button_changes = self.button_changes.lock();
+        let mut change_state = self.change_state.lock();
         let mut state = self.state.write();
 
         state.prepare_for_update();
 
         // Update mouse position, etc
-        state.delta = *mouse_pos - state.position;
-        state.position = *mouse_pos;
+        state.delta = change_state.mouse_pos - state.position;
+        state.position = change_state.mouse_pos;
 
         #[cfg(feature = "mouse_pos_logging")]
         if !state.delta.is_zero() {
             log_verbose!(LOG_INPUT_CAT, "Mouse moved to position {} and delta {}", state.position, state.delta);
         }
-        #[cfg(feature = "raw_input_logging")]
-        {
-            if !scroll.x.is_zero() {
-                log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", scroll.x);
-            }
-            if !scroll.y.is_zero() {
-                log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", scroll.y);
-            }
-        }
+        // #[cfg(feature = "raw_input_logging")]
+        // {
+        //     if !change_state.scroll.x.is_zero() {
+        //         log_verbose!(LOG_INPUT_CAT, "Horizontal scroll with delta of {}", change_state.scroll.x);
+        //     }
+        //     if !change_state.scroll.y.is_zero() {
+        //         log_verbose!(LOG_INPUT_CAT, "Scroll with delta of {}", change_state.scroll.y);
+        //     }
+        // }
 
-        state.scroll += *scroll;
-        if !scroll.is_zero() {
-            if scroll.x > 0f32 {
+        state.scroll += change_state.scroll;
+        if !change_state.scroll.is_zero() {
+            if change_state.scroll.x > 0f32 {
                 notify_rebind(Self::WHEEL);
                 notify_rebind(Self::WHEEL_UP);
-            } else if scroll.x < 0f32 {
+            } else if change_state.scroll.x < 0f32 {
                 notify_rebind(Self::WHEEL);
                 notify_rebind(Self::WHEEL_DOWN);
             }
 
-            if scroll.y > 0f32 {
+            if change_state.scroll.y > 0f32 {
                 notify_rebind(Self::HWHEEL);
                 notify_rebind(Self::HWHEEL_LEFT);
-            } else if scroll.y < 0f32 {
+            } else if change_state.scroll.y < 0f32 {
                 notify_rebind(Self::HWHEEL);
                 notify_rebind(Self::HWHEEL_RIGHT);
             }
         }
 
-        *scroll = MouseScroll::zero();
+        change_state.scroll = MouseScroll::zero();
 
         // We generally only care about the last action of a button, as a press and release should not happen in a single frame.
-        // While this is possible, especially at a lower framerate, it doesn't make much sense in term of the input system
-        let mut processed_buttons = BitSet::<NUM_BUTTONS>::new();
-        for change in button_changes.iter().rev() {
+        // While this is possible, especially at a lower framerate, it doesn't make much sense in terms of the input system.
+        let mut processed_buttons = BitSet::<{MouseButton::COUNT}>::new();
+        for change in change_state.buttons.iter().rev() {
             let button_idx = change.button as usize;
             if processed_buttons.get(button_idx) {
                 continue;
@@ -307,7 +309,7 @@ impl InputDevice for Mouse {
             const BUTTON_AXIS_OFFSET : usize = 9;
             notify_rebind(InputAxisId::new(self.get_axes()[BUTTON_AXIS_OFFSET + button_idx].path));
         }
-        button_changes.clear();
+        change_state.buttons.clear();
 
         // Handle timers
         for (idx, timer) in self.button_timers.iter_mut().enumerate() {
@@ -324,8 +326,15 @@ impl InputDevice for Mouse {
         
     }
 
-    fn handle_hid_input(&mut self, _hid_device: &onca_hid::Device, _input_report: onca_hid::InputReport) {
+    fn handle_hid_input(&mut self, _input_report: &[u8]) {
         // We don't do anything here, as the mouse is special and gets input in a different way
+    }
+
+    fn handle_native_input(&mut self, native_data: *const std::ffi::c_void) {
+        unsafe {
+            let raw_mouse = &*(native_data as *const RAWMOUSE);
+            OSMouse::process_window_event(self, raw_mouse);
+        }
     }
 
     fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
@@ -369,5 +378,9 @@ impl InputDevice for Mouse {
 
     fn get_device_type(&self) -> DeviceType {
         DeviceType::Mouse
+    }
+    
+    fn take_native_handle(&mut self) -> NativeDeviceHandle {
+        core::mem::take(&mut self.handle).unwrap()
     }
 }

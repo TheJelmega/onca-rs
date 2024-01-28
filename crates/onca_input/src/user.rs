@@ -5,7 +5,7 @@ use onca_common::{
     sync::Mutex,
     time::DeltaTime
 };
-use crate::{MappingContext, ControlSet, AxisValue, DeviceHandle, ControlSchemeID, InputProcessContext, Action, TriggerResult, InputAxisId};
+use crate::{MappingContext, ControlSet, AxisValue, ControlSchemeID, InputProcessContext, Action, TriggerResult, InputAxisId, Handle, NativeDeviceHandle};
 
 
 pub struct User {
@@ -20,10 +20,9 @@ pub struct User {
     /// Disconnected control set
     disconnected_scheme : ControlSchemeID,
     /// Currently held devices (re-used when reconnecting)
-    cur_held_devs       : Vec<DeviceHandle>,
+    cur_held_devs       : Vec<Handle>,
     /// Disconnected device that could reconnect to this user
-    disconnected_devs   : Vec<DeviceHandle>,
-
+    disconnected_devs   : Vec<NativeDeviceHandle>,
 }
 
 
@@ -58,18 +57,18 @@ impl User {
         }
     }
 
-    pub(crate) fn notify_device_removed(&mut self, handle: DeviceHandle) -> bool {
+    pub(crate) fn notify_device_removed(&mut self, handle: Handle, native_handle: NativeDeviceHandle) -> Result<(), NativeDeviceHandle> {
         if let Some(control_set) = &self.control_set && control_set.devices().contains(&handle) {
             let mut control_set = take(&mut self.control_set).unwrap();
             self.cur_held_devs = control_set.take_devices();
-            self.disconnected_devs.push(handle);
-            true
-        } else if !self.cur_held_devs.is_empty() && let Some(idx) = self.cur_held_devs.iter().position(|val| *val == handle) {
+            self.disconnected_devs.push(native_handle);
+            Ok(())
+        } else if let Some(idx) = self.cur_held_devs.iter().position(|val| *val == handle) {
             self.cur_held_devs.remove(idx);
-            self.disconnected_devs.push(handle);
-            true
+            self.disconnected_devs.push(native_handle);
+            Ok(())
         } else {
-            false
+            Err(native_handle)
         }
     }
 
@@ -121,12 +120,12 @@ impl User {
         self.prev_trigger_res = context.trigger_states;
     }
 
-    pub(crate) fn get_currently_held_devices(&self) -> &Vec<DeviceHandle> {
+    pub(crate) fn get_currently_held_devices(&self) -> &Vec<Handle> {
         &self.cur_held_devs
     }
 
-    pub(crate) fn try_reconnect_device(&mut self, handle: DeviceHandle) -> bool {
-        let idx = match self.disconnected_devs.iter().position(|val| *val == handle) {
+    pub(crate) fn try_reconnect_device(&mut self, handle: Handle, native_handle: &NativeDeviceHandle) -> bool {
+        let idx = match self.disconnected_devs.iter().position(|val| *val == *native_handle) {
             Some(idx) => idx,
             None => return false,
         };

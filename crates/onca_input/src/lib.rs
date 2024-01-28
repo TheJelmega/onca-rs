@@ -60,25 +60,25 @@ impl AxisValue {
         match self {
             AxisValue::Digital(val) => match val_type {
                 AxisType::Digital => AxisValue::Digital(*val),
-                AxisType::Axis  => AxisValue::Axis(*val as i32 as f32),
+                AxisType::Axis    => AxisValue::Axis(*val as i32 as f32),
                 AxisType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val as i32 as f32, 0f32)),
                 AxisType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val as i32 as f32, 0f32, 0f32)),
             },
             AxisValue::Axis(val) => match val_type {
                 AxisType::Digital => AxisValue::Digital(*val != 0f32),
-                AxisType::Axis  => AxisValue::Axis(*val),
+                AxisType::Axis    => AxisValue::Axis(*val),
                 AxisType::Axis2D  => AxisValue::Axis2D(f32v2::new(*val, 0f32)),
                 AxisType::Axis3D  => AxisValue::Axis3D(f32v3::new(*val, 0f32, 0f32)),
             },
             AxisValue::Axis2D(val) => match val_type {
                 AxisType::Digital => AxisValue::Digital(val.x != 0f32),
-                AxisType::Axis  => AxisValue::Axis(val.x),
+                AxisType::Axis    => AxisValue::Axis(val.x),
                 AxisType::Axis2D  => AxisValue::Axis2D(*val),
                 AxisType::Axis3D  => AxisValue::Axis3D(val.extend(0f32)),
             },
             AxisValue::Axis3D(val) => match val_type {
                 AxisType::Digital => AxisValue::Digital(val.x != 0f32),
-                AxisType::Axis  => AxisValue::Axis(val.x),
+                AxisType::Axis    => AxisValue::Axis(val.x),
                 AxisType::Axis2D  => AxisValue::Axis2D(val.xy()),
                 AxisType::Axis3D  => AxisValue::Axis3D(*val),
             },
@@ -88,9 +88,9 @@ impl AxisValue {
     pub fn axis_type(&self) -> AxisType {
         match self {
             AxisValue::Digital(_) => AxisType::Digital,
-            AxisValue::Axis(_) => AxisType::Axis,
-            AxisValue::Axis2D(_) => AxisType::Axis2D,
-            AxisValue::Axis3D(_) => AxisType::Axis3D,
+            AxisValue::Axis(_)    => AxisType::Axis,
+            AxisValue::Axis2D(_)  => AxisType::Axis2D,
+            AxisValue::Axis3D(_)  => AxisType::Axis3D,
         }
     }
 }

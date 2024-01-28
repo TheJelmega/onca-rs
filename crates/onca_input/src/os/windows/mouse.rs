@@ -2,13 +2,10 @@ use core::mem;
 use onca_common::utils::is_flag_set;
 use windows::Win32::{
     UI::{ 
-        Input::{
-            RAWINPUTDEVICE, RegisterRawInputDevices, RAWMOUSE, RAWINPUTDEVICE_FLAGS,
-        },
+        Input::RAWMOUSE,
         WindowsAndMessaging::*,
     },
-    Foundation::HWND,
-    Devices::HumanInterfaceDevice::{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, MOUSE_MOVE_ABSOLUTE, MOUSE_VIRTUAL_DESKTOP}
+    Devices::HumanInterfaceDevice::{MOUSE_MOVE_ABSOLUTE, MOUSE_VIRTUAL_DESKTOP}
 };
 
 use onca_logging::log_error;
@@ -19,18 +16,6 @@ pub(crate) struct OSMouse;
 
 impl OSMouse {
     pub(crate) fn new() -> Option<Self> {
-        let raw_input = RAWINPUTDEVICE {
-            usUsagePage: HID_USAGE_PAGE_GENERIC,
-            usUsage: HID_USAGE_GENERIC_MOUSE,
-            dwFlags: RAWINPUTDEVICE_FLAGS(0),
-            hwndTarget: HWND::default(),
-        };
-        
-        let raw_input_devices = [raw_input];
-        if let Err(err) = unsafe { RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32) } {
-            log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the mouse (err code: {err}).");
-            return None;
-        }
         Some(Self)
     }
 

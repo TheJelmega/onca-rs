@@ -16,7 +16,7 @@ use crate::{AxisValue, AxisType, User, InputProcessContext, InputAxisId};
 // MODIFIERS
 //------------------------------------------------------------------------------------------------------------------------------
 
-/// Deadzone type
+/// Deadzone type.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DeadzoneType {
     /// Apply the deadzone to each axis individually, this results in the deadzone having sharp corners (square/cubic).
@@ -25,52 +25,32 @@ pub enum DeadzoneType {
     Radial,
 }
 
-/// Input axis swizzle
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AxisSwizzle {
-    XYZ,
-    XZY,
-    YXZ,
-    YZX,
-    ZXY,
-    ZYX
-}
-
-impl AxisSwizzle {
-    fn to_swizzle_constants(self) -> (Swizzle, Swizzle, Swizzle) {
-        match self {
-            AxisSwizzle::XYZ => (Swizzle::X, Swizzle::Y, Swizzle::Z),
-            AxisSwizzle::XZY => (Swizzle::X, Swizzle::Z, Swizzle::Y),
-            AxisSwizzle::YXZ => (Swizzle::Y, Swizzle::X, Swizzle::Z),
-            AxisSwizzle::YZX => (Swizzle::Y, Swizzle::Z, Swizzle::X),
-            AxisSwizzle::ZXY => (Swizzle::Z, Swizzle::X, Swizzle::Y),
-            AxisSwizzle::ZYX => (Swizzle::Z, Swizzle::Y, Swizzle::X),
-        }
-    }
-}
-
-/// Custom modifier
+/// Custom modifier.
 pub trait CustomModifier {
-    /// Apply the modifier to the given value
+    /// Apply the modifier to the given value.
     fn apply(&mut self, value: AxisValue) -> AxisValue;
 
-    /// Clone the modifier
+    /// Clone the modifier.
     fn clone_modifier(&self) -> Box<dyn CustomModifier>;
 }
 
-/// Input modifier
+/// Input modifier.
 pub enum Modifier {
-    /// Apply a deadzone to the value, with a given lower and upper bound
-    Deadzone{ lower_bound: f32, upper_bound: f32, deadzone_type: DeadzoneType },
-    /// Negate the given components
+    /// Apply a deadzone to the value, with a given lower and upper bound.
+    Deadzone{
+        lower_bound: f32,
+        upper_bound: f32,
+        deadzone_type: DeadzoneType
+    },
+    /// Negate the given components.
     Negate(bool, bool, bool),
-    /// Scale the value
+    /// Scale the value.
     Scale(f32, f32, f32),
-    /// Scale by time
+    /// Scale by time.
     TimeScale(bool),
-    /// Swizzle the axes
-    Swizzle(AxisSwizzle),
-    /// Custom modifier
+    /// Swizzle the axes.
+    Swizzle(Swizzle, Swizzle, Swizzle),
+    /// Custom modifier.
     Custom(Box<dyn CustomModifier>)
 }
 
@@ -78,11 +58,11 @@ impl Modifier {
     fn apply(&mut self, value: AxisValue, dt: DeltaTime) -> AxisValue {
         match self {
             Modifier::Deadzone { lower_bound, upper_bound, deadzone_type } => Self::apply_deadzone(value, *lower_bound, *upper_bound, *deadzone_type),
-            Modifier::Negate(x, y, z) => Self::apply_negate(value, *x, *y, *z),
-            Modifier::Scale(x, y, z) => Self::apply_scale(value, *x, *y, *z),
-            Modifier::TimeScale(use_dilation) => Self::apply_time_scale(value, dt, *use_dilation),
-            Modifier::Custom(custom) => custom.apply(value),
-            Modifier::Swizzle(swizzle) => Self::apply_swizzle(value, *swizzle),
+            Modifier::Negate(x, y, z)                                      => Self::apply_negate(value, *x, *y, *z),
+            Modifier::Scale(x, y, z)                                       => Self::apply_scale(value, *x, *y, *z),
+            Modifier::TimeScale(use_dilation)                              => Self::apply_time_scale(value, dt, *use_dilation),
+            Modifier::Swizzle(x, y, z)                                     => Self::apply_swizzle(value, *x, *y, *z),
+            Modifier::Custom(custom)                                       => custom.apply(value),
         }
     }
 
@@ -97,23 +77,23 @@ impl Modifier {
 
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
-            AxisValue::Axis(val) => AxisValue::Axis(deadzone_1d(val)),
-            AxisValue::Axis2D(val) => {
+            AxisValue::Axis(val)    => AxisValue::Axis(deadzone_1d(val)),
+            AxisValue::Axis2D(val)  => {
                 match deadzone_type {
-                    DeadzoneType::Axial => AxisValue::Axis2D(f32v2::new(deadzone_1d(val.x), deadzone_1d(val.y))),
+                    DeadzoneType::Axial  => AxisValue::Axis2D(f32v2::new(deadzone_1d(val.x), deadzone_1d(val.y))),
                     DeadzoneType::Radial => {
                         let len = val.len();
-                        let deadzone_len = deadzone_1d(val.len());
+                        let deadzone_len = deadzone_1d(len);
                         AxisValue::Axis2D(val / len * deadzone_len)
                     },
                 }
             },
             AxisValue::Axis3D(val) => {
                 match deadzone_type {
-                    DeadzoneType::Axial => AxisValue::Axis3D(f32v3::new(deadzone_1d(val.x), deadzone_1d(val.y), deadzone_1d(val.z))),
+                    DeadzoneType::Axial  => AxisValue::Axis3D(f32v3::new(deadzone_1d(val.x), deadzone_1d(val.y), deadzone_1d(val.z))),
                     DeadzoneType::Radial => {
                         let len = val.len();
-                        let deadzone_len = deadzone_1d(val.len());
+                        let deadzone_len = deadzone_1d(len);
                         AxisValue::Axis3D(val / len * deadzone_len)
                     },
                 }
@@ -148,12 +128,11 @@ impl Modifier {
         }
     }
 
-    fn apply_swizzle(value: AxisValue, swizzle: AxisSwizzle) -> AxisValue {
-        let (x, y, z) = swizzle.to_swizzle_constants();
+    fn apply_swizzle(value: AxisValue, x: Swizzle, y: Swizzle, z: Swizzle) -> AxisValue {
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
-            AxisValue::Axis(val) => AxisValue::Axis(if x == Swizzle::X { val } else { 0f32 }),
-            AxisValue::Axis2D(val) => {
+            AxisValue::Axis(val)    => AxisValue::Axis(if x == Swizzle::X { val } else { 0f32 }),
+            AxisValue::Axis2D(val)  => {
                 AxisValue::Axis2D(f32v2::new(
                     if x == Swizzle::Z { 0f32 } else { val[x as usize] },
                     if y == Swizzle::Z { 0f32 } else { val[y as usize] }
@@ -167,12 +146,12 @@ impl Modifier {
 impl Clone for Modifier {
     fn clone(&self) -> Self {
         match self {
-            Self::Deadzone { lower_bound, upper_bound, deadzone_type } => Self::Deadzone { lower_bound: lower_bound.clone(), upper_bound: upper_bound.clone(), deadzone_type: deadzone_type.clone() },
-            Self::Negate(arg0, arg1, arg2) => Self::Negate(arg0.clone(), arg1.clone(), arg2.clone()),
-            Self::Scale(arg0, arg1, arg2) => Self::Scale(arg0.clone(), arg1.clone(), arg2.clone()),
-            Self::TimeScale(arg0) => Self::TimeScale(arg0.clone()),
-            Self::Swizzle(arg0) => Self::Swizzle(arg0.clone()),
-            Self::Custom(arg0) => Self::Custom(arg0.clone_modifier()),
+            Self::Deadzone { lower_bound, upper_bound, deadzone_type } => Self::Deadzone { lower_bound: *lower_bound, upper_bound: *upper_bound, deadzone_type: *deadzone_type },
+            Self::Negate(arg0, arg1, arg2)                             => Self::Negate(*arg0, *arg1, *arg2),
+            Self::Scale(arg0, arg1, arg2)                              => Self::Scale(*arg0, *arg1, *arg2),
+            Self::TimeScale(arg0)                                      => Self::TimeScale(*arg0),
+            Self::Swizzle(arg0, arg1, arg2)                            => Self::Swizzle(*arg0, *arg1, *arg2),
+            Self::Custom(arg0)                                         => Self::Custom(arg0.clone_modifier()),
         }
     }
 }
@@ -183,91 +162,91 @@ impl Clone for Modifier {
 
 /// Custom trigger
 pub trait CustomTrigger {
-    /// Check the trigger based on the current value
+    /// Check the trigger based on the current value.
     fn check(&mut self, value: AxisValue, ctx: &mut TriggerContext) -> TriggerResult;
 
-    /// Get the trigger type
+    /// Get the trigger type.
     fn trigger_type(&self) -> TriggerType;
 
-    /// Clone the trigger
+    /// Clone the trigger.
     fn clone_trigger(&self) -> Box<dyn CustomTrigger>;
 }
 
 /// Trigger type
 pub enum Trigger {
-    /// Trigger when the value passes the given threshold.
+    /// Trigger when the value passes or hits the given threshold.
     Down(f32),
-    /// Trigger when the value passes the given threshold for the first time.
+    /// Trigger when the value passes or hits the given threshold for the first time.
     Pressed(f32),
-    /// Trigger when the value was over the given threshold and moves below it.
+    /// Trigger when the value was over or on the given threshold and moves below it.
     Released(f32),
     /// Triggers when the value stays over a given value for a given period of time, can trigger once or continuously after that.
     Hold {
         /// Period of time the input needs to be actuated to trigger.
-        hold_time     : f32,
+        hold_time:     f32,
         /// Whether this trigger should only fire once after it is triggered.
-        one_shot      : bool,
+        one_shot:      bool,
         /// Whether the trigger time is affected by time dialation.
-        time_dilation : bool,
-        /// Actuation treshold.
-        threshold     : f32
+        time_dilation: bool,
+        /// Actuation treshold (actuates when greater or equal).
+        threshold:     f32
     },
     /// Triggers when the value stays over a given value for a given period of time, and it then released.
     HoldAndRelease {
         /// Period of time the input needs to be actuated to triggered on release.
-        hold_time     : f32,
+        hold_time:     f32,
         /// Whether the hold trigger is affected by time dialation.
-        time_dilation : bool,
-        /// Actuation treshold.
-        threshold     : f32
+        time_dilation: bool,
+        /// Actuation treshold (actuates when greater or equal).
+        threshold:     f32
     },
     /// Pulse the trigger when the given values stays over a given value.
     Pulse {
         /// Should the trigger pulse on the initial actuation.
-        trigger_on_start : bool,
+        trigger_on_start: bool,
         /// Time between pulses.
-        interval         : f32,
+        interval:         f32,
         /// Maximum number of pulses, `None` is no limit.
-        trigger_limit    : Option<NonZeroU32>,
+        trigger_limit:    Option<NonZeroU32>,
         /// Whether the hold trigger is affected by time dialation.
-        time_dilation    : bool,
-        /// Actuation treshold.
-        threshold        : f32
+        time_dilation:    bool,
+        /// Actuation treshold (actuates when greater or equal).
+        threshold:        f32
     },
-    /// Triggers if the value passes the given value and moves below within a given limit
+    /// Triggers if the value passes the given value and moves below within a given limit.
     Tap {
-        /// Maximum amount of time the values can be above the given actuation threshold
+        /// Maximum amount of time the values can be above the given actuation threshold.
         release_time_threshold : f32,
         /// Whether the hold trigger is affected by time dialation.
         time_dilation          : bool,
-        /// Actuation treshold.
+        /// Actuation treshold (actuates when greater or equal).
         threshold              : f32
     },
-    /// Chorded trigger (other action needs to be triggered)
+    /// Chorded trigger (other action needs to be triggered).
     Chord(Weak<Mutex<Action>>),
-    /// Custom trigger
+    /// Custom trigger.
     Custom(Box<dyn CustomTrigger>)
 }
 
 impl Clone for Trigger {
     fn clone(&self) -> Self {
         match self {
-            Self::Down(arg0) => Self::Down(arg0.clone()),
-            Self::Pressed(arg0) => Self::Pressed(arg0.clone()),
-            Self::Released(arg0) => Self::Released(arg0.clone()),
-            Self::Hold { hold_time, one_shot, time_dilation, threshold } => Self::Hold { hold_time: hold_time.clone(), one_shot: one_shot.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
-            Self::HoldAndRelease { hold_time, time_dilation, threshold } => Self::HoldAndRelease { hold_time: hold_time.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
-            Self::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => Self::Pulse { trigger_on_start: trigger_on_start.clone(), interval: interval.clone(), trigger_limit: trigger_limit.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
-            Self::Tap { release_time_threshold, time_dilation, threshold } => Self::Tap { release_time_threshold: release_time_threshold.clone(), time_dilation: time_dilation.clone(), threshold: threshold.clone() },
-            Self::Chord(action) => Self::Chord(action.clone()),
-            Self::Custom(arg0) => Self::Custom(arg0.clone_trigger()),
+            Self::Down(arg0)                                                                    => Self::Down(*arg0),
+            Self::Pressed(arg0)                                                                 => Self::Pressed(*arg0),
+            Self::Released(arg0)                                                                => Self::Released(*arg0),
+            Self::Hold { hold_time, one_shot, time_dilation, threshold }                        => Self::Hold { hold_time: hold_time.clone(), one_shot: *one_shot, time_dilation: *time_dilation, threshold: *threshold },
+            Self::HoldAndRelease { hold_time, time_dilation, threshold }                        => Self::HoldAndRelease { hold_time: *hold_time, time_dilation: *time_dilation, threshold: *threshold },
+            Self::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => Self::Pulse { trigger_on_start: *trigger_on_start, interval: *interval, trigger_limit: *trigger_limit, time_dilation: *time_dilation, threshold: *threshold },
+            Self::Tap { release_time_threshold, time_dilation, threshold }                      => Self::Tap { release_time_threshold: *release_time_threshold, time_dilation: *time_dilation, threshold: *threshold },
+            Self::Chord(action)                                                                 => Self::Chord(action.clone()),
+            Self::Custom(arg0)                                                                  => Self::Custom(arg0.clone_trigger()),
         }
     }
 }
 
-/// Current trigger state
+/// Current trigger state.
 /// 
-/// The trigger state is calculated from the last and current trigger result
+/// The trigger state is calculated from the last and current trigger result.
 /// 
 /// prev result | new result | state
 /// ------------|------------|------- 
@@ -281,7 +260,7 @@ impl Clone for Trigger {
 /// triggered   | ongoing    | ongoing
 /// triggered   | triggered  | triggered
 /// 
-/// Only Started and Triggered can ever be set at the same times, other combos are invalid
+/// Only `Started` and `Triggered` can ever be set at the same time, other combos are invalid.
 #[flags]
 pub enum TriggerState {
     /// The trigger is currently idle
@@ -302,34 +281,34 @@ impl TriggerState {
     pub fn from_results(prev: TriggerResult, current: TriggerResult) -> TriggerState {
         match prev {
             TriggerResult::Idle => match current {
-                TriggerResult::Idle => TriggerState::Idle,
-                TriggerResult::Ongoing => TriggerState::Started,
+                TriggerResult::Idle      => TriggerState::Idle,
+                TriggerResult::Ongoing   => TriggerState::Started,
                 TriggerResult::Triggered => TriggerState::Started | TriggerState::Triggered,
             },
             TriggerResult::Ongoing => match current {
-                TriggerResult::Idle => TriggerState::Cancelled,
-                TriggerResult::Ongoing => TriggerState::Ongoing,
+                TriggerResult::Idle      => TriggerState::Cancelled,
+                TriggerResult::Ongoing   => TriggerState::Ongoing,
                 TriggerResult::Triggered => TriggerState::Triggered,
             },
             TriggerResult::Triggered => match current {
-                TriggerResult::Idle => TriggerState::Completed,
-                TriggerResult::Ongoing => TriggerState::Ongoing,
+                TriggerResult::Idle      => TriggerState::Completed,
+                TriggerResult::Ongoing   => TriggerState::Ongoing,
                 TriggerResult::Triggered => TriggerState::Triggered,
             },
         }
     }
 }
 
-/// Trigger result
+/// Trigger result.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TriggerResult {
-    /// The trigger is idle
+    /// The trigger is idle.
     Idle,
-    /// The trigger is being processed
+    /// The trigger is being processed.
     /// 
-    /// This result is not useful for `Implicit` and `Blocker` triggers
+    /// This result is not useful for `Implicit` and `Blocker` triggers.
     Ongoing,
-    /// The trigger has triggered
+    /// The trigger has triggered.
     Triggered,
 }
 
@@ -339,13 +318,13 @@ impl BitOr for TriggerResult {
     fn bitor(self, rhs: Self) -> Self::Output {
         match self {
             TriggerResult::Idle => match rhs {
-                TriggerResult::Idle => TriggerResult::Idle,
-                TriggerResult::Ongoing => TriggerResult::Ongoing,
+                TriggerResult::Idle      => TriggerResult::Idle,
+                TriggerResult::Ongoing   => TriggerResult::Ongoing,
                 TriggerResult::Triggered => TriggerResult::Triggered,
             },
             TriggerResult::Ongoing => match rhs {
-                TriggerResult::Idle => TriggerResult::Ongoing,
-                TriggerResult::Ongoing => TriggerResult::Ongoing,
+                TriggerResult::Idle      => TriggerResult::Ongoing,
+                TriggerResult::Ongoing   => TriggerResult::Ongoing,
                 TriggerResult::Triggered => TriggerResult::Triggered,
             },
             TriggerResult::Triggered => TriggerResult::Triggered,
@@ -354,9 +333,9 @@ impl BitOr for TriggerResult {
 }
 
 pub(crate) struct FinalTriggerResult {
-    result       : TriggerResult,
-    all_implicit : bool,
-    blocked      : bool,
+    result:       TriggerResult,
+    all_implicit: bool,
+    blocked:      bool,
 }
 
 impl FinalTriggerResult {
@@ -366,9 +345,9 @@ impl FinalTriggerResult {
 
     pub fn update(&mut self, ty: TriggerType, res: TriggerResult) {
         match ty {
-            TriggerType::Explicit => self.result = self.result | res,
-            TriggerType::Implicit => self.all_implicit &= res == TriggerResult::Triggered,
-            TriggerType::Blocker => self.blocked |= res == TriggerResult::Triggered,
+            TriggerType::Any => self.result        = self.result | res,
+            TriggerType::Required => self.all_implicit &= res == TriggerResult::Triggered,
+            TriggerType::Blocker  => self.blocked      |= res == TriggerResult::Triggered,
         }
     }
 
@@ -381,13 +360,13 @@ impl FinalTriggerResult {
     }
 }
 
-/// Default trigger context
+/// Default trigger context.
 #[derive(Clone)]
 pub struct TriggerContext {
-    prev_value  : AxisValue,
-    prev_result : TriggerResult,
-    timer       : f32,
-    misc        : u32,
+    prev_value:  AxisValue,
+    prev_result: TriggerResult,
+    timer:       f32,
+    misc:        u32,
 }
 
 impl Default for TriggerContext {
@@ -401,37 +380,45 @@ impl Default for TriggerContext {
     }
 }
 
-/// Trigger kind
+/// Trigger kind.
+/// 
+/// A action can be triggered if any `Any` trigger, all `Required` triggers, and no `Blocker` triggers are triggered.
 pub enum TriggerType {
-    /// Any explicit trigger needs to be triggered for the action to happen
-    Explicit,
-    /// All implicit triggers need to be triggered for the action to happen
-    Implicit,
-    /// If triggered, the action cannot happen
+    /// Any trigger of this type needs to be triggered for the action to happen.
+    Any,
+    /// All required triggers need to be triggered for the action to happen.
+    Required,
+    /// If triggered, the action cannot happen.
     Blocker,
 }
 
 /// Trigger
 #[derive(Clone)]
 pub struct TriggerData {
-    trigger : Trigger,
-    context      : TriggerContext,
+    trigger: Trigger,
+    context: TriggerContext,
 }
 
 impl TriggerData {
     /// Checks if the trigger has been triggered
     fn check(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext) -> TriggerResult {
         let res = match &mut self.trigger {
-            Trigger::Down(threshold) => Self::check_down(value, *threshold),
-            Trigger::Pressed(threshold) => Self::check_pressed(self.context.prev_value, value, *threshold),
-            Trigger::Released(threshold) => Self::check_released(self.context.prev_value, value, *threshold),
-            Trigger::Hold { hold_time, one_shot, time_dilation: time_dialation, threshold } => Self::check_hold(&mut self.context, value, dt, *hold_time, *one_shot, *time_dialation, *threshold),
-            Trigger::HoldAndRelease { hold_time, time_dilation: time_dialation, threshold } => Self::check_hold_and_release(&mut self.context, value, dt, *hold_time, *time_dialation, *threshold),
+            Trigger::Down(threshold)                                                               => Self::check_down(value, *threshold),
+            Trigger::Pressed(threshold)                                                            => Self::check_pressed(self.context.prev_value, value, *threshold),
+            Trigger::Released(threshold)                                                           => Self::check_released(self.context.prev_value, value, *threshold),
+            Trigger::Hold { hold_time, one_shot, time_dilation: time_dialation, threshold }        => Self::check_hold(&mut self.context, value, dt, *hold_time, *one_shot, *time_dialation, *threshold),
+            Trigger::HoldAndRelease { hold_time, time_dilation: time_dialation, threshold }        => Self::check_hold_and_release(&mut self.context, value, dt, *hold_time, *time_dialation, *threshold),
             Trigger::Pulse { trigger_on_start, interval, trigger_limit, time_dilation, threshold } => 
                 Self::check_pulse(&mut self.context, value, dt, *trigger_on_start, *interval, *trigger_limit, *time_dilation, *threshold),
-            Trigger::Tap { release_time_threshold, time_dilation, threshold } => Self::check_tap(&mut self.context, value, dt, *release_time_threshold, *time_dilation, *threshold),
-            Trigger::Chord(chorded_action) => if context.triggered_actions.iter().find(|action| Weak::ptr_eq(&Arc::downgrade(action), chorded_action)).is_some() { TriggerResult::Triggered } else { TriggerResult::Idle },
-            Trigger::Custom(custom) => custom.check(value, &mut self.context),
+            Trigger::Tap { release_time_threshold, time_dilation, threshold }                      =>
+                Self::check_tap(&mut self.context, value, dt, *release_time_threshold, *time_dilation, *threshold),
+            Trigger::Chord(chorded_action)                                                         =>
+                if context.triggered_actions.iter().find(|action| Weak::ptr_eq(&Arc::downgrade(action), chorded_action)).is_some() {
+                    TriggerResult::Triggered
+                } else {
+                    TriggerResult::Idle
+                },
+            Trigger::Custom(custom)                                                                => custom.check(value, &mut self.context),
         };
         self.context.prev_value = value;
         self.context.prev_result = res;
@@ -440,14 +427,14 @@ impl TriggerData {
 
     fn trigger_type(&self) -> TriggerType {
         match &self.trigger {
-            Trigger::Down(_)               => TriggerType::Explicit,
-            Trigger::Pressed(_)            => TriggerType::Explicit,
-            Trigger::Released(_)           => TriggerType::Explicit,
-            Trigger::Hold { .. }           => TriggerType::Explicit,
-            Trigger::HoldAndRelease { .. } => TriggerType::Explicit,
-            Trigger::Pulse { .. }          => TriggerType::Explicit,
-            Trigger::Tap { .. }            => TriggerType::Explicit,
-            Trigger::Chord(_)              => TriggerType::Implicit,
+            Trigger::Down(_)               => TriggerType::Any,
+            Trigger::Pressed(_)            => TriggerType::Any,
+            Trigger::Released(_)           => TriggerType::Any,
+            Trigger::Hold { .. }           => TriggerType::Any,
+            Trigger::HoldAndRelease { .. } => TriggerType::Any,
+            Trigger::Pulse { .. }          => TriggerType::Any,
+            Trigger::Tap { .. }            => TriggerType::Any,
+            Trigger::Chord(_)              => TriggerType::Required,
             Trigger::Custom(custom)        => custom.trigger_type(),
         }
     }
@@ -455,9 +442,9 @@ impl TriggerData {
     fn check_down(value: AxisValue, threshold: f32) -> TriggerResult {
         match value {
             AxisValue::Digital(val) => if val { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis(val)    => if val > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis2D(val)  => if val.x > threshold || val.y > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
-            AxisValue::Axis3D(val)  => if val.x > threshold || val.y > threshold || val.z > threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis(val)    => if val >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis2D(val)  => if val.x >= threshold || val.y >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Axis3D(val)  => if val.x >= threshold || val.y >= threshold || val.z >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
         }
     }
 
@@ -492,7 +479,6 @@ impl TriggerData {
             } else {
                 ctx.timer += dt.get(time_dilation);
                 if ctx.timer > hold_time {
-                    ctx.timer = -1f32;
                     TriggerResult::Triggered
                 } else {
                     TriggerResult::Ongoing
@@ -548,10 +534,9 @@ impl TriggerData {
     fn check_tap(ctx: &mut TriggerContext, value: AxisValue, dt: DeltaTime, release_time_threshold: f32, time_dilation: bool, threshold: f32) -> TriggerResult {
         if Self::is_down(value, threshold) {
             ctx.timer += dt.get(time_dilation);
-            ctx.misc = 1;
             TriggerResult::Ongoing
         } else {
-            let res = if ctx.misc == 1 && ctx.timer <= release_time_threshold {
+            let res = if ctx.prev_result == TriggerResult::Ongoing && ctx.timer <= release_time_threshold {
                 TriggerResult::Triggered
             } else {
                 TriggerResult::Idle
@@ -579,33 +564,30 @@ impl From<Trigger> for TriggerData {
 pub struct Action {
     /// Localized description of this action
     // TODO: Localized string
-    pub description         : (),
+    pub description:         (),
     /// Should the input action consumes the input? (input will not be processed by any triggers that occur after this action)
-    pub consume_input       : bool,
-    /// Should the input action trigger when the game is paused?
-    pub trigger_when_paused : bool,
+    pub consume_input:       bool,
     /// Axis type that will be used by this action
-    pub axis_type           : AxisType,
+    pub axis_type:           AxisType,
     /// Triggers that apply to all mappings for this action.
     /// 
     /// These triggers are used to instantiate the mapping specific triggers and are not use themselves
     // TODO: Have these associated to the action only when in its asset?
-    pub triggers            : Vec<TriggerData>,
+    pub triggers:            Vec<TriggerData>,
     /// Modifiers that apply to all mappings for this action. (Modifiers will be applied after the mapping specific modifiers have been applied)
     /// 
     /// These modifiers are used to instantiate the mapping specific triggers and are not use themselves
     // TODO: Have these associated to the action only when in its asset?
-    pub modifiers           : Vec<Modifier>,
+    pub modifiers:           Vec<Modifier>,
     /// Action event listeners
-    pub listeners           : DynEventListenerArray<(TriggerState, AxisValue, u8)>,
+    pub listeners:           DynEventListenerArray<(TriggerState, AxisValue, u8)>,
 }
 
 impl Action {
-    pub fn new(consume_input: bool, trigger_when_paused: bool, axis_type: AxisType) -> Self {
+    pub fn new(consume_input: bool, axis_type: AxisType) -> Self {
         Self {
             description: (),
             consume_input,
-            trigger_when_paused,
             axis_type,
             triggers: Vec::new(),
             modifiers: Vec::new(),
@@ -635,24 +617,24 @@ impl Action {
 pub struct RebindOptions {
     /// Localized description of this action
     // TODO: Localized string
-    pub display_name     : (),
+    pub display_name:     (),
     /// Localized category of this action
     // TODO: Localized string
-    pub display_category : (),
+    pub display_category: (),
     /// Name used to remap
-    pub name             : String,
+    pub name:             String,
 }
 
 #[derive(Clone)]
 pub struct Binding {
     /// Input axis that the binding is bound to.
-    pub input_axis     : InputAxisId,
+    pub input_axis:     InputAxisId,
     /// Binding specific triggers
-    pub triggers       : Vec<TriggerData>,
+    pub triggers:       Vec<TriggerData>,
     /// Binding specific modifiers
-    pub modifiers      : Vec<Modifier>,
+    pub modifiers:      Vec<Modifier>,
     /// Binding rebind options
-    pub rebind_options : Option<RebindOptions>
+    pub rebind_options: Option<RebindOptions>
 }
 
 impl Binding {
@@ -681,8 +663,8 @@ impl Binding {
 
     pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext, final_res: &mut FinalTriggerResult) {
         for trigger in &mut self.triggers {
-            let trigger_type = trigger.trigger_type();
             let res = trigger.check(value, dt, context);
+            let trigger_type = trigger.trigger_type();
             final_res.update(trigger_type, res);
         }
     }
@@ -691,18 +673,17 @@ impl Binding {
 #[derive(Clone)]
 pub struct Mapping {
     /// Input action associated with this binding
-    pub action    : Arc<Mutex<Action>>,
+    pub action:    Arc<Mutex<Action>>,
     /// Instance of the action triggers that will actually be used
-    pub triggers  : Vec<TriggerData>,
+    pub triggers:  Vec<TriggerData>,
     /// Instance of the action triggers that will actually be used
-    pub modifiers : Vec<Modifier>,
+    pub modifiers: Vec<Modifier>,
     /// Input 
-    pub bindings  : Vec<Binding>,
+    pub bindings:  Vec<Binding>,
 }
 
 impl Mapping {
     pub fn new(action: Arc<Mutex<Action>>) -> Self {
-
         let (triggers, modifiers) = {
             let action = action.lock();
             (action.triggers.clone(), action.modifiers.clone())
@@ -712,11 +693,12 @@ impl Mapping {
     }
 
     pub fn set_action(&mut self, action: Arc<Mutex<Action>>) {
+        {
+            let action = self.action.lock();
+            self.triggers = action.triggers.clone();
+            self.modifiers = action.modifiers.clone();
+        }
         self.action = action;
-
-        let action = self.action.lock();
-        self.triggers = action.triggers.clone();
-        self.modifiers = action.modifiers.clone();
     }
 
     pub fn add_binding(&mut self, binding: Binding) {
@@ -731,15 +713,14 @@ impl Mapping {
 
     pub(crate) fn process_triggers(&mut self, value: AxisValue, dt: DeltaTime, context: &mut InputProcessContext, final_res: &mut FinalTriggerResult) {
         for trigger in &mut self.triggers {
-            let trigger_type = trigger.trigger_type();
             let res = trigger.check(value, dt, context);
+            let trigger_type = trigger.trigger_type();
             final_res.update(trigger_type, res);
         }
     }
 
-    pub(crate) fn process<F>(&mut self, dt: DeltaTime, user: &User, user_idx: u8, context: &mut InputProcessContext, get_input: &F) 
-    where
-        F : Fn(&User, &InputAxisId) -> AxisValue
+    pub(crate) fn process<F>(&mut self, dt: DeltaTime, user: &User, user_idx: u8, context: &mut InputProcessContext, get_input: &F) where
+        F: Fn(&User, &InputAxisId) -> AxisValue
     {
         // Only the first occurance of an action is processed, so check that first
         if context.processed_actions.iter().any(|action| Arc::ptr_eq(action, &self.action)) {
@@ -799,12 +780,12 @@ impl Mapping {
 pub struct MappingContext {
     /// Localized description of this mapping context
     // TODO: Localized string
-    pub description : (),
+    pub description: (),
     /// Identifier
     // TODO: Id should be something associated to the asset
-    pub identifier  : String,
+    pub identifier:  String,
     /// Input mappings
-    pub mappings    : Vec<Mapping>,
+    pub mappings:    Vec<Mapping>,
 }
 
 impl MappingContext {

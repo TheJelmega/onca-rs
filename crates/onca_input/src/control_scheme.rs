@@ -2,7 +2,7 @@ use core::num::NonZeroUsize;
 use onca_common::prelude::*;
 use onca_logging::log_warning;
 
-use crate::{DeviceType, LOG_INPUT_CAT, DeviceTypeMatchSupport, DeviceHandle};
+use crate::{DeviceType, LOG_INPUT_CAT, DeviceTypeMatchSupport, Handle};
 
 pub enum SchemeItem {
     /// The device is required for this mapping
@@ -37,21 +37,21 @@ impl Default for ControlSchemeID {
 /// 
 /// A control scheme is limited to 64 items.
 pub struct ControlScheme {
-    identifier : ControlSchemeID,
+    identifier: ControlSchemeID,
     /// Items
-    items      : Vec<SchemeItem>,
+    items:      Vec<SchemeItem>,
     /// Index of the first `Optional` item (this is also the number of required/either devices)
-    opt_start  : Option<NonZeroUsize>,
+    opt_start:  Option<NonZeroUsize>,
 }
 
 impl ControlScheme {
-    pub const MAX_SCHEME_ITEMS : usize = 64;
+    pub const MAX_SCHEME_ITEMS: usize = 64;
 
     /// Create a new control scheme
     /// 
     /// # Errors
     /// 
-    /// Return an error when 0 or more than 64 items are passed, or when duplicate device 
+    /// Return an error when 0 or more than 64 items are passed.
     pub fn new(identifier: ControlSchemeID, mut items: Vec<SchemeItem>) -> Result<Self, Vec<SchemeItem>> {
         if !items.is_empty() && items.len() <= Self::MAX_SCHEME_ITEMS {
             if items.iter().position(|val| !matches!(val, SchemeItem::Optional(_))).is_none() {
@@ -71,14 +71,14 @@ impl ControlScheme {
 
     /// Try to create a control set for the layout from the currently available devices.
     /// 
-    /// Returns an option with the created control set, if the control scheme can be created
+    /// Returns an option with the created control set, if the control scheme can be created.
     /// 
     /// If there is not exact match for a device, but there is a device with the support needed for the wanted control scheme, the first device that fits will be selected.
-    pub fn create_control_set<'a, F>(&self, available_devices: &Vec<DeviceHandle>, get_dev_type: F) -> Option<ControlSet>
-        where F : Fn(DeviceHandle) -> DeviceType
+    pub fn create_control_set<'a, F>(&self, available_devices: &Vec<Handle>, get_dev_type: F) -> Option<ControlSet> where
+        F: Fn(Handle) -> DeviceType
     {
         let mut scheme_devs = Vec::new();
-        scheme_devs.resize(self.items.len(), DeviceHandle::Invalid);
+        scheme_devs.resize_with(self.items.len(), || None);
         let mut cur_matches = Vec::new();
         cur_matches.resize(self.items.len(), DeviceTypeMatchSupport::None);
 
@@ -91,19 +91,23 @@ impl ControlScheme {
                     SchemeItem::Either(types) => types.iter().fold(DeviceTypeMatchSupport::None, |acc, ty| acc.max(dev_type.match_or_supports(ty))),
                     SchemeItem::Optional(ty) => dev_type.match_or_supports(ty),
                 };
-                if cur_matches.len() <= idx || cur_matches[idx] != match_support {
+                if cur_matches.len() <= idx || cur_matches[idx] < match_support {
                     cur_matches[idx] = match_support;
-                    scheme_devs[idx] = *dev;
+                    scheme_devs[idx] = Some(*dev);
                 }
             }
         }
 
-        let has_all_required = scheme_devs[..self.opt_start.map_or(scheme_devs.len(), |x| x.get())].iter().find(|handle| !matches!(handle, DeviceHandle::Invalid)).is_none();
+        let has_all_required = scheme_devs[..self.opt_start.map_or(scheme_devs.len(), |x| x.get())]
+            .iter()
+            .find(|handle| handle.is_some())
+            .is_none();
 
         if has_all_required {
-            None
+            let devices = scheme_devs.iter().filter_map(|opt| *opt).collect();
+            Some(ControlSet{ scheme: self.identifier.clone(), devices })
         } else {
-            Some(ControlSet{ scheme: self.identifier.clone(), devices: scheme_devs })
+            None
         }
     }
 
@@ -114,8 +118,8 @@ impl ControlScheme {
 
 /// Control set containing device handles for current layout
 pub struct ControlSet {
-    pub(crate) scheme  : ControlSchemeID,
-    pub(crate) devices : Vec<DeviceHandle>,
+    pub(crate) scheme:  ControlSchemeID,
+    pub(crate) devices: Vec<Handle>,
 }
 
 impl ControlSet {
@@ -123,11 +127,11 @@ impl ControlSet {
         &self.scheme
     }
 
-    pub fn devices(&self) -> &Vec<DeviceHandle> {
+    pub fn devices(&self) -> &Vec<Handle> {
         &self.devices
     }
 
-    pub(crate) fn take_devices(&mut self) -> Vec<DeviceHandle> {
+    pub(crate) fn take_devices(&mut self) -> Vec<Handle> {
         core::mem::take(&mut self.devices)
     }
 }

@@ -1,0 +1,172 @@
+# Input device HID definitions
+#
+# This file contains definitions that represents an input device that can be fully defined by an HID interface (i.e. does not require a custom API).
+#
+# Each definintion is an entry in an array specifying 1 device each.
+#
+# Below is the definition of an entry:
+#
+# Common properties
+# =================
+#
+# `name`: This is the name of the device, while not really required, a warning will be produced and it the name will default to `generic {kind}` 
+#     (this might be useful to disguise the name of a device that is not a know HID devices, although it would make more sense to just have a custom device for this).
+# `kind`: a string or an array of strings defining the sub-types of the device
+# `vid`: Vendor ID of the device
+# `pid`: Product ID of the device
+#
+# The supported kinds are
+# - gamepad
+# - touch
+# - sensor
+#
+#
+# Common sections
+# ===============
+#
+# [definition.buttons]
+#
+# This is a table containing button identifiers and there corresponding page/usage.
+# Each identifier matches up with predefined buttons for the sub-kind specifies in the common properties.
+# The inline table contains both the HID page and usage this button can be found on
+#
+# button_iden = { page = 0x..., usage = 0x... }
+#
+#
+#
+# [definition.axes]
+#
+# This is a table containing axes identifiers and there corresponding axes. 
+# Each identifier matches up with predefined buttons for the sub-kind specifies in the common properties.
+# The inline table contains the HID page and usage for each axis component, when only an x-axis is needed, the sub-table can contain the properties directly.
+#
+# axis_single = { page = 0x..., usage = 0x... }
+# axis_x = { x = { page = 0x..., usage = 0x... } }
+# axis_y = { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... } }
+# axis_y = { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... }, z = { page = 0x..., usage = 0x... } }
+#
+#
+#
+# Gamepad sections
+# ================
+#
+# [definition.dpad]
+#
+# `kind`: This is either `hat` or `buttons`, which defines the other properties in this table.
+#
+# If kind is set to `hat` the following properties needs to be defined, with the HID page and usage for the hat switch
+# 
+# hat = { page = 0x...., usage = 0x.... } <- hat switch usage
+# neutral = 0 <- hat switch neutral position (should be 0 or 8)
+#
+# Otherwise if the kind is set to `buttons`, the 4 or 8 buttons conposing the hat need to be defined:
+#
+# up = { page = 0x...., usage = 0x.... }
+# down = { page = 0x...., usage = 0x.... }
+# left = { page = 0x...., usage = 0x.... }
+# right = { page = 0x...., usage = 0x.... }
+#
+# If the dpad has separate buttons for the diagonal directions, they can be defined as
+#
+# up_left = { page = 0x...., usage = 0x.... }
+# up_right = { page = 0x...., usage = 0x.... }
+# down_left = { page = 0x...., usage = 0x.... }
+# down_right = { page = 0x...., usage = 0x.... }
+#
+# Gamepad buttons and axes definitions
+# ------------------------------------
+#
+# Buttons:
+# - `face_bottom`: The bottom or south face button, e.g. A on xbox and cross on PS
+# - `face_right`: The right or east face button, e.g. B on xbox and circle on PS
+# - `face_left`: The left or west face button, e.g. X on xbox and square on PS
+# - `face_up`: The up or north face button, e.g. Y on xbox and triangle on PS
+# - `left_bumper`: The left bumper of shoulder button
+# - `right_bumper`: The right bumper of shoulder button
+# - `left_menu`: The left menu button, e.g. view on xbox or create of PS
+# - `right_menu`: The right menu button, e.g. menu on xbox or options on PS
+# - `left_thumbstick`: The left thumbstick button
+# - `right_thumbstick`: The right thumbstick button
+#
+# Axes:
+# - `left_thumbstick`: Left thumbstick, containing an x and y mapping
+# - `right_thumbstick`: Right thumbstick, containing an x and y mapping
+# - `left_trigger`: Left trigger, containing a single axis mapping
+# - `right_trigger`: Right trigger, containing a single axis mapping
+#
+# Touch sections
+# ==============
+#
+# [definition.touch]
+#
+# This is a table of touch sensors with there corresponding axes.
+# It contains a single element called `touch` which is either a signle axis or an array of axes
+# Each identifier is an index in an array of touch indices
+# There are 2 types of supported axes: 1D (e.g. capacitive slider) and 2D (e.g. touchpad).
+# The inline table contains the HID page and usage for each axis component, when only an x-axis is needed, the sub-table can contain the properties directly.
+#
+# 0 = { page = 0x..., usage = 0x... }
+# 1 = { x = { page = 0x..., usage = 0x... } }
+# 2 = { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... } }
+#
+# Sensor sections
+# ===============
+#
+# [definition.sensor]
+#
+# This is a table of sensors supported by a device with there correspoding axes
+# Each sensor needs to be one from a supported list of sensors
+# The inline table contains the HID page and usage for each axis component, when only an x-axis is needed, the sub-table can contain the properties directly.
+# 
+# The supported sensors are:
+# - gyroscope: up to 3D axis
+# -  : up to 3D axis
+# 
+# Other sensors might be added later
+#
+# Unsupported device types
+# ========================
+# 
+# Some device types can be very difficult to define via HID, these are currently not supported
+#
+# - keyboard
+
+[[definition]]
+name = "Dualsense wireless controller (PS5)"
+kind = "gamepad"
+vid = 0x054C
+pid = 0x0CE6
+
+[definition.buttons]
+face_bottom = { page = 0x9, usage = 0x2 }
+face_right = { page = 0x9, usage = 0x3 }
+face_left = { page = 0x9, usage = 0x1 }
+face_up = { page = 0x9, usage = 0x4 }
+left_bumper = { page = 0x9, usage = 0x5 }
+right_bumper = { page = 0x9, usage = 0x6 }
+left_menu = { page = 0x9, usage = 0x9 }
+right_menu = { page = 0x9, usage = 0xA }
+left_thumbstick = { page = 0x9, usage = 0xB }
+right_thumbstick = { page = 0x9, usage = 0xC }
+guide = { page = 0x9, usage = 0xD }
+
+# Touchpad button: { page = 0x9, usage = 0xE }
+# Guide button: { page = 0x9, usage = 0xD }
+# Mute button: { page = 0x9, usage = 0xF }
+# Left trigger button: { page = 0x9, usage = 0x7 }
+# Right trigger button: { page = 0x9, usage = 0x8 }
+# Unknown: { page = 0xFF0, usage = 0x21 }
+
+[definition.dpad]
+kind = "hat"
+hat = { page = 0x1, usage = 0x39 }
+neutral = 8
+
+[definition.axes]
+left_thumbstick = { x = {page = 0x1, usage = 0x30}, y = {page = 0x1, usage = 0x31}  }
+right_thumbstick = { x = {page = 0x1, usage = 0x32}, y = {page = 0x1, usage = 0x35}  }
+left_trigger = { page = 0x1, usage = 0x33 }
+right_trigger = { page = 0x1, usage = 0x34 }
+
+[definition.touch]
+touch = { x = {page = 0x0, usage = 0x0}, y = {page = 0x0, usage = 0x0}  }

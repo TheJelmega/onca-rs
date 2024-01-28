@@ -1,14 +1,16 @@
-use core::fmt;
+use onca_base::EnumFromIndexT;
 use onca_common::{
     collections::BitSet,
     sync::{Mutex, RwLock},
     event_listener::DynEventListenerRef
 };
+use onca_common_macros::{EnumFromIndex, EnumDisplay};
 use onca_logging::log_warning;
 #[cfg(any(feature = "raw_input_logging", feature = "mouse_pos_logging"))]
 use onca_logging::log_verbose;
+use windows::Win32::UI::Input::RAWKEYBOARD;
 
-use crate::{os, LOG_INPUT_CAT, InputAxisDefinition, AxisType, AxisValue, DeviceType, InputAxisId};
+use crate::{os::{self, OSKeyboard}, LOG_INPUT_CAT, InputAxisDefinition, AxisType, AxisValue, DeviceType, InputAxisId, NativeDeviceHandle};
 
 use super::InputDevice;
 
@@ -19,361 +21,483 @@ use super::InputDevice;
 /// For keycodes that represent characters that can appear on a shifted layer (depending on layout),
 /// only the character on the base layer will be sent for pressed/released events, but the shifted character is sent for the char event.
 /// e.g. on a US QWERTY keyboard, typing `'_'` will only send `'-'` for pressed/released events, `'_'` will be sent for char events.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[allow(unused)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, EnumFromIndex, EnumDisplay)]
 pub enum KeyCode {
     /// Any key.
     /// 
     /// This key is meant to use in bindings that can receive any key, it cannot be used in any other usecase.
+    #[display("any key")]
     Any,
 
     /// Shift (any)
+    #[display("shift")]
     Shift,
     /// Left shift
+    #[display("left shift")]
     LShift,
     /// Right shift
+    #[display("right shift")]
     RShift,
     /// Control (any)
+    #[display("ctrl")]
     Ctrl,
     /// Left control
+    #[display("left ctrl")]
     LCtr,
     /// Right control
+    #[display("right ctrl")]
     RCtr,
     /// Alt (any)
+    #[display("alt")]
     Alt,
     /// Left alt
+    #[display("left alt")]
     LAlt,
     /// Right alt
+    #[display("right alt")]
     RAlt,
     /// left command/system-key
+    #[display("left command")]
     LCommand,
     /// Right command/system-key
+    #[display("right comman")]
     RCommand,
     /// Menu
+    #[display("system")]
     Menu,
 
     /// Space bar
+    #[display("space")]
     Space,
     /// Backspace
+    #[display("backspace")]
     Backspace,
     /// Tab
+    #[display("tab")]
     Tab,
     /// Enter
+    #[display("enter")]
     Enter,
     /// Escape
+    #[display("escape")]
     Escape,
     /// Delete
+    #[display("delete")]
     Delete,
     /// Insert
+    #[display("insert")]
     Insert,
     /// Home
+    #[display("home")]
     Home,
     /// End
+    #[display("end")]
     End,
     /// Page down
+    #[display("page down")]
     PgDown,
     /// Page up
+    #[display("page u")]
     PgUp,
 
     /// PrintScreen
+    #[display("printscreen")]
     PrintScreen,
     /// Caps lock
+    #[display("caps-lock")]
     CapsLock,
     /// Num lock
+    #[display("num-lock")]
     NumLock,
     /// Scroll lock
+    #[display("scroll-lock")]
     ScrollLock,
 
     /// Up arrow
+    #[display("up")]
     Up,
     /// Down arrow
+    #[display("down")]
     Down,
     /// Left arrow
+    #[display("left")]
     Left,
     /// Right arrow
+    #[display("right")]
     Right,
 
     /// Pause/Break
+    #[display("break/pause")]
     Break,
     /// Clear
+    #[display("clear")]
     Clear,
 
     /// F1
+    #[display("F1")]
     F1,
     /// F2
+    #[display("F2")]
     F2,
     /// F3
+    #[display("F3")]
     F3,
     /// F4
+    #[display("F4")]
     F4,
     /// F5
+    #[display("F5")]
     F5,
     /// F6
+    #[display("F6")]
     F6,
     /// F7
+    #[display("F7")]
     F7,
     /// F8
+    #[display("F8")]
     F8,
     /// F9
+    #[display("F9")]
     F9,
     /// F10
+    #[display("F10")]
     F10,
     /// F11
+    #[display("F11")]
     F11,
     /// F12
+    #[display("F12")]
     F12,
 
     /// Numpad 0
+    #[display("numpad 0")]
     Numpad0,
     /// Numpad 1
+    #[display("numpad 1")]
     Numpad1,
     /// Numpad 2
+    #[display("numpad 2")]
     Numpad2,
     /// Numpad 3
+    #[display("numpad 3")]
     Numpad3,
     /// Numpad 4
+    #[display("numpad 4")]
     Numpad4,
     /// Numpad 5
+    #[display("numpad 5")]
     Numpad5,
     /// Numpad 6
+    #[display("numpad 6")]
     Numpad6,
     /// Numpad 7
+    #[display("numpad 7")]
     Numpad7,
     /// Numpad 8
+    #[display("numpad 8")]
     Numpad8,
     /// Numpad 9
+    #[display("numpad 9")]
     Numpad9,
     /// Numpad multiply
+    #[display("numpad *")]
     NumpadMultipy,
     /// Numpad add
+    #[display("numpad +")]
     NumpadAdd,
     /// Numpad subtract
+    #[display("numpad -")]
     NumpadSubtract,
     /// Numpad decimal
+    #[display("numpad .")]
     NumpadDecimal,
     /// Numpad divide
+    #[display("numpad /")]
     NumpadDivide,
 
+    #[display("A")]
     A,
+    #[display("B")]
     B,
+    #[display("C")]
     C,
+    #[display("D")]
     D,
+    #[display("E")]
     E,
+    #[display("F")]
     F,
+    #[display("G")]
     G,
+    #[display("H")]
     H,
+    #[display("I")]
     I,
+    #[display("J")]
     J,
+    #[display("K")]
     K,
+    #[display("L")]
     L,
+    #[display("M")]
     M,
+    #[display("N")]
     N,
+    #[display("O")]
     O,
+    #[display("P")]
     P,
+    #[display("Q")]
     Q,
+    #[display("R")]
     R,
+    #[display("S")]
     S,
+    #[display("T")]
     T,
+    #[display("U")]
     U,
+    #[display("V")]
     V,
+    #[display("W")]
     W,
+    #[display("X")]
     X,
+    #[display("Y")]
     Y,
+    #[display("Z")]
     Z,
 
+    #[display("0")]
     N0,
+    #[display("1")]
     N1,
+    #[display("2")]
     N2,
+    #[display("3")]
     N3,
+    #[display("4")]
     N4,
+    #[display("5")]
     N5,
+    #[display("6")]
     N6,
+    #[display("7")]
     N7,
+    #[display("8")]
     N8,
+    #[display("9")]
     N9,
 
     // Below are all special characters with a key on the base layer on common keyboard layouts
 
     /// ;
+    #[display(";")]
     Semicolon,
     /// =
+    #[display("=")]
     Equals,
     /// ,
+    #[display(",")]
     Comma,
     /// -
+    #[display("-")]
     Hyphen,
     /// _
+    #[display("_")]
     Underscore,
     /// .
+    #[display(".")]
     Period,
     /// /
+    #[display("/")]
     Slash,
     /// `
+    #[display("`")]
     Backtick,
     /// [
+    #[display("]")]
     LBracket,
     /// \
+    #[display("\\")]
     Backslash,
     /// ]
+    #[display("[")]
     RBracket,
     /// '
+    #[display("'")]
     Apostrophe,
     /// "
+    #[display("\"")]
     Quote,
     /// (
+    #[display("(")]
     LParen,
     /// )
+    #[display(")")]
     RParen,
     /// &
+    #[display("&")]
     Ampersand,
     /// *
+    #[display("*")]
     Asterisk,
     /// ^
+    #[display("^")]
     Caret,
     /// $
+    #[display("$")]
     Dollar,
     /// !
+    #[display("!")]
     Exclamation,
     /// :
+    #[display(":")]
     Colon,
     /// é
+    #[display("é")]
     EAcute,
     /// è
+    #[display("è")]
     EGrave,
     /// à
+    #[display("à")]
     AGrave,
     /// ç
+    #[display("ç")]
     CCedilla,
     /// §
+    #[display("§")]
     Section,
 }
 pub const NUM_KEYS : usize = KeyCode::Section as usize + 1;
 pub const NUM_KEY_BITS : usize = NUM_KEYS.next_power_of_two();
 
 mod keycode_name {
-    pub const ANY             : &str = "Any Key"          ;
-    pub const SHIFT           : &str = "Shift"            ;
-    pub const LSHIFT          : &str = "Left Shift"       ;
-    pub const RSHIFT          : &str = "Right Shift"      ;
-    pub const CTRL            : &str = "Ctrl"             ;
-    pub const LCTR            : &str = "Left Ctrl"        ;
-    pub const RCTR            : &str = "Right Ctrl"       ;
-    pub const ALT             : &str = "Alt"              ;
-    pub const LALT            : &str = "Left Alt"         ;
-    pub const RALT            : &str = "Right Alt"        ;
-    pub const LCOMMAND        : &str = "Left Command"     ;
-    pub const RCOMMAND        : &str = "Right Command"    ;
-    pub const MENU            : &str = "Menu"             ;
-    pub const SPACE           : &str = "Space"            ;
-    pub const BACKSPACE       : &str = "Backspace"        ;
-    pub const TAB             : &str = "Tab"              ;
-    pub const ENTER           : &str = "Enter"            ;
-    pub const ESCAPE          : &str = "Escape"           ;
-    pub const DELETE          : &str = "Delete"           ;
-    pub const INSERT          : &str = "Insert"           ;
-    pub const HOME            : &str = "Home"             ;
-    pub const END             : &str = "End"              ;
-    pub const PG_DOWN         : &str = "Page Down"        ;
-    pub const PG_UP           : &str = "Page Up"          ;
-    pub const PRINT_SCREEN    : &str = "Print Screen"     ;
-    pub const CAPS_LOCK       : &str = "Caps Lock"        ;
-    pub const NUM_LOCK        : &str = "Num Lock"         ;
-    pub const SCROLL_LOCK     : &str = "Scroll Lock"      ;
-    pub const UP              : &str = "Up Arrow"         ;
-    pub const DOWN            : &str = "Down Arrow"       ;
-    pub const LEFT            : &str = "Left Arrow"       ;
-    pub const RIGHT           : &str = "Right Arrow"      ;
-    pub const BREAK           : &str = "Break"            ;
-    pub const CLEAR           : &str = "Clear"            ;
-    pub const F1              : &str = "F1"               ;
-    pub const F2              : &str = "F2"               ;
-    pub const F3              : &str = "F3"               ;
-    pub const F4              : &str = "F4"               ;
-    pub const F5              : &str = "F5"               ;
-    pub const F6              : &str = "F6"               ;
-    pub const F7              : &str = "F7"               ;
-    pub const F8              : &str = "F8"               ;
-    pub const F9              : &str = "F9"               ;
-    pub const F10             : &str = "F10"              ;
-    pub const F11             : &str = "F11"              ;
-    pub const F12             : &str = "F12"              ;
-    pub const NUMPAD0         : &str = "Num 0"            ;
-    pub const NUMPAD1         : &str = "Num 1"            ;
-    pub const NUMPAD2         : &str = "Num 2"            ;
-    pub const NUMPAD3         : &str = "Num 3"            ;
-    pub const NUMPAD4         : &str = "Num 4"            ;
-    pub const NUMPAD5         : &str = "Num 5"            ;
-    pub const NUMPAD6         : &str = "Num 6"            ;
-    pub const NUMPAD7         : &str = "Num 7"            ;
-    pub const NUMPAD8         : &str = "Num 8"            ;
-    pub const NUMPAD9         : &str = "Num 9"            ;
-    pub const NUMPAD_MULTIPY  : &str = "Num *"            ;
-    pub const NUMPAD_ADD      : &str = "Num +"            ;
-    pub const NUMPAD_SUBTRACT : &str = "Num -"            ;
-    pub const NUMPAD_DECIMAL  : &str = "Num ."            ;
-    pub const NUMPAD_DIVIDE   : &str = "Num /"            ;
-    pub const A               : &str = "A"                ;
-    pub const B               : &str = "B"                ;
-    pub const C               : &str = "C"                ;
-    pub const D               : &str = "D"                ;
-    pub const E               : &str = "E"                ;
-    pub const F               : &str = "F"                ;
-    pub const G               : &str = "G"                ;
-    pub const H               : &str = "H"                ;
-    pub const I               : &str = "I"                ;
-    pub const J               : &str = "J"                ;
-    pub const K               : &str = "K"                ;
-    pub const L               : &str = "L"                ;
-    pub const M               : &str = "M"                ;
-    pub const N               : &str = "N"                ;
-    pub const O               : &str = "O"                ;
-    pub const P               : &str = "P"                ;
-    pub const Q               : &str = "Q"                ;
-    pub const R               : &str = "R"                ;
-    pub const S               : &str = "S"                ;
-    pub const T               : &str = "T"                ;
-    pub const U               : &str = "U"                ;
-    pub const V               : &str = "V"                ;
-    pub const W               : &str = "W"                ;
-    pub const X               : &str = "X"                ;
-    pub const Y               : &str = "Y"                ;
-    pub const Z               : &str = "Z"                ;
-    pub const N0              : &str = "0"                ;
-    pub const N1              : &str = "1"                ;
-    pub const N2              : &str = "2"                ;
-    pub const N3              : &str = "3"                ;
-    pub const N4              : &str = "4"                ;
-    pub const N5              : &str = "5"                ;
-    pub const N6              : &str = "6"                ;
-    pub const N7              : &str = "7"                ;
-    pub const N8              : &str = "8"                ;
-    pub const N9              : &str = "9"                ;
-    pub const SEMICOLON       : &str = "Semicolon"        ;
-    pub const EQUALS          : &str = "Equals"           ;
-    pub const COMMA           : &str = "Comma"            ;
-    pub const HYPHEN          : &str = "Hyphen"           ;
-    pub const UNDERSCORE      : &str = "Underscore"       ;
-    pub const PERIOD          : &str = "Period"           ;
-    pub const SLASH           : &str = "Slash"            ;
-    pub const BACKTICK        : &str = "Backtick"         ;
-    pub const LBRACKET        : &str = "Left Bracket"     ;
-    pub const RBRACKET        : &str = "Right Bracket"    ;
-    pub const BACKSLASH       : &str = "Backslash"        ;
-    pub const APOSTROPHE      : &str = "Apostrophe"       ;
-    pub const QUOTE           : &str = "Quote"            ;
-    pub const LPAREN          : &str = "Left Parentheses" ;
-    pub const RPAREN          : &str = "Right Parentheses";
-    pub const AMPERSAND       : &str = "Ampersand"        ;
-    pub const ASTERISK        : &str = "Asterisk"         ;
-    pub const CARET           : &str = "Caret"            ;
-    pub const DOLLAR          : &str = "Dollar"           ;
-    pub const EXCLAMATION     : &str = "Exclamation"      ;
-    pub const COLON           : &str = "Colon"            ;
-    pub const EACUTE          : &str = "é"                ;
-    pub const EGRAVE          : &str = "è"                ;
-    pub const AGRAVE          : &str = "à"                ;
-    pub const CCEDILLA        : &str = "ç"                ;
-    pub const SECTION         : &str = "§"                ;
+    pub const ANY:             &'static str = "Any Key"          ;
+    pub const SHIFT:           &'static str = "Shift"            ;
+    pub const LSHIFT:          &'static str = "Left Shift"       ;
+    pub const RSHIFT:          &'static str = "Right Shift"      ;
+    pub const CTRL:            &'static str = "Ctrl"             ;
+    pub const LCTR:            &'static str = "Left Ctrl"        ;
+    pub const RCTR:            &'static str = "Right Ctrl"       ;
+    pub const ALT:             &'static str = "Alt"              ;
+    pub const LALT:            &'static str = "Left Alt"         ;
+    pub const RALT:            &'static str = "Right Alt"        ;
+    pub const LCOMMAND:        &'static str = "Left Command"     ;
+    pub const RCOMMAND:        &'static str = "Right Command"    ;
+    pub const MENU:            &'static str = "Menu"             ;
+    pub const SPACE:           &'static str = "Space"            ;
+    pub const BACKSPACE:       &'static str = "Backspace"        ;
+    pub const TAB:             &'static str = "Tab"              ;
+    pub const ENTER:           &'static str = "Enter"            ;
+    pub const ESCAPE:          &'static str = "Escape"           ;
+    pub const DELETE:          &'static str = "Delete"           ;
+    pub const INSERT:          &'static str = "Insert"           ;
+    pub const HOME:            &'static str = "Home"             ;
+    pub const END:             &'static str = "End"              ;
+    pub const PG_DOWN:         &'static str = "Page Down"        ;
+    pub const PG_UP:           &'static str = "Page Up"          ;
+    pub const PRINT_SCREEN:    &'static str = "Print Screen"     ;
+    pub const CAPS_LOCK:       &'static str = "Caps Lock"        ;
+    pub const NUM_LOCK:        &'static str = "Num Lock"         ;
+    pub const SCROLL_LOCK:     &'static str = "Scroll Lock"      ;
+    pub const UP:              &'static str = "Up Arrow"         ;
+    pub const DOWN:            &'static str = "Down Arrow"       ;
+    pub const LEFT:            &'static str = "Left Arrow"       ;
+    pub const RIGHT:           &'static str = "Right Arrow"      ;
+    pub const BREAK:           &'static str = "Break"            ;
+    pub const CLEAR:           &'static str = "Clear"            ;
+    pub const F1:              &'static str = "F1"               ;
+    pub const F2:              &'static str = "F2"               ;
+    pub const F3:              &'static str = "F3"               ;
+    pub const F4:              &'static str = "F4"               ;
+    pub const F5:              &'static str = "F5"               ;
+    pub const F6:              &'static str = "F6"               ;
+    pub const F7:              &'static str = "F7"               ;
+    pub const F8:              &'static str = "F8"               ;
+    pub const F9:              &'static str = "F9"               ;
+    pub const F10:             &'static str = "F10"              ;
+    pub const F11:             &'static str = "F11"              ;
+    pub const F12:             &'static str = "F12"              ;
+    pub const NUMPAD0:         &'static str = "Num 0"            ;
+    pub const NUMPAD1:         &'static str = "Num 1"            ;
+    pub const NUMPAD2:         &'static str = "Num 2"            ;
+    pub const NUMPAD3:         &'static str = "Num 3"            ;
+    pub const NUMPAD4:         &'static str = "Num 4"            ;
+    pub const NUMPAD5:         &'static str = "Num 5"            ;
+    pub const NUMPAD6:         &'static str = "Num 6"            ;
+    pub const NUMPAD7:         &'static str = "Num 7"            ;
+    pub const NUMPAD8:         &'static str = "Num 8"            ;
+    pub const NUMPAD9:         &'static str = "Num 9"            ;
+    pub const NUMPAD_MULTIPY:  &'static str = "Num *"            ;
+    pub const NUMPAD_ADD:      &'static str = "Num +"            ;
+    pub const NUMPAD_SUBTRACT: &'static str = "Num -"            ;
+    pub const NUMPAD_DECIMAL:  &'static str = "Num ."            ;
+    pub const NUMPAD_DIVIDE:   &'static str = "Num /"            ;
+    pub const A:               &'static str = "A"                ;
+    pub const B:               &'static str = "B"                ;
+    pub const C:               &'static str = "C"                ;
+    pub const D:               &'static str = "D"                ;
+    pub const E:               &'static str = "E"                ;
+    pub const F:               &'static str = "F"                ;
+    pub const G:               &'static str = "G"                ;
+    pub const H:               &'static str = "H"                ;
+    pub const I:               &'static str = "I"                ;
+    pub const J:               &'static str = "J"                ;
+    pub const K:               &'static str = "K"                ;
+    pub const L:               &'static str = "L"                ;
+    pub const M:               &'static str = "M"                ;
+    pub const N:               &'static str = "N"                ;
+    pub const O:               &'static str = "O"                ;
+    pub const P:               &'static str = "P"                ;
+    pub const Q:               &'static str = "Q"                ;
+    pub const R:               &'static str = "R"                ;
+    pub const S:               &'static str = "S"                ;
+    pub const T:               &'static str = "T"                ;
+    pub const U:               &'static str = "U"                ;
+    pub const V:               &'static str = "V"                ;
+    pub const W:               &'static str = "W"                ;
+    pub const X:               &'static str = "X"                ;
+    pub const Y:               &'static str = "Y"                ;
+    pub const Z:               &'static str = "Z"                ;
+    pub const N0:              &'static str = "0"                ;
+    pub const N1:              &'static str = "1"                ;
+    pub const N2:              &'static str = "2"                ;
+    pub const N3:              &'static str = "3"                ;
+    pub const N4:              &'static str = "4"                ;
+    pub const N5:              &'static str = "5"                ;
+    pub const N6:              &'static str = "6"                ;
+    pub const N7:              &'static str = "7"                ;
+    pub const N8:              &'static str = "8"                ;
+    pub const N9:              &'static str = "9"                ;
+    pub const SEMICOLON:       &'static str = "Semicolon"        ;
+    pub const EQUALS:          &'static str = "Equals"           ;
+    pub const COMMA:           &'static str = "Comma"            ;
+    pub const HYPHEN:          &'static str = "Hyphen"           ;
+    pub const UNDERSCORE:      &'static str = "Underscore"       ;
+    pub const PERIOD:          &'static str = "Period"           ;
+    pub const SLASH:           &'static str = "Slash"            ;
+    pub const BACKTICK:        &'static str = "Backtick"         ;
+    pub const LBRACKET:        &'static str = "Left Bracket"     ;
+    pub const RBRACKET:        &'static str = "Right Bracket"    ;
+    pub const BACKSLASH:       &'static str = "Backslash"        ;
+    pub const APOSTROPHE:      &'static str = "Apostrophe"       ;
+    pub const QUOTE:           &'static str = "Quote"            ;
+    pub const LPAREN:          &'static str = "Left Parentheses" ;
+    pub const RPAREN:          &'static str = "Right Parentheses";
+    pub const AMPERSAND:       &'static str = "Ampersand"        ;
+    pub const ASTERISK:        &'static str = "Asterisk"         ;
+    pub const CARET:           &'static str = "Caret"            ;
+    pub const DOLLAR:          &'static str = "Dollar"           ;
+    pub const EXCLAMATION:     &'static str = "Exclamation"      ;
+    pub const COLON:           &'static str = "Colon"            ;
+    pub const EACUTE:          &'static str = "é"                ;
+    pub const EGRAVE:          &'static str = "è"                ;
+    pub const AGRAVE:          &'static str = "à"                ;
+    pub const CCEDILLA:        &'static str = "ç"                ;
+    pub const SECTION:         &'static str = "§"                ;
 }
     
 impl KeyCode {
@@ -403,135 +527,6 @@ impl KeyCode {
 
     pub fn is_text_input_key(self) -> bool {
         self.is_character_key() || self.is_text_input_special_key()
-    }
-
-    pub fn from_idx(idx: usize) -> Option<Self> {
-        match idx {
-              0 => Some(Self::Any),
-              1 => Some(Self::Shift),
-              2 => Some(Self::LShift),
-              3 => Some(Self::RShift),
-              4 => Some(Self::Ctrl),
-              5 => Some(Self::LCtr),
-              6 => Some(Self::RCtr),
-              7 => Some(Self::Alt),
-              8 => Some(Self::LAlt),
-              9 => Some(Self::RAlt),
-             10 => Some(Self::LCommand),
-             11 => Some(Self::RCommand),
-             12 => Some(Self::Menu),
-             13 => Some(Self::Space),
-             14 => Some(Self::Backspace),
-             15 => Some(Self::Tab),
-             16 => Some(Self::Enter),
-             17 => Some(Self::Escape),
-             18 => Some(Self::Delete),
-             19 => Some(Self::Insert),
-             20 => Some(Self::Home),
-             21 => Some(Self::End),
-             22 => Some(Self::PgDown),
-             23 => Some(Self::PgUp),
-             24 => Some(Self::PrintScreen),
-             25 => Some(Self::CapsLock),
-             26 => Some(Self::NumLock),
-             27 => Some(Self::ScrollLock),
-             28 => Some(Self::Up),
-             29 => Some(Self::Down),
-             30 => Some(Self::Left),
-             31 => Some(Self::Right),
-             32 => Some(Self::Break),
-             33 => Some(Self::Clear),
-             34 => Some(Self::F1),
-             35 => Some(Self::F2),
-             36 => Some(Self::F3),
-             37 => Some(Self::F4),
-             38 => Some(Self::F5),
-             39 => Some(Self::F6),
-             40 => Some(Self::F7),
-             41 => Some(Self::F8),
-             42 => Some(Self::F9),
-             43 => Some(Self::F10),
-             44 => Some(Self::F11),
-             45 => Some(Self::F12),
-             46 => Some(Self::Numpad0),
-             47 => Some(Self::Numpad1),
-             48 => Some(Self::Numpad2),
-             49 => Some(Self::Numpad3),
-             50 => Some(Self::Numpad4),
-             51 => Some(Self::Numpad5),
-             52 => Some(Self::Numpad6),
-             53 => Some(Self::Numpad7),
-             54 => Some(Self::Numpad8),
-             55 => Some(Self::Numpad9),
-             56 => Some(Self::NumpadMultipy),
-             57 => Some(Self::NumpadAdd),
-             58 => Some(Self::NumpadSubtract),
-             59 => Some(Self::NumpadDecimal),
-             60 => Some(Self::NumpadDivide),
-             61 => Some(Self::A),
-             62 => Some(Self::B),
-             63 => Some(Self::C),
-             64 => Some(Self::D),
-             65 => Some(Self::E),
-             66 => Some(Self::F),
-             67 => Some(Self::G),
-             68 => Some(Self::H),
-             69 => Some(Self::I),
-             70 => Some(Self::J),
-             71 => Some(Self::K),
-             72 => Some(Self::L),
-             73 => Some(Self::M),
-             74 => Some(Self::N),
-             75 => Some(Self::O),
-             76 => Some(Self::P),
-             77 => Some(Self::Q),
-             78 => Some(Self::R),
-             79 => Some(Self::S),
-             80 => Some(Self::T),
-             81 => Some(Self::U),
-             82 => Some(Self::V),
-             83 => Some(Self::W),
-             84 => Some(Self::X),
-             85 => Some(Self::Y),
-             86 => Some(Self::Z),
-             87 => Some(Self::N0),
-             88 => Some(Self::N1),
-             89 => Some(Self::N2),
-             90 => Some(Self::N3),
-             91 => Some(Self::N4),
-             92 => Some(Self::N5),
-             93 => Some(Self::N6),
-             94 => Some(Self::N7),
-             95 => Some(Self::N8),
-             96 => Some(Self::N9),
-             97 => Some(Self::Semicolon),
-             98 => Some(Self::Equals),
-             99 => Some(Self::Comma),
-            100 => Some(Self::Hyphen),
-            101 => Some(Self::Underscore),
-            102 => Some(Self::Period),
-            103 => Some(Self::Slash),
-            104 => Some(Self::Backtick),
-            105 => Some(Self::LBracket),
-            106 => Some(Self::Backslash),
-            107 => Some(Self::RBracket),
-            108 => Some(Self::Apostrophe),
-            109 => Some(Self::Quote),
-            110 => Some(Self::LParen),
-            111 => Some(Self::RParen),
-            112 => Some(Self::Ampersand),
-            113 => Some(Self::Asterisk),
-            114 => Some(Self::Caret),
-            115 => Some(Self::Dollar),
-            116 => Some(Self::Exclamation),
-            117 => Some(Self::Colon),
-            118 => Some(Self::EAcute),
-            119 => Some(Self::EGrave),
-            120 => Some(Self::AGrave),
-            121 => Some(Self::CCedilla),
-            122 => Some(Self::Section),
-            _ => None
-        }
     }
 
     pub const fn as_str(self) -> &'static str {
@@ -752,136 +747,6 @@ impl From<KeyCode> for char {
     }
 }
 
-impl fmt::Display for KeyCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            KeyCode::Any             => f.write_str("any key"),
-            KeyCode::Shift           => f.write_str("shift"),
-            KeyCode::LShift          => f.write_str("left shift"),
-            KeyCode::RShift          => f.write_str("right shift"),
-            KeyCode::Ctrl            => f.write_str("ctrl"),
-            KeyCode::LCtr            => f.write_str("left ctrl"),
-            KeyCode::RCtr            => f.write_str("right ctrl"),
-            KeyCode::Alt             => f.write_str("alt"),
-            KeyCode::LAlt            => f.write_str("left alt"),
-            KeyCode::RAlt            => f.write_str("right alt"),
-            KeyCode::LCommand        => f.write_str("left command"),
-            KeyCode::RCommand        => f.write_str("right command"),
-            KeyCode::Menu            => f.write_str("system"),
-            KeyCode::Space           => f.write_str("space"),
-            KeyCode::Backspace       => f.write_str("backspace"),
-            KeyCode::Tab             => f.write_str("tagb"),
-            KeyCode::Enter           => f.write_str("enter"),
-            KeyCode::Escape          => f.write_str("escape"),
-            KeyCode::Delete          => f.write_str("delete"),
-            KeyCode::Insert          => f.write_str("insert"),
-            KeyCode::Home            => f.write_str("home"),
-            KeyCode::End             => f.write_str("end"),
-            KeyCode::PgDown          => f.write_str("page down"),
-            KeyCode::PgUp            => f.write_str("page up"),
-            KeyCode::PrintScreen     => f.write_str("printscreen"),
-            KeyCode::CapsLock        => f.write_str("caps-lock"),
-            KeyCode::NumLock         => f.write_str("num-lock"),
-            KeyCode::ScrollLock      => f.write_str("scroll-lock"),
-            KeyCode::Up              => f.write_str("up"),
-            KeyCode::Down            => f.write_str("down"),
-            KeyCode::Left            => f.write_str("left"),
-            KeyCode::Right           => f.write_str("right"),
-            KeyCode::Break           => f.write_str("break/pause"),
-            KeyCode::Clear           => f.write_str("clear"),
-            KeyCode::F1              => f.write_str("F1"),
-            KeyCode::F2              => f.write_str("F2"),
-            KeyCode::F3              => f.write_str("F3"),
-            KeyCode::F4              => f.write_str("F4"),
-            KeyCode::F5              => f.write_str("F5"),
-            KeyCode::F6              => f.write_str("F6"),
-            KeyCode::F7              => f.write_str("F7"),
-            KeyCode::F8              => f.write_str("F8"),
-            KeyCode::F9              => f.write_str("F9"),
-            KeyCode::F10             => f.write_str("F10"),
-            KeyCode::F11             => f.write_str("F11"),
-            KeyCode::F12             => f.write_str("F12"),
-            KeyCode::Numpad0         => f.write_str("numpad 0"),
-            KeyCode::Numpad1         => f.write_str("numpad 1"),
-            KeyCode::Numpad2         => f.write_str("numpad 2"),
-            KeyCode::Numpad3         => f.write_str("numpad 3"),
-            KeyCode::Numpad4         => f.write_str("numpad 4"),
-            KeyCode::Numpad5         => f.write_str("numpad 5"),
-            KeyCode::Numpad6         => f.write_str("numpad 6"),
-            KeyCode::Numpad7         => f.write_str("numpad 7"),
-            KeyCode::Numpad8         => f.write_str("numpad 8"),
-            KeyCode::Numpad9         => f.write_str("numpad 9"),
-            KeyCode::NumpadMultipy   => f.write_str("numpad *"),
-            KeyCode::NumpadAdd       => f.write_str("numpad +"),
-            KeyCode::NumpadSubtract  => f.write_str("numpad -"),
-            KeyCode::NumpadDecimal   => f.write_str("numpad ."),
-            KeyCode::NumpadDivide    => f.write_str("numpad /"),
-            KeyCode::A               => f.write_str("A"),
-            KeyCode::B               => f.write_str("B"),
-            KeyCode::C               => f.write_str("C"),
-            KeyCode::D               => f.write_str("D"),
-            KeyCode::E               => f.write_str("E"),
-            KeyCode::F               => f.write_str("F"),
-            KeyCode::G               => f.write_str("G"),
-            KeyCode::H               => f.write_str("H"),
-            KeyCode::I               => f.write_str("I"),
-            KeyCode::J               => f.write_str("J"),
-            KeyCode::K               => f.write_str("K"),
-            KeyCode::L               => f.write_str("L"),
-            KeyCode::M               => f.write_str("M"),
-            KeyCode::N               => f.write_str("N"),
-            KeyCode::O               => f.write_str("O"),
-            KeyCode::P               => f.write_str("P"),
-            KeyCode::Q               => f.write_str("Q"),
-            KeyCode::R               => f.write_str("R"),
-            KeyCode::S               => f.write_str("S"),
-            KeyCode::T               => f.write_str("T"),
-            KeyCode::U               => f.write_str("U"),
-            KeyCode::V               => f.write_str("V"),
-            KeyCode::W               => f.write_str("W"),
-            KeyCode::X               => f.write_str("X"),
-            KeyCode::Y               => f.write_str("Y"),
-            KeyCode::Z               => f.write_str("Z"),
-            KeyCode::N0              => f.write_str("0"),
-            KeyCode::N1              => f.write_str("1"),
-            KeyCode::N2              => f.write_str("2"),
-            KeyCode::N3              => f.write_str("3"),
-            KeyCode::N4              => f.write_str("4"),
-            KeyCode::N5              => f.write_str("5"),
-            KeyCode::N6              => f.write_str("6"),
-            KeyCode::N7              => f.write_str("7"),
-            KeyCode::N8              => f.write_str("8"),
-            KeyCode::N9              => f.write_str("9"),
-            KeyCode::Backtick        => f.write_str("`"),
-            KeyCode::Exclamation     => f.write_str("!"),
-            KeyCode::Dollar          => f.write_str("$"),
-            KeyCode::Caret           => f.write_str("^"),
-            KeyCode::Ampersand       => f.write_str("&"),
-            KeyCode::Asterisk        => f.write_str("*"),
-            KeyCode::LParen          => f.write_str("("),
-            KeyCode::RParen          => f.write_str(")"),
-            KeyCode::Hyphen          => f.write_str("-"),
-            KeyCode::Underscore      => f.write_str("_"),
-            KeyCode::Equals          => f.write_str("="),
-            KeyCode::LBracket        => f.write_str("["),
-            KeyCode::Backslash       => f.write_str("\\"),
-            KeyCode::RBracket        => f.write_str("]"),
-            KeyCode::Colon           => f.write_str(":"),
-            KeyCode::Semicolon       => f.write_str(";"),
-            KeyCode::Quote           => f.write_str("\""),
-            KeyCode::Apostrophe      => f.write_str("'"),
-            KeyCode::Comma           => f.write_str(","),
-            KeyCode::Period          => f.write_str("."),
-            KeyCode::Slash           => f.write_str("/"),
-            KeyCode::EAcute          => f.write_str("é"),
-            KeyCode::EGrave          => f.write_str("è"),
-            KeyCode::AGrave          => f.write_str("à"),
-            KeyCode::CCedilla        => f.write_str("ç"),
-            KeyCode::Section         => f.write_str("§"),
-        }
-    }
-}
-
 /// Keyboard text input (any keyboard input relevant to text input).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(unused)]
@@ -958,8 +823,8 @@ impl KeyboardState {
 
     pub fn press(&mut self, key: KeyCode) {
         let idx = key as usize;
-        self.pressed.set(idx, true);
-        self.down.set(idx, true);
+        self.pressed.enable(idx);
+        self.down.enable(idx);
     }
 
     pub fn release(&mut self, key: KeyCode) {
@@ -969,9 +834,9 @@ impl KeyboardState {
             self.released.set_all();
         } else {
             let idx = key as usize;
-            self.pressed.set(idx, false);
-            self.down.set(idx, false);
-            self.released.set(idx, true);
+            self.pressed.disable(idx);
+            self.down.disable(idx);
+            self.released.enable(idx);
         }
     }
 
@@ -995,168 +860,170 @@ impl KeyboardState {
 }
 
 struct KeyChange {
-    key     : KeyCode,
-    time    : f32,
-    chars   : [char; 4],
-    pressed : bool,
+    key:     KeyCode,
+    time:    f32,
+    chars:   [char; 4],
+    pressed: bool,
 }
 
 /// Keyboard input
 pub struct Keyboard {
-    _os_kb              : os::OSKeyboard,
-
+    _os_kb:              os::OSKeyboard,
+    handle:              Option<NativeDeviceHandle>,
     // Keys
-    state               : RwLock<KeyboardState>,
-    key_changes         : Mutex<Vec<KeyChange>>,
-
-    key_timers          : [f32; NUM_KEYS],
-
+    state:               RwLock<KeyboardState>,
+    key_changes:         Mutex<Vec<KeyChange>>,
+    key_timers:          [f32; NUM_KEYS],
     // Text
-    text_input          : Vec<KeyboardTextInput>,
-    text_input_listener : Mutex<Option<DynEventListenerRef<KeyboardTextInput>>>,
+    text_input:          Vec<KeyboardTextInput>,
+    text_input_listener: Mutex<Option<DynEventListenerRef<KeyboardTextInput>>>,
     /// Time between multi-shot key events.
-    text_rep_time       : f32,
-    text_timer          : f32,
+    text_rep_time:       f32,
+    text_timer:          f32,
 }
 
 impl Keyboard {
 
-    pub const ANY             : InputAxisId = InputAxisId::new(keycode_name::ANY            );
-    pub const SHIFT           : InputAxisId = InputAxisId::new(keycode_name::SHIFT          );
-    pub const LSHIFT          : InputAxisId = InputAxisId::new(keycode_name::LSHIFT         );
-    pub const RSHIFT          : InputAxisId = InputAxisId::new(keycode_name::RSHIFT         );
-    pub const CTRL            : InputAxisId = InputAxisId::new(keycode_name::CTRL           );
-    pub const LCTR            : InputAxisId = InputAxisId::new(keycode_name::LCTR           );
-    pub const RCTR            : InputAxisId = InputAxisId::new(keycode_name::RCTR           );
-    pub const ALT             : InputAxisId = InputAxisId::new(keycode_name::ALT            );
-    pub const LALT            : InputAxisId = InputAxisId::new(keycode_name::LALT           );
-    pub const RALT            : InputAxisId = InputAxisId::new(keycode_name::RALT           );
-    pub const LCOMMAND        : InputAxisId = InputAxisId::new(keycode_name::LCOMMAND       );
-    pub const RCOMMAND        : InputAxisId = InputAxisId::new(keycode_name::RCOMMAND       );
-    pub const MENU            : InputAxisId = InputAxisId::new(keycode_name::MENU           );
-    pub const SPACE           : InputAxisId = InputAxisId::new(keycode_name::SPACE          );
-    pub const BACKSPACE       : InputAxisId = InputAxisId::new(keycode_name::BACKSPACE      );
-    pub const TAB             : InputAxisId = InputAxisId::new(keycode_name::TAB            );
-    pub const ENTER           : InputAxisId = InputAxisId::new(keycode_name::ENTER          );
-    pub const ESCAPE          : InputAxisId = InputAxisId::new(keycode_name::ESCAPE         );
-    pub const DELETE          : InputAxisId = InputAxisId::new(keycode_name::DELETE         );
-    pub const INSERT          : InputAxisId = InputAxisId::new(keycode_name::INSERT         );
-    pub const HOME            : InputAxisId = InputAxisId::new(keycode_name::HOME           );
-    pub const END             : InputAxisId = InputAxisId::new(keycode_name::END            );
-    pub const PG_DOWN         : InputAxisId = InputAxisId::new(keycode_name::PG_DOWN        );
-    pub const PG_UP           : InputAxisId = InputAxisId::new(keycode_name::PG_UP          );
-    pub const PRINT_SCREEN    : InputAxisId = InputAxisId::new(keycode_name::PRINT_SCREEN   );
-    pub const CAPS_LOCK       : InputAxisId = InputAxisId::new(keycode_name::CAPS_LOCK      );
-    pub const NUM_LOCK        : InputAxisId = InputAxisId::new(keycode_name::NUM_LOCK       );
-    pub const SCROLL_LOCK     : InputAxisId = InputAxisId::new(keycode_name::SCROLL_LOCK    );
-    pub const UP              : InputAxisId = InputAxisId::new(keycode_name::UP             );
-    pub const DOWN            : InputAxisId = InputAxisId::new(keycode_name::DOWN           );
-    pub const LEFT            : InputAxisId = InputAxisId::new(keycode_name::LEFT           );
-    pub const RIGHT           : InputAxisId = InputAxisId::new(keycode_name::RIGHT          );
-    pub const BREAK           : InputAxisId = InputAxisId::new(keycode_name::BREAK          );
-    pub const CLEAR           : InputAxisId = InputAxisId::new(keycode_name::CLEAR          );
-    pub const F1              : InputAxisId = InputAxisId::new(keycode_name::F1             );
-    pub const F2              : InputAxisId = InputAxisId::new(keycode_name::F2             );
-    pub const F3              : InputAxisId = InputAxisId::new(keycode_name::F3             );
-    pub const F4              : InputAxisId = InputAxisId::new(keycode_name::F4             );
-    pub const F5              : InputAxisId = InputAxisId::new(keycode_name::F5             );
-    pub const F6              : InputAxisId = InputAxisId::new(keycode_name::F6             );
-    pub const F7              : InputAxisId = InputAxisId::new(keycode_name::F7             );
-    pub const F8              : InputAxisId = InputAxisId::new(keycode_name::F8             );
-    pub const F9              : InputAxisId = InputAxisId::new(keycode_name::F9             );
-    pub const F10             : InputAxisId = InputAxisId::new(keycode_name::F10            );
-    pub const F11             : InputAxisId = InputAxisId::new(keycode_name::F11            );
-    pub const F12             : InputAxisId = InputAxisId::new(keycode_name::F12            );
-    pub const NUMPAD0         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD0        );
-    pub const NUMPAD1         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD1        );
-    pub const NUMPAD2         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD2        );
-    pub const NUMPAD3         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD3        );
-    pub const NUMPAD4         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD4        );
-    pub const NUMPAD5         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD5        );
-    pub const NUMPAD6         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD6        );
-    pub const NUMPAD7         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD7        );
-    pub const NUMPAD8         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD8        );
-    pub const NUMPAD9         : InputAxisId = InputAxisId::new(keycode_name::NUMPAD9        );
-    pub const NUMPAD_MULTIPY  : InputAxisId = InputAxisId::new(keycode_name::NUMPAD_MULTIPY );
-    pub const NUMPAD_ADD      : InputAxisId = InputAxisId::new(keycode_name::NUMPAD_ADD     );
-    pub const NUMPAD_SUBTRACT : InputAxisId = InputAxisId::new(keycode_name::NUMPAD_SUBTRACT);
-    pub const NUMPAD_DECIMAL  : InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DECIMAL );
-    pub const NUMPAD_DIVIDE   : InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DIVIDE  );
-    pub const A               : InputAxisId = InputAxisId::new(keycode_name::A              );
-    pub const B               : InputAxisId = InputAxisId::new(keycode_name::B              );
-    pub const C               : InputAxisId = InputAxisId::new(keycode_name::C              );
-    pub const D               : InputAxisId = InputAxisId::new(keycode_name::D              );
-    pub const E               : InputAxisId = InputAxisId::new(keycode_name::E              );
-    pub const F               : InputAxisId = InputAxisId::new(keycode_name::F              );
-    pub const G               : InputAxisId = InputAxisId::new(keycode_name::G              );
-    pub const H               : InputAxisId = InputAxisId::new(keycode_name::H              );
-    pub const I               : InputAxisId = InputAxisId::new(keycode_name::I              );
-    pub const J               : InputAxisId = InputAxisId::new(keycode_name::J              );
-    pub const K               : InputAxisId = InputAxisId::new(keycode_name::K              );
-    pub const L               : InputAxisId = InputAxisId::new(keycode_name::L              );
-    pub const M               : InputAxisId = InputAxisId::new(keycode_name::M              );
-    pub const N               : InputAxisId = InputAxisId::new(keycode_name::N              );
-    pub const O               : InputAxisId = InputAxisId::new(keycode_name::O              );
-    pub const P               : InputAxisId = InputAxisId::new(keycode_name::P              );
-    pub const Q               : InputAxisId = InputAxisId::new(keycode_name::Q              );
-    pub const R               : InputAxisId = InputAxisId::new(keycode_name::R              );
-    pub const S               : InputAxisId = InputAxisId::new(keycode_name::S              );
-    pub const T               : InputAxisId = InputAxisId::new(keycode_name::T              );
-    pub const U               : InputAxisId = InputAxisId::new(keycode_name::U              );
-    pub const V               : InputAxisId = InputAxisId::new(keycode_name::V              );
-    pub const W               : InputAxisId = InputAxisId::new(keycode_name::W              );
-    pub const X               : InputAxisId = InputAxisId::new(keycode_name::X              );
-    pub const Y               : InputAxisId = InputAxisId::new(keycode_name::Y              );
-    pub const Z               : InputAxisId = InputAxisId::new(keycode_name::Z              );
-    pub const N0              : InputAxisId = InputAxisId::new(keycode_name::N0             );
-    pub const N1              : InputAxisId = InputAxisId::new(keycode_name::N1             );
-    pub const N2              : InputAxisId = InputAxisId::new(keycode_name::N2             );
-    pub const N3              : InputAxisId = InputAxisId::new(keycode_name::N3             );
-    pub const N4              : InputAxisId = InputAxisId::new(keycode_name::N4             );
-    pub const N5              : InputAxisId = InputAxisId::new(keycode_name::N5             );
-    pub const N6              : InputAxisId = InputAxisId::new(keycode_name::N6             );
-    pub const N7              : InputAxisId = InputAxisId::new(keycode_name::N7             );
-    pub const N8              : InputAxisId = InputAxisId::new(keycode_name::N8             );
-    pub const N9              : InputAxisId = InputAxisId::new(keycode_name::N9             );
-    pub const SEMICOLON       : InputAxisId = InputAxisId::new(keycode_name::SEMICOLON      );
-    pub const EQUALS          : InputAxisId = InputAxisId::new(keycode_name::EQUALS         );
-    pub const COMMA           : InputAxisId = InputAxisId::new(keycode_name::COMMA          );
-    pub const HYPHEN          : InputAxisId = InputAxisId::new(keycode_name::HYPHEN         );
-    pub const UNDERSCORE      : InputAxisId = InputAxisId::new(keycode_name::UNDERSCORE     );
-    pub const PERIOD          : InputAxisId = InputAxisId::new(keycode_name::PERIOD         );
-    pub const SLASH           : InputAxisId = InputAxisId::new(keycode_name::SLASH          );
-    pub const BACKTICK        : InputAxisId = InputAxisId::new(keycode_name::BACKTICK       );
-    pub const LBRACKET        : InputAxisId = InputAxisId::new(keycode_name::LBRACKET       );
-    pub const RBRACKET        : InputAxisId = InputAxisId::new(keycode_name::RBRACKET       );
-    pub const BACKSLASH       : InputAxisId = InputAxisId::new(keycode_name::BACKSLASH      );
-    pub const APOSTROPHE      : InputAxisId = InputAxisId::new(keycode_name::APOSTROPHE     );
-    pub const QUOTE           : InputAxisId = InputAxisId::new(keycode_name::QUOTE          );
-    pub const LPAREN          : InputAxisId = InputAxisId::new(keycode_name::LPAREN         );
-    pub const RPAREN          : InputAxisId = InputAxisId::new(keycode_name::RPAREN         );
-    pub const AMPERSAND       : InputAxisId = InputAxisId::new(keycode_name::AMPERSAND      );
-    pub const ASTERISK        : InputAxisId = InputAxisId::new(keycode_name::ASTERISK       );
-    pub const CARET           : InputAxisId = InputAxisId::new(keycode_name::CARET          );
-    pub const DOLLAR          : InputAxisId = InputAxisId::new(keycode_name::DOLLAR         );
-    pub const EXCLAMATION     : InputAxisId = InputAxisId::new(keycode_name::EXCLAMATION    );
-    pub const COLON           : InputAxisId = InputAxisId::new(keycode_name::COLON          );
-    pub const EACUTE          : InputAxisId = InputAxisId::new(keycode_name::EACUTE         );
-    pub const EGRAVE          : InputAxisId = InputAxisId::new(keycode_name::EGRAVE         );
-    pub const AGRAVE          : InputAxisId = InputAxisId::new(keycode_name::AGRAVE         );
-    pub const CCEDILLA        : InputAxisId = InputAxisId::new(keycode_name::CCEDILLA       );
-    pub const SECTION         : InputAxisId = InputAxisId::new(keycode_name::SECTION        );
+    pub const ANY:             InputAxisId = InputAxisId::new(keycode_name::ANY            );
+    pub const SHIFT:           InputAxisId = InputAxisId::new(keycode_name::SHIFT          );
+    pub const LSHIFT:          InputAxisId = InputAxisId::new(keycode_name::LSHIFT         );
+    pub const RSHIFT:          InputAxisId = InputAxisId::new(keycode_name::RSHIFT         );
+    pub const CTRL:            InputAxisId = InputAxisId::new(keycode_name::CTRL           );
+    pub const LCTR:            InputAxisId = InputAxisId::new(keycode_name::LCTR           );
+    pub const RCTR:            InputAxisId = InputAxisId::new(keycode_name::RCTR           );
+    pub const ALT:             InputAxisId = InputAxisId::new(keycode_name::ALT            );
+    pub const LALT:            InputAxisId = InputAxisId::new(keycode_name::LALT           );
+    pub const RALT:            InputAxisId = InputAxisId::new(keycode_name::RALT           );
+    pub const LCOMMAND:        InputAxisId = InputAxisId::new(keycode_name::LCOMMAND       );
+    pub const RCOMMAND:        InputAxisId = InputAxisId::new(keycode_name::RCOMMAND       );
+    pub const MENU:            InputAxisId = InputAxisId::new(keycode_name::MENU           );
+    pub const SPACE:           InputAxisId = InputAxisId::new(keycode_name::SPACE          );
+    pub const BACKSPACE:       InputAxisId = InputAxisId::new(keycode_name::BACKSPACE      );
+    pub const TAB:             InputAxisId = InputAxisId::new(keycode_name::TAB            );
+    pub const ENTER:           InputAxisId = InputAxisId::new(keycode_name::ENTER          );
+    pub const ESCAPE:          InputAxisId = InputAxisId::new(keycode_name::ESCAPE         );
+    pub const DELETE:          InputAxisId = InputAxisId::new(keycode_name::DELETE         );
+    pub const INSERT:          InputAxisId = InputAxisId::new(keycode_name::INSERT         );
+    pub const HOME:            InputAxisId = InputAxisId::new(keycode_name::HOME           );
+    pub const END:             InputAxisId = InputAxisId::new(keycode_name::END            );
+    pub const PG_DOWN:         InputAxisId = InputAxisId::new(keycode_name::PG_DOWN        );
+    pub const PG_UP:           InputAxisId = InputAxisId::new(keycode_name::PG_UP          );
+    pub const PRINT_SCREEN:    InputAxisId = InputAxisId::new(keycode_name::PRINT_SCREEN   );
+    pub const CAPS_LOCK:       InputAxisId = InputAxisId::new(keycode_name::CAPS_LOCK      );
+    pub const NUM_LOCK:        InputAxisId = InputAxisId::new(keycode_name::NUM_LOCK       );
+    pub const SCROLL_LOCK:     InputAxisId = InputAxisId::new(keycode_name::SCROLL_LOCK    );
+    pub const UP:              InputAxisId = InputAxisId::new(keycode_name::UP             );
+    pub const DOWN:            InputAxisId = InputAxisId::new(keycode_name::DOWN           );
+    pub const LEFT:            InputAxisId = InputAxisId::new(keycode_name::LEFT           );
+    pub const RIGHT:           InputAxisId = InputAxisId::new(keycode_name::RIGHT          );
+    pub const BREAK:           InputAxisId = InputAxisId::new(keycode_name::BREAK          );
+    pub const CLEAR:           InputAxisId = InputAxisId::new(keycode_name::CLEAR          );
+    pub const F1:              InputAxisId = InputAxisId::new(keycode_name::F1             );
+    pub const F2:              InputAxisId = InputAxisId::new(keycode_name::F2             );
+    pub const F3:              InputAxisId = InputAxisId::new(keycode_name::F3             );
+    pub const F4:              InputAxisId = InputAxisId::new(keycode_name::F4             );
+    pub const F5:              InputAxisId = InputAxisId::new(keycode_name::F5             );
+    pub const F6:              InputAxisId = InputAxisId::new(keycode_name::F6             );
+    pub const F7:              InputAxisId = InputAxisId::new(keycode_name::F7             );
+    pub const F8:              InputAxisId = InputAxisId::new(keycode_name::F8             );
+    pub const F9:              InputAxisId = InputAxisId::new(keycode_name::F9             );
+    pub const F10:             InputAxisId = InputAxisId::new(keycode_name::F10            );
+    pub const F11:             InputAxisId = InputAxisId::new(keycode_name::F11            );
+    pub const F12:             InputAxisId = InputAxisId::new(keycode_name::F12            );
+    pub const NUMPAD0:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD0        );
+    pub const NUMPAD1:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD1        );
+    pub const NUMPAD2:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD2        );
+    pub const NUMPAD3:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD3        );
+    pub const NUMPAD4:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD4        );
+    pub const NUMPAD5:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD5        );
+    pub const NUMPAD6:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD6        );
+    pub const NUMPAD7:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD7        );
+    pub const NUMPAD8:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD8        );
+    pub const NUMPAD9:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD9        );
+    pub const NUMPAD_MULTIPY:  InputAxisId = InputAxisId::new(keycode_name::NUMPAD_MULTIPY );
+    pub const NUMPAD_ADD:      InputAxisId = InputAxisId::new(keycode_name::NUMPAD_ADD     );
+    pub const NUMPAD_SUBTRACT: InputAxisId = InputAxisId::new(keycode_name::NUMPAD_SUBTRACT);
+    pub const NUMPAD_DECIMAL:  InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DECIMAL );
+    pub const NUMPAD_DIVIDE:   InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DIVIDE  );
+    pub const A:               InputAxisId = InputAxisId::new(keycode_name::A              );
+    pub const B:               InputAxisId = InputAxisId::new(keycode_name::B              );
+    pub const C:               InputAxisId = InputAxisId::new(keycode_name::C              );
+    pub const D:               InputAxisId = InputAxisId::new(keycode_name::D              );
+    pub const E:               InputAxisId = InputAxisId::new(keycode_name::E              );
+    pub const F:               InputAxisId = InputAxisId::new(keycode_name::F              );
+    pub const G:               InputAxisId = InputAxisId::new(keycode_name::G              );
+    pub const H:               InputAxisId = InputAxisId::new(keycode_name::H              );
+    pub const I:               InputAxisId = InputAxisId::new(keycode_name::I              );
+    pub const J:               InputAxisId = InputAxisId::new(keycode_name::J              );
+    pub const K:               InputAxisId = InputAxisId::new(keycode_name::K              );
+    pub const L:               InputAxisId = InputAxisId::new(keycode_name::L              );
+    pub const M:               InputAxisId = InputAxisId::new(keycode_name::M              );
+    pub const N:               InputAxisId = InputAxisId::new(keycode_name::N              );
+    pub const O:               InputAxisId = InputAxisId::new(keycode_name::O              );
+    pub const P:               InputAxisId = InputAxisId::new(keycode_name::P              );
+    pub const Q:               InputAxisId = InputAxisId::new(keycode_name::Q              );
+    pub const R:               InputAxisId = InputAxisId::new(keycode_name::R              );
+    pub const S:               InputAxisId = InputAxisId::new(keycode_name::S              );
+    pub const T:               InputAxisId = InputAxisId::new(keycode_name::T              );
+    pub const U:               InputAxisId = InputAxisId::new(keycode_name::U              );
+    pub const V:               InputAxisId = InputAxisId::new(keycode_name::V              );
+    pub const W:               InputAxisId = InputAxisId::new(keycode_name::W              );
+    pub const X:               InputAxisId = InputAxisId::new(keycode_name::X              );
+    pub const Y:               InputAxisId = InputAxisId::new(keycode_name::Y              );
+    pub const Z:               InputAxisId = InputAxisId::new(keycode_name::Z              );
+    pub const N0:              InputAxisId = InputAxisId::new(keycode_name::N0             );
+    pub const N1:              InputAxisId = InputAxisId::new(keycode_name::N1             );
+    pub const N2:              InputAxisId = InputAxisId::new(keycode_name::N2             );
+    pub const N3:              InputAxisId = InputAxisId::new(keycode_name::N3             );
+    pub const N4:              InputAxisId = InputAxisId::new(keycode_name::N4             );
+    pub const N5:              InputAxisId = InputAxisId::new(keycode_name::N5             );
+    pub const N6:              InputAxisId = InputAxisId::new(keycode_name::N6             );
+    pub const N7:              InputAxisId = InputAxisId::new(keycode_name::N7             );
+    pub const N8:              InputAxisId = InputAxisId::new(keycode_name::N8             );
+    pub const N9:              InputAxisId = InputAxisId::new(keycode_name::N9             );
+    pub const SEMICOLON:       InputAxisId = InputAxisId::new(keycode_name::SEMICOLON      );
+    pub const EQUALS:          InputAxisId = InputAxisId::new(keycode_name::EQUALS         );
+    pub const COMMA:           InputAxisId = InputAxisId::new(keycode_name::COMMA          );
+    pub const HYPHEN:          InputAxisId = InputAxisId::new(keycode_name::HYPHEN         );
+    pub const UNDERSCORE:      InputAxisId = InputAxisId::new(keycode_name::UNDERSCORE     );
+    pub const PERIOD:          InputAxisId = InputAxisId::new(keycode_name::PERIOD         );
+    pub const SLASH:           InputAxisId = InputAxisId::new(keycode_name::SLASH          );
+    pub const BACKTICK:        InputAxisId = InputAxisId::new(keycode_name::BACKTICK       );
+    pub const LBRACKET:        InputAxisId = InputAxisId::new(keycode_name::LBRACKET       );
+    pub const RBRACKET:        InputAxisId = InputAxisId::new(keycode_name::RBRACKET       );
+    pub const BACKSLASH:       InputAxisId = InputAxisId::new(keycode_name::BACKSLASH      );
+    pub const APOSTROPHE:      InputAxisId = InputAxisId::new(keycode_name::APOSTROPHE     );
+    pub const QUOTE:           InputAxisId = InputAxisId::new(keycode_name::QUOTE          );
+    pub const LPAREN:          InputAxisId = InputAxisId::new(keycode_name::LPAREN         );
+    pub const RPAREN:          InputAxisId = InputAxisId::new(keycode_name::RPAREN         );
+    pub const AMPERSAND:       InputAxisId = InputAxisId::new(keycode_name::AMPERSAND      );
+    pub const ASTERISK:        InputAxisId = InputAxisId::new(keycode_name::ASTERISK       );
+    pub const CARET:           InputAxisId = InputAxisId::new(keycode_name::CARET          );
+    pub const DOLLAR:          InputAxisId = InputAxisId::new(keycode_name::DOLLAR         );
+    pub const EXCLAMATION:     InputAxisId = InputAxisId::new(keycode_name::EXCLAMATION    );
+    pub const COLON:           InputAxisId = InputAxisId::new(keycode_name::COLON          );
+    pub const EACUTE:          InputAxisId = InputAxisId::new(keycode_name::EACUTE         );
+    pub const EGRAVE:          InputAxisId = InputAxisId::new(keycode_name::EGRAVE         );
+    pub const AGRAVE:          InputAxisId = InputAxisId::new(keycode_name::AGRAVE         );
+    pub const CCEDILLA:        InputAxisId = InputAxisId::new(keycode_name::CCEDILLA       );
+    pub const SECTION:         InputAxisId = InputAxisId::new(keycode_name::SECTION        );
 
     /// Create a new keyboard.
-    pub fn new() -> Option<Self> {
-        os::OSKeyboard::new().map(|os_kb| Keyboard {
-            _os_kb: os_kb,
-            state: RwLock::new(KeyboardState::new()),
-            key_changes: Mutex::new(Vec::new()),
-            key_timers: [0f32; NUM_KEYS],
-            text_input: Vec::new(),
-            text_input_listener: Mutex::new(None),
-            text_rep_time: 0f32,
-            text_timer: 0f32,
-        })
+    pub fn new(handle: NativeDeviceHandle) -> Result<Self, NativeDeviceHandle> {
+        match os::OSKeyboard::new() {
+            Some(os_kb) => Ok(Keyboard {
+                _os_kb: os_kb,
+                handle: Some(handle),
+                state: RwLock::new(KeyboardState::new()),
+                key_changes: Mutex::new(Vec::new()),
+                key_timers: [0f32; NUM_KEYS],
+                text_input: Vec::new(),
+                text_input_listener: Mutex::new(None),
+                text_rep_time: 0f32,
+                text_timer: 0f32,
+            }),
+            None => Err(handle),
+        }
     }
 
     /// Emulate a key press.
@@ -1220,6 +1087,10 @@ impl Keyboard {
 }
 
 impl InputDevice for Keyboard {
+    fn get_native_handle(&self) -> &crate::NativeDeviceHandle {
+        self.handle.as_ref().unwrap()
+    }
+
     fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(InputAxisId)) {
         let mut key_changes = self.key_changes.lock();
         let mut state = self.state.write();
@@ -1227,7 +1098,7 @@ impl InputDevice for Keyboard {
         state.prepare_for_update();
 
         // We generally only care about the last action of a button, as a press and release should not happen in a single frame.
-        // While this is possible, especially at a lower framerate, it doesn't make much sense in term of the input system
+        // While this is possible, especially at a lower framerate, it doesn't make much sense in terms of the input system.
         let mut processed_buttons = BitSet::<NUM_KEYS>::new();
         for change in key_changes.iter().rev() {
             if change.key != KeyCode::Any {
@@ -1329,8 +1200,15 @@ impl InputDevice for Keyboard {
         }
     }
 
-    fn handle_hid_input(&mut self, _hid_device: &onca_hid::Device, _input_report: onca_hid::InputReport) {
+    fn handle_hid_input(&mut self, _input_report: &[u8]) {
         // We don't do anything here, as the keyboard is special and gets input in a different way
+    }
+
+    fn handle_native_input(&mut self, native_data: *const std::ffi::c_void) {
+        unsafe {
+            let raw_mouse = &*(native_data as *const RAWKEYBOARD);
+            OSKeyboard::process_window_event(self, raw_mouse);
+        }
     }
 
     fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
@@ -1593,5 +1471,9 @@ impl InputDevice for Keyboard {
 
     fn get_device_type(&self) -> DeviceType {
         DeviceType::Keyboard
+    }
+    
+    fn take_native_handle(&mut self) -> NativeDeviceHandle {
+        core::mem::take(&mut self.handle).unwrap()
     }
 }
