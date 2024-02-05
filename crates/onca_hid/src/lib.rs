@@ -366,42 +366,42 @@ pub struct InputReport<'a> {
 }
 
 impl<'a> InputReport<'a> {
-	/// Create an input report from raw slice
-	pub unsafe fn from_raw_slice(raw: &'a [u8], device: &'a Device) -> InputReport<'a> {
-		InputReport { data: ReportData::Slice(raw), device }
+	/// Create an input report from a raw slice.
+	pub unsafe fn from_raw_slice(raw: &'a [u8], device: &'a Device) -> Self {
+		Self { data: ReportData::Slice(raw), device }
 	}
 
-	/// Get the usage of all button that are currently set to 'on'
+	/// Get the usage of all button that are currently set to 'on'.
 	pub fn get_buttons(&self) -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, 0, ReportType::Input, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific collection
+	/// Get the usage of all button that are currently set to 'on', for a specific collection.
 	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, collection_id, ReportType::Input, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific usage page
+	/// Get the usage of all button that are currently set to 'on', for a specific usage page.
 	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, 0, ReportType::Input, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection
+	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection.
 	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Input, self.data.get_data())
 	}
 
-	/// Get the raw value(s) for the given usage
+	/// Get the raw value(s) for the given usage.
 	pub fn get_raw_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<RawValue> {
 		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
-	/// Get the scaled value and its logical range for the given usage
+	/// Get the scaled value and its logical range for the given usage.
 	pub fn get_scaled_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<i32> {
 		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Input, self.data.get_data())
 	}
 
-	/// Get data from the report, this will return all buttons that are on and all values
+	/// Get data from the report, this will return all buttons that are on and all values.
 	pub fn get_data(&self) -> Option<Vec<Data>> {
 		os::get_data(self.device, ReportType::Input, self.data.get_data())
 	}
@@ -409,53 +409,71 @@ impl<'a> InputReport<'a> {
 
 pub struct OutputReport<'a> {
 	data   : ReportData<'a>,
-	device : &'a Device
+	device : *const Device
 }
 
-impl OutputReport<'_> {
-	/// Set buttons in the report
+impl<'a> OutputReport<'a> {
+	/// Create an output report from a raw slice.
+	pub unsafe fn from_raw_slice(raw: &'a [u8], device: &Device) -> Self {
+		Self { data: ReportData::Slice(raw), device }
+	}
+
+	/// Set buttons in the report.
 	pub fn set_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
-		os::set_buttons(self.device, page, 0, usages, ReportType::Output, self.data.get_mut_data())
+		let (dev, dev_data) = self.device_and_data();
+		os::set_buttons(dev, page, 0, usages, ReportType::Output, dev_data)
 	}
 
-	/// Set buttons in the report
+	/// Set buttons in the report.
 	pub fn set_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
-		os::set_buttons(self.device, page, collection_id, usages, ReportType::Output, self.data.get_mut_data())
+		let (dev, dev_data) = self.device_and_data();
+		os::set_buttons(dev, page, collection_id, usages, ReportType::Output, dev_data)
 	}
 
-	/// Unet buttons in the report
+	/// Unet buttons in the report.
 	pub fn unset_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
-		os::unset_buttons(self.device, page, 0, usages, ReportType::Output, self.data.get_mut_data())
+		let (dev, dev_data) = self.device_and_data();
+		os::unset_buttons(dev, page, 0, usages, ReportType::Output, dev_data)
 	}
 
-	/// Unset buttons in the report
+	/// Unset buttons in the report.
 	pub fn unset_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
-		os::unset_buttons(self.device, page, collection_id, usages, ReportType::Output, self.data.get_mut_data())
+		let (dev, dev_data) = self.device_and_data();
+		os::unset_buttons(dev, page, collection_id, usages, ReportType::Output, dev_data)
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_value(&mut self, usage: Usage, raw_value: u32) {
-		os::set_value(self.device, usage, 0, raw_value, ReportType::Output, self.data.get_mut_data());
+		let (dev, dev_data) = self.device_and_data();
+		os::set_value(dev, usage, 0, raw_value, ReportType::Output, dev_data);
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_value_for_collection(&mut self, usage: Usage, collection_id: u16, raw_value: u32) {
-		os::set_value(self.device, usage, collection_id, raw_value, ReportType::Output, self.data.get_mut_data());
+		let (dev, dev_data) = self.device_and_data();
+		os::set_value(dev, usage, collection_id, raw_value, ReportType::Output, dev_data);
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_values(&mut self, usage: Usage, raw_values: &[u8]) {
-		os::set_values(self.device, usage, 0, raw_values, ReportType::Output, self.data.get_mut_data());
+		let (dev, dev_data) = self.device_and_data();
+		os::set_values(dev, usage, 0, raw_values, ReportType::Output, dev_data);
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_values_for_collection(&mut self, usage: Usage, collection_id: u16, raw_values: &[u8]) {
-		os::set_values(self.device, usage, collection_id, raw_values, ReportType::Output, self.data.get_mut_data());
+		let (dev, dev_data) = self.device_and_data();
+		os::set_values(dev, usage, collection_id, raw_values, ReportType::Output, dev_data);
 	}
 
-	/// Set data in the report
+	/// Set data in the report.
 	pub fn set_data(&mut self, data: &[Data]) {
-		os::set_data(self.device, data, ReportType::Output, self.data.get_mut_data())
+		let (dev, dev_data) = self.device_and_data();
+		os::set_data(dev, data, ReportType::Output, dev_data)
+	}
+
+	fn device_and_data(&mut self) -> (&Device, &mut [u8]) {
+		(unsafe { &*self.device }, self.data.get_mut_data())
 	}
 }
 
@@ -464,110 +482,120 @@ pub struct FeatureReport<'a> {
 	device : &'a Device
 }
 
-impl FeatureReport<'_> {
-	/// Get the usage of all button that are currently set to 'on'
+impl<'a> FeatureReport<'a> {
+	/// Create a feature report from a raw slice.
+	pub unsafe fn from_raw_slice(raw: &'a [u8], device: &'a Device) -> Self {
+		Self { data: ReportData::Slice(raw), device }
+	}
+
+	/// Get the usage of all button that are currently set to 'on'.
 	pub fn get_buttons(&self) -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, 0, ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific collection
+	/// Get the usage of all button that are currently set to 'on', for a specific collection.
 	pub fn get_buttons_for_collection(&self, collection_id: u16)  -> Option<Vec<Usage>> {
 		os::get_buttons(self.device, collection_id, ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific usage page
+	/// Get the usage of all button that are currently set to 'on', for a specific usage page.
 	pub fn get_buttons_for_page(&self, page: UsagePageId) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, 0, ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection
+	/// Get the usage of all button that are currently set to 'on', for a specific usage page and collection.
 	pub fn get_buttons_for_page_and_collection(&self, page: UsagePageId, collection_id: u16) -> Option<Vec<UsageId>> {
 		os::get_buttons_for_page(self.device, page, collection_id, ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get the raw value(s) for the given usage
+	/// Get the raw value(s) for the given usage.
 	pub fn get_raw_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<RawValue> {
 		os::get_raw_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get the scaled value and its logical range for the given usage
+	/// Get the scaled value and its logical range for the given usage.
 	pub fn get_scaled_value(&self, usage: Usage, collection_id: Option<u16>) -> Option<i32> {
 		os::get_scaled_value(self.device, usage, collection_id.unwrap_or_default(), ReportType::Feature, self.data.get_data())
 	}
 
-	/// Get data from the report, this will return all buttons that are on and all values
+	/// Get data from the report, this will return all buttons that are on and all values.
 	pub fn get_data(&self) -> Option<Vec<Data>> {
 		os::get_data(self.device, ReportType::Feature, self.data.get_data())
 	}
 
-	/// Set buttons in the report
+	/// Get the raw data from this report.
+	pub fn get_raw_data(&self) -> &[u8] {
+		self.data.get_data()
+	}
+
+	/// Set buttons in the report.
 	pub fn set_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
 		os::set_buttons(self.device, page, 0, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
-	/// Set buttons in the report
+	/// Set buttons in the report.
 	pub fn set_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
 		os::set_buttons(self.device, page, collection_id, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
-	/// Unet buttons in the report
+	/// Unet buttons in the report.
 	pub fn unset_buttons(&mut self, page: UsagePageId, usages: &mut [UsageId]) {
 		os::unset_buttons(self.device, page, 0, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
-	/// Unset buttons in the report
+	/// Unset buttons in the report.
 	pub fn unset_buttons_for_collection(&mut self, page: UsagePageId, collection_id: u16, usages: &mut [UsageId]) {
 		os::unset_buttons(self.device, page, collection_id, usages, ReportType::Feature, self.data.get_mut_data())
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_value(&mut self, usage: Usage, raw_value: u32) {
 		os::set_value(self.device, usage, 0, raw_value, ReportType::Feature, self.data.get_mut_data());
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_value_for_collection(&mut self, usage: Usage, collection_id: u16, raw_value: u32) {
 		os::set_value(self.device, usage, collection_id, raw_value, ReportType::Feature, self.data.get_mut_data());
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_values(&mut self, usage: Usage, raw_values: &[u8]) {
 		os::set_values(self.device, usage, 0, raw_values, ReportType::Feature, self.data.get_mut_data());
 	}
 
-	/// Set a value in the report
+	/// Set a value in the report.
 	pub fn set_values_for_collection(&mut self, usage: Usage, collection_id: u16, raw_values: &[u8]) {
 		os::set_values(self.device, usage, collection_id, raw_values, ReportType::Feature, self.data.get_mut_data());
 	}
 
-	/// Set data in the report
+	/// Set data in the report.
 	pub fn set_data(&mut self, data: &[Data]) {
 		os::set_data(self.device, data, ReportType::Feature, self.data.get_mut_data())
 	}
 }
 
-/// Button capabilities (report descriptor)
+/// Button capabilities (report descriptor).
 #[derive(Debug)]
 pub struct ButtonCaps {
-	/// Usage page for all usages
+	/// Usage page for all usages.
 	pub usage_page    : UsagePageId,
-	/// Report id
+	/// Report id.
 	pub report_id     : u8,
-	/// Data fields associated with the main item
+	/// Data fields associated with the main item.
 	pub data_fields   : u16,
 	/// Index of the collection the capabilites are part of.
 	pub collection_id : u16,
 	/// Number of reports
 	pub report_count  : u16,
-	/// Usages, if the report count is higher that the usage `range`, the last usage is used for all subsequent reports
+	/// Usages, if the report count is higher that the usage `range`, the last usage is used for all subsequent reports.
 	pub usage         : ValueRange<UsageId>,
-	/// String indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
+	/// String indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports.
 	pub string_index  : ValueRange<u16>,
-	/// Designators, if the report count is higher that the designator `range`, the last designator is used for all subsequent reports
+	/// Designators, if the report count is higher that the designator `range`, the last designator is used for all subsequent reports.
 	pub designator    : ValueRange<u16>,
-	/// data indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
+	/// data indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports.
 	pub data_index    : ValueRange<u16>,
-	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value
+	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value.
 	pub is_absolute   : bool,
 }
 
@@ -589,40 +617,40 @@ impl fmt::Display for ButtonCaps {
     }
 }
 
-/// Value capabilities (report descriptor)
+/// Value capabilities (report descriptor).
 #[derive(Debug)]
 pub struct ValueCaps {
-	/// Usage page for all usages
+	/// Usage page for all usages.
 	pub usage_page:     UsagePageId,
-	/// Report id
+	/// Report id.
 	pub report_id:      u8,
-	/// Data fields associated with the main item
+	/// Data fields associated with the main item.
 	pub data_fields:    u16,
 	/// Index of the collection the capabilites are part of.
 	pub collection_id:  u16,
-	/// Does the value have a 'null' state
+	/// Does the value have a 'null' state.
 	pub has_null:       bool,
-	/// Unit exponent
+	/// Unit exponent.
 	pub unit_exp:       u32,
-	/// Unit type
+	/// Unit type.
 	pub units:          u32,
-	/// Logical value range (raw value range)
+	/// Logical value range (raw value range).
 	pub logical_range:  ValueRange<i32>,
-	/// Physical value range (after scaling)
+	/// Physical value range (after scaling).
 	pub physical_range: ValueRange<i32>,
-	/// Bit size of each field
+	/// Bit size of each field.
 	pub bit_size:       u16,
-	/// Number of reports
+	/// Number of reports.
 	pub report_count:   u16,
-	/// Usages, if the report count is higher that the usage `range`, the last usage is used for all subsequent reports
+	/// Usages, if the report count is higher that the usage `range`, the last usage is used for all subsequent reports.
 	pub usage:          ValueRange<UsageId>,
-	/// String indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
+	/// String indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports.
 	pub string_index:   ValueRange<u16>,
-	/// Designators, if the report count is higher that the designator `range`, the last designator is used for all subsequent reports
+	/// Designators, if the report count is higher that the designator `range`, the last designator is used for all subsequent reports.
 	pub designator:     ValueRange<u16>,
-	/// data indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports
+	/// data indices, if the report count is higher that the index `range`, the last index is used for all subsequent reports.
 	pub data_index:     ValueRange<u16>,
-	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value
+	/// If `true`, the value provides an absolute range, otherwise the data is relative to the previous value.
 	pub is_absolute:    bool,
 }
 
@@ -652,26 +680,26 @@ impl fmt::Display for ValueCaps {
 
 
 impl ValueCaps {
-	/// Get the maximum value of the raw value (raw value in in range `0..=max`)
+	/// Get the maximum value of the raw value (raw value in in range `0..=max`).
 	pub fn get_raw_value_max(&self) -> u32 {
 		(1u64 << self.bit_size as u64) as u32
 	}
 }
 
-/// Raw unscaled HID value
+/// Raw unscaled HID value.
 pub enum RawValue {
-	/// Stored as a pair of raw bits and a bit-size
+	/// Stored as a pair of raw bits and a bit-size.
 	/// 
-	/// To get a signed representation, use the bitsize to sign-extend the value
+	/// To get a signed representation, use the bitsize to sign-extend the value.
 	Single(u32, u16),
-	/// Sequentially stored values and a bit-size
+	/// Sequentially stored values and a bit-size.
 	/// 
 	/// To extract the values, the bit-size indicated the number of bits per packed value. Values are not byte aligned!
 	Array(Vec<u8>, u16)
 }
 
 impl RawValue {
-	/// Get a value for a given report
+	/// Get a value for a given report.
 	pub fn get_value(&self, report: u16) -> u32 {
 		match self {
 		    RawValue::Single(val, _) => *val,
@@ -695,6 +723,13 @@ impl RawValue {
 			},
 		}
 	}
+
+	pub fn get_arr(&self) -> Option<&[u8]> {
+		match self {
+		    RawValue::Single(_, _) => None,
+		    RawValue::Array(vec, _) => Some(vec.as_slice()),
+		}
+	}
 }
 
 /// HID device
@@ -707,9 +742,7 @@ pub struct Device {
 	capabilities  : Capabilities,
 	button_caps   : [Vec<ButtonCaps>; ReportType::COUNT],
 	value_caps    : [Vec<ValueCaps>; ReportType::COUNT],
-	read_buffer   : Vec<u8>,
 	owns_handle   : bool,
-	read_pending  : bool,
 }
 
 impl Device {
@@ -768,10 +801,10 @@ impl Device {
 			None => return None,
 		};
 
-		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, read_buffer: Vec::new(), owns_handle, read_pending: false })
+		Some(Self { os_dev, handle, identifier, preparse_data, capabilities, button_caps, value_caps, owns_handle })
 	}
 
-	/// Get the device handle
+	/// Get the device handle.
 	pub fn handle(&self) -> DeviceHandle {
 		self.handle
 	}
@@ -785,11 +818,11 @@ impl Device {
 	/// 
 	/// This should normally match the string which can be found using `UsbDevice::new(...).name`.
 	/// 
-	/// If the vendor string could not be retrieved, `None` is returned
+	/// If the vendor string could not be retrieved, `None` is returned.
 	pub fn get_vendor_string(&self) -> Option<String> {
 		match os::get_vendor_string(self.handle) {
 		    Some(s) => Some(s),
-			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
+			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors.
 		    None => self.identifier.vendor_device.get_vendor_string(),
 		}
 	}
@@ -800,7 +833,7 @@ impl Device {
 	pub fn get_product_string(&self) -> Option<String> {
 		match os::get_product_string(self.handle) {
 		    Some(s) => Some(s),
-			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors
+			// If we can't get the string directly from the device, check if we can't get it statically from the know vendors.
 		    None => self.identifier.vendor_device.get_device_string(),
 		}
 	}
@@ -815,12 +848,12 @@ impl Device {
 		os::get_indexed_string(self.handle, index)
 	}
 
-	/// Get the number of reports that can fit in the HIDs ring buffer used to queue input reports
+	/// Get the number of reports that can fit in the HIDs ring buffer used to queue input reports.
 	pub fn get_num_input_buffers(&self) -> Option<NonZeroU32> {
 		os::get_num_input_buffers(self.handle)
 	}
 
-	/// Set the number of reports that can fit in the HIDs ring buffer used to queue input reports
+	/// Set the number of reports that can fit in the HIDs ring buffer used to queue input reports.
 	pub fn set_num_input_buffers(&self, num_buffers: u32) {
 		if num_buffers < 2 {
 			log_warning!(LOG_HID_CAT, "The HID device requires at minimum 2 input buffers");
@@ -829,17 +862,17 @@ impl Device {
 		}
 	}
 
-	/// Get the device HID capabilities
+	/// Get the device HID capabilities.
 	pub fn get_capabilities(&self) -> &Capabilities {
 		&self.capabilities
 	}
 
-	/// Get the device's button capabilities
+	/// Get the device's button capabilities.
 	pub fn get_button_capabilities(&self, report_type: ReportType) -> &Vec<ButtonCaps> {
 		&self.button_caps[report_type as usize]
 	}
 
-	/// Get the button capabilities for a specific usage page and an optional collection id
+	/// Get the button capabilities for a specific usage page and an optional collection id.
 	pub fn get_button_capabilities_for_page(&self, report_type: ReportType, page: UsagePageId, collection_id: Option<u16>) -> Option<&ButtonCaps> {
 		let collection_id = collection_id.unwrap_or_default();
 
@@ -856,12 +889,12 @@ impl Device {
 		ret
 	}
 
-	/// Get the device's value capabilities
+	/// Get the device's value capabilities.
 	pub fn get_value_capabilities(&self, report_type: ReportType) -> &Vec<ValueCaps> {
 		&self.value_caps[report_type as usize]
 	}
 
-	/// Get the value capabilities for a specific usage and an optional collection id
+	/// Get the value capabilities for a specific usage and an optional collection id.
 	pub fn get_value_capabilities_for_usage(&self, report_type: ReportType, usage: Usage, collection_id: Option<u16>) -> Option<&ValueCaps> {
 		let collection_id = collection_id.unwrap_or_default();
 
@@ -878,38 +911,38 @@ impl Device {
 		ret
 	}
 	
-	/// Get the HID collections for the device
+	/// Get the HID collections for the device.
 	pub fn get_top_level_collection(&self) -> Option<TopLevelCollection<'_>> {
 		os::get_top_level_collection(&self)
 	}
 
-	/// Create an output report
+	/// Create an output report.
 	pub fn create_output_report(&self, report_id: u8) -> Option<OutputReport<'_>> {
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(OutputReport { data: ReportData::Blob(blob), device: self })
 	}
 
-	/// Create a feature report
+	/// Create a feature report.
 	pub fn create_feature_report(&self, report_id: u8) -> Option<FeatureReport<'_>> {
 		let blob = os::create_report_data(self, ReportType::Output, report_id)?;
 		Some(FeatureReport { data: ReportData::Blob(blob), device: self })
 	}
 
-	/// Flush the device's input buffer
+	/// Flush the device's input buffer.
 	pub fn flush_input_queue(&self) {
 		os::flush_input_queue(self.handle)
 	}
 
-	/// Read an input report
+	/// Read an input report.
 	/// 
 	/// If a failure occured while trying to read a report, an `Err` will be returned.
 	/// 
-	/// If the read is successfull, `Ok(None)` can return, meaning that the io operation is still pending
-	pub fn read_input_report(&mut self, timeout: Duration) -> Result<Option<InputReport>, ()> {
-		os::read_input_report(self, timeout)
+	/// If the read is successfull, `Ok(None)` can return, meaning that the io operation is still pending.
+	pub fn read_input_report(&mut self) -> Result<Option<InputReport>, ()> {
+		os::read_input_report(self)
 	}
 
-	/// Write an output report
+	/// Write an output report.
 	/// 
 	/// If a failure occured while trying to write the report, an error will be returned with the report that could not be written.
 	/// 
@@ -918,12 +951,12 @@ impl Device {
 		os::write_output_report(self, report)
 	}
 
-	/// Get the feature report from the device
-	pub fn get_feature_report(&mut self) -> Option<FeatureReport> {
-		os::get_feature_report(self)
+	/// Get the feature report from the device.
+	pub fn get_feature_report(&mut self, report_id: u8) -> Option<FeatureReport> {
+		os::get_feature_report(self, report_id)
 	}
 
-	/// Set the feature report of the device
+	/// Set the feature report of the device.
 	/// 
 	/// If a failure occured while trying to set the feature report, an error will be returned with the report that could not be set.
 	pub fn set_feature_report<'a>(&mut self, report: FeatureReport<'a>) -> Result<(), FeatureReport<'a>> {
@@ -941,24 +974,6 @@ impl Drop for Device {
 		}
     }
 }
-
-/*
-
-/// HID device
-#[derive(Debug)]
-pub struct Device {
-	os_dev        : OSDevice,
-	handle        : DeviceHandle,
-	identifier    : Identifier,
-	preparse_data : PreparseData,
-	capabilities  : Capabilities,
-	button_caps   : [Vec<ButtonCaps>; NUM_REPORT_TYPES],
-	value_caps    : [Vec<ValueCaps>; NUM_REPORT_TYPES],
-	read_buffer   : Vec<u8>,
-	owns_handle   : bool,
-	read_pending  : bool,
-}
-*/
 
 impl fmt::Display for Device {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

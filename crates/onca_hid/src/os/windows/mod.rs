@@ -14,20 +14,17 @@ use windows::{
     Win32::{
         Devices::HumanInterfaceDevice::*,
         Foundation::{HANDLE, GetLastError, CloseHandle, BOOL, ERROR_IO_PENDING, WAIT_OBJECT_0, BOOLEAN},
-        Storage::FileSystem::{CreateFileA, FILE_SHARE_WRITE, FILE_SHARE_READ, FILE_FLAG_OVERLAPPED, OPEN_EXISTING, ReadFile, WriteFile, FILE_GENERIC_WRITE, FILE_GENERIC_READ},
+        Storage::FileSystem::{CreateFileA, ReadFile, WriteFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
         System::{
             Threading::{CreateEventA, WaitForSingleObject}, IO::{OVERLAPPED, GetOverlappedResult, CancelIoEx},
         },
     },
-    core::PCSTR,
+    core::{HRESULT, PCSTR},
 };
 
 use crate::*;
 
-pub struct OSDevice {
-    read_overlapped  : Box<OVERLAPPED>,
-    write_overlapped : Box<OVERLAPPED>
-}
+pub struct OSDevice;
 
 impl core::fmt::Debug for OSDevice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -50,7 +47,7 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         None,
         OPEN_EXISTING,
-        FILE_FLAG_OVERLAPPED,
+        FILE_FLAGS_AND_ATTRIBUTES(0),
         HANDLE::default()
     )};
     match handle {
@@ -69,31 +66,10 @@ pub fn close_handle(handle: DeviceHandle) {
 }
 
 pub fn create_os_device(_handle: &DeviceHandle) -> Option<OSDevice> {
-    let read_overlapped = create_overlapped("read")?;
-    let write_overlapped = create_overlapped("write")?;
-    Some(OSDevice { read_overlapped, write_overlapped })
-}
-
-fn create_overlapped(err_kind: &str) -> Option<Box<OVERLAPPED>> {
-    let event = unsafe { CreateEventA(None, BOOL(0), BOOL(0), PCSTR(null_mut())) };
-    let read_event = match event {
-        Ok(event) => event,
-        Err(err) => {
-            log_error!(LOG_HID_CAT, create_overlapped, "Failed to create a {} event for the HID device. ({err})", err_kind);
-            return None
-        },
-    };
-
-    let mut overlapped = Box::new(OVERLAPPED::default());
-    overlapped.hEvent = read_event;
-
-    Some(overlapped)
+    Some(OSDevice)
 }
 
 pub fn destroy_os_device(os_dev: &mut OSDevice) {
-    if let Err(err) = unsafe { CloseHandle(os_dev.read_overlapped.hEvent) } {
-        log_error!(LOG_HID_CAT, destroy_os_device, "Failed to destroy an event for the HID device. ({err})");
-    }
 }
 
 pub fn get_preparse_data(handle: DeviceHandle) -> Option<PreparseData> {
@@ -553,12 +529,15 @@ fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &
 
 pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) -> Option<Vec<u8>> {
         let preparse_data = dev.preparse_data.get_address() as isize;
+        
+        let report_size = match report_type {
+            ReportType::Input => dev.capabilities.output_report_byte_len,
+            ReportType::Output => dev.capabilities.input_report_byte_len,
+            ReportType::Feature => dev.capabilities.feature_report_byte_len,
+        } as usize;
         let report_type = to_native_report_type(report_type);
-
-        let report_size = dev.capabilities.output_report_byte_len as usize;
-        let mut blob = Vec::with_capacity(report_size);
-        unsafe { blob.set_len(report_size) };
-
+        
+        let mut blob = vec![0; report_size as usize];
         let res = unsafe { HidP_InitializeReportForID(report_type, report_id, PHIDP_PREPARSED_DATA(preparse_data), &mut blob) }.ok();
         match res {
             Ok(_) => Some(blob),
@@ -573,92 +552,48 @@ pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) 
 // REPORT READ/WRITE
 //------------------------------------------------------------------------------------------------------------------------------
 
-pub fn read_input_report(dev: &mut Device, timeout: Duration) -> Result<Option<InputReport>, ()> {
+pub fn read_input_report(dev: &mut Device) -> Result<Option<InputReport>, ()> {
     let handle = HANDLE(dev.handle.0 as isize);
-    let event = dev.os_dev.read_overlapped.hEvent;
-    let overlapped = &mut *dev.os_dev.write_overlapped;
 
     let report_len = dev.capabilities.input_report_byte_len as u32;
     let mut bytes_read = 0;
 
-    if !dev.read_pending {
-        dev.read_buffer.reserve(report_len as usize);
-        unsafe { dev.read_buffer.set_len(report_len as usize) };
+    let mut read_buffer = Vec::new();
+    read_buffer.resize(report_len as usize, 0);
 
-        dev.read_pending = match unsafe { ReadFile(handle, Some(&mut dev.read_buffer), Some(&mut bytes_read), Some(overlapped)) } {
-            Ok(_) => false,
-            Err(err) => if err.code().0 as u32 == ERROR_IO_PENDING.0 {
-                true
-            } else {
-                _ = unsafe { CancelIoEx(handle, Some(overlapped)) };
-                log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report ({err})");
-                return Err(());
-            },
-        }
-    }
-
-    if !timeout.is_zero() {
-        let res = unsafe { WaitForSingleObject(event, timeout.as_millis() as u32) };
-        if res != WAIT_OBJECT_0 {
-            return Ok(None);
-        }
-    }
-
-    dev.read_pending = false;
-    match unsafe { GetOverlappedResult(handle, overlapped, &mut bytes_read, true)} {
-        Ok(_) if bytes_read > 0 => {
-            unsafe { dev.read_buffer.set_len(bytes_read as usize) };
-            let report_buf = mem::replace(&mut dev.read_buffer, Vec::with_capacity(report_len as usize));
-            Ok(Some(InputReport { data: crate::ReportData::Blob(report_buf), device: dev }))
+    match unsafe { ReadFile(handle, Some(&mut read_buffer), Some(&mut bytes_read), None) } {
+        Ok(_) => (),
+        Err(err) => {
+            log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report ({err})");
+            return Err(());
         },
-        _ => Err(()),
+    };
+
+    if bytes_read < report_len {
+        log_error!(LOG_HID_CAT, read_input_report, "Failed to read full input report ({bytes_read}/{report_len} bytes read)");
     }
+
+    unsafe { read_buffer.set_len(bytes_read as usize) };
+    let report_buf = mem::replace(&mut read_buffer, Vec::with_capacity(report_len as usize));
+    Ok(Some(InputReport { data: crate::ReportData::Blob(report_buf), device: dev }))
 }
 
 pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Result<(), OutputReport<'a>> {
     let handle = HANDLE(dev.handle.0 as isize);
-    let event = dev.os_dev.read_overlapped.hEvent;
-    let overlapped = &mut *dev.os_dev.write_overlapped;
 
     let mut bytes_written = 0;
     let data = report.data.get_data();
-    let write_pending = match unsafe { WriteFile(handle, Some(data), Some(&mut bytes_written), Some(overlapped)) } {
-        Ok(_) => false,
-        Err(err) => if err.code().0 as u32 == ERROR_IO_PENDING.0 {
-            true
-        } else {
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to write output report (err: {err})");
-            return Err(report);
-        },
-    };
-    
-
-    if write_pending {
-        // TODO: don't wait here, but check time since last pending write, if it still hasn't been written after 1 sec, fail
-        // Wait for about a second, if we failed writing at that point, we fail
-        let res = unsafe { WaitForSingleObject(event, 1000) };
-        if res != WAIT_OBJECT_0 {
-            _ = unsafe { CancelIoEx(handle, Some(overlapped)) };
-            log_error!(LOG_HID_CAT, write_output_report, "Timout while writing output report (error: {:X})", res.0);
-            return Err(report);
-        }
-
-        if let Err(err) = unsafe { GetOverlappedResult(handle, overlapped, &mut bytes_written, BOOL(1)) } {
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to get overlapped result for output report. ({err})");
-            return Err(report);
-        }
-    }
-    Ok(())
+    unsafe { WriteFile(handle, Some(data), Some(&mut bytes_written), None) }.map_err(|err| {
+        log_error!(LOG_HID_CAT, write_output_report, "Failed to write output report (err: {err})");
+        report
+    })
 }
 
-pub fn get_feature_report(dev: &mut Device) -> Option<FeatureReport<'_>> {
+pub fn get_feature_report(dev: &mut Device, report_id: u8) -> Option<FeatureReport<'_>> {
     let handle = HANDLE(dev.handle.0 as isize);
-    let report_len = dev.capabilities.feature_report_byte_len as u32;
+    let mut report_blob = create_report_data(dev, ReportType::Feature, report_id)?;
 
-    let mut report_blob = Vec::with_capacity(report_len as usize);
-    unsafe { report_blob.set_len(report_len as usize) };
-
-    let res = unsafe { HidD_GetFeature(handle, report_blob.as_mut_ptr() as *mut c_void, report_len) }.as_bool();
+    let res = unsafe { HidD_GetFeature(handle, report_blob.as_mut_ptr() as *mut c_void, report_blob.len() as u32) }.as_bool();
     if res {
         Some(FeatureReport { data: ReportData::Blob(report_blob), device: dev })
     } else {
