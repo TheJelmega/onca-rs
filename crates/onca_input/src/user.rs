@@ -5,7 +5,7 @@ use onca_common::{
     sync::Mutex,
     time::DeltaTime
 };
-use crate::{MappingContext, ControlSet, AxisValue, ControlSchemeID, InputProcessContext, Action, TriggerResult, InputAxisId, Handle, NativeDeviceHandle};
+use crate::{MappingContext, ControlSet, AxisValue, ControlSchemeID, InputProcessContext, Action, TriggerResult, AxisId, Handle, NativeDeviceHandle};
 
 
 pub struct User {
@@ -109,7 +109,7 @@ impl User {
 
     pub(crate) fn process_input<F>(&mut self, dt: DeltaTime, user_idx: u8, get_input: F)
     where
-        F : Fn(&User, &InputAxisId) -> AxisValue
+        F : Fn(&User, &AxisId) -> AxisValue
     {
         let mut context = InputProcessContext::new();
         for mapping_ctx in &mut *self.mappings_contexts.lock() {
@@ -145,7 +145,7 @@ impl User {
         }
     }
 
-    pub(crate) fn rebind(&mut self, binding_name: &str, context_identifier: Option<&String>, input: InputAxisId) {
+    pub(crate) fn rebind(&mut self, binding_name: &str, context_identifier: Option<&String>, input: AxisId) {
         for (_, mapping_ctx) in &mut *self.mappings_contexts.lock() {
             if let Some(ident) = context_identifier && mapping_ctx.identifier == *ident {
                 mapping_ctx.rebind(binding_name, input.clone());

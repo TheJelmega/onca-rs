@@ -108,6 +108,11 @@ impl OSInput {
                 }
                 let rawinput = &*(buffer.as_ptr() as *const RAWINPUT);
 
+                // Just ignore hdevice 0
+                if rawinput.header.hDevice == HANDLE::default() {
+                    return;
+                }
+
                 let handle = match manager.get_os_input().handle_mapping.get(&rawinput.header.hDevice.0) {
                     Some(handle) => *handle,
                     None => {
@@ -121,8 +126,6 @@ impl OSInput {
                     return;
                 }
                 
-                
-
                 match rawinput.header.dwType {
                     RIMTYPE_MOUSE    => manager.handle_native_input(handle, &rawinput.data.mouse as *const _ as *const _),
                     RIMTYPE_KEYBOARD => manager.handle_native_input(handle, &rawinput.data.keyboard as *const _ as *const _),
@@ -136,7 +139,6 @@ impl OSInput {
             onca_window::RawInputEvent::DeviceChanged(raw_ptr) => {
                 let (wparam, lparam) = unsafe { *(raw_ptr as *const (WPARAM, LPARAM)) };
                 
-
                 if wparam.0 == GIDC_ARRIVAL as usize {
                     let native_handle = HANDLE(lparam.0);
                     let native_handle = match DeviceHandle::new(native_handle) {

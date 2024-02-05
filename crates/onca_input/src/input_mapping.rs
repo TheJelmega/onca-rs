@@ -10,7 +10,7 @@ use onca_common::{
 use onca_common_macros::flags;
 use onca_math::{f32v2, f32v3, Swizzle};
 
-use crate::{AxisValue, AxisType, User, InputProcessContext, InputAxisId};
+use crate::{AxisValue, AxisType, User, InputProcessContext, AxisId};
 
 //------------------------------------------------------------------------------------------------------------------------------
 // MODIFIERS
@@ -77,6 +77,7 @@ impl Modifier {
 
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
+            AxisValue::Int(val)     => AxisValue::Int(val),
             AxisValue::Axis(val)    => AxisValue::Axis(deadzone_1d(val)),
             AxisValue::Axis2D(val)  => {
                 match deadzone_type {
@@ -104,6 +105,7 @@ impl Modifier {
     fn apply_negate(value: AxisValue, x: bool, y: bool, z: bool) -> AxisValue {
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(if x { !val } else {val}),
+            AxisValue::Int(val)     => AxisValue::Int(if x { -val } else { val }),
             AxisValue::Axis(val)    => AxisValue::Axis(if x { -val } else { val }),
             AxisValue::Axis2D(val)  => AxisValue::Axis2D(f32v2::new(if x { -val.x } else { val.x }, if y { -val.y } else { val.y })),
             AxisValue::Axis3D(val)  => AxisValue::Axis3D(f32v3::new(if x { -val.x } else { val.x }, if y { -val.y } else { val.y }, if z { -val.z } else { val.z })),
@@ -113,6 +115,7 @@ impl Modifier {
     fn apply_scale(value: AxisValue, x: f32, y: f32, z: f32) -> AxisValue {
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
+            AxisValue::Int(val)     => AxisValue::Int((val as f32 * x) as i32),
             AxisValue::Axis(val)    => AxisValue::Axis(val * x),
             AxisValue::Axis2D(val)  => AxisValue::Axis2D(val * f32v2{ x, y }),
             AxisValue::Axis3D(val)  => AxisValue::Axis3D(val * f32v3{ x, y, z }),
@@ -122,6 +125,7 @@ impl Modifier {
     fn apply_time_scale(value: AxisValue, dt: DeltaTime, dilation: bool) -> AxisValue {
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
+            AxisValue::Int(val)     => AxisValue::Int((val as f32 * dt.get(dilation)) as i32),
             AxisValue::Axis(val)    => AxisValue::Axis(val * dt.get(dilation)),
             AxisValue::Axis2D(val)  => AxisValue::Axis2D(val * dt.get(dilation)),
             AxisValue::Axis3D(val)  => AxisValue::Axis3D(val * dt.get(dilation)),
@@ -131,6 +135,7 @@ impl Modifier {
     fn apply_swizzle(value: AxisValue, x: Swizzle, y: Swizzle, z: Swizzle) -> AxisValue {
         match value {
             AxisValue::Digital(val) => AxisValue::Digital(val),
+            AxisValue::Int(val)     => AxisValue::Int(if x == Swizzle::X { val } else { 0 }),
             AxisValue::Axis(val)    => AxisValue::Axis(if x == Swizzle::X { val } else { 0f32 }),
             AxisValue::Axis2D(val)  => {
                 AxisValue::Axis2D(f32v2::new(
@@ -442,6 +447,7 @@ impl TriggerData {
     fn check_down(value: AxisValue, threshold: f32) -> TriggerResult {
         match value {
             AxisValue::Digital(val) => if val { TriggerResult::Triggered } else { TriggerResult::Idle },
+            AxisValue::Int(val)     => if val as f32 >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
             AxisValue::Axis(val)    => if val >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
             AxisValue::Axis2D(val)  => if val.x >= threshold || val.y >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
             AxisValue::Axis3D(val)  => if val.x >= threshold || val.y >= threshold || val.z >= threshold { TriggerResult::Triggered } else { TriggerResult::Idle },
@@ -628,7 +634,7 @@ pub struct RebindOptions {
 #[derive(Clone)]
 pub struct Binding {
     /// Input axis that the binding is bound to.
-    pub input_axis:     InputAxisId,
+    pub input_axis:     AxisId,
     /// Binding specific triggers
     pub triggers:       Vec<TriggerData>,
     /// Binding specific modifiers
@@ -638,7 +644,7 @@ pub struct Binding {
 }
 
 impl Binding {
-    pub fn new(input_axis: InputAxisId) -> Self {
+    pub fn new(input_axis: AxisId) -> Self {
         Self {
             input_axis,
             triggers: Vec::new(),
@@ -720,7 +726,7 @@ impl Mapping {
     }
 
     pub(crate) fn process<F>(&mut self, dt: DeltaTime, user: &User, user_idx: u8, context: &mut InputProcessContext, get_input: &F) where
-        F: Fn(&User, &InputAxisId) -> AxisValue
+        F: Fn(&User, &AxisId) -> AxisValue
     {
         // Only the first occurance of an action is processed, so check that first
         if context.processed_actions.iter().any(|action| Arc::ptr_eq(action, &self.action)) {
@@ -767,7 +773,7 @@ impl Mapping {
         }   
     }
 
-    pub(crate) fn rebind(&mut self, binding_name: &str, input: InputAxisId) {
+    pub(crate) fn rebind(&mut self, binding_name: &str, input: AxisId) {
         for binding in &mut self.bindings {
             if let Some(rebind_options) = &binding.rebind_options && rebind_options.name == binding_name {
                 binding.input_axis = input.clone();
@@ -797,7 +803,7 @@ impl MappingContext {
         self.mappings.push(mapping);
     }
 
-    pub(crate) fn rebind(&mut self, binding_name: &str, input: InputAxisId) {
+    pub(crate) fn rebind(&mut self, binding_name: &str, input: AxisId) {
         for mapping in &mut self.mappings {
             mapping.rebind(binding_name, input.clone());
         }

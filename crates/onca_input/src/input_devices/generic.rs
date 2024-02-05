@@ -1,7 +1,7 @@
 use onca_base::{EnumFromIndexT, EnumCountT};
 use onca_hid as hid;
 use onca_math::f32v2;
-use crate::{InputDevice, InputDeviceDefinition, NativeDeviceHandle, InputAxisDefinition, Gamepad, DefinitionKind, GamepadReleaseCurve, DefinitionDPad, DPadDirection, GamepadButton, DefinitionAxis, UsageDef};
+use crate::{AxisId, AxisValue, DefinitionAxis, DefinitionDPad, DefinitionKind, DeviceType, Gamepad, GamepadButton, GamepadFeatures, HatSwitch, InputAxisDefinition, InputDevice, InputDeviceDefinition, NativeDeviceHandle, OutputInfo, Rebinder, ReleaseCurve, RumbleSupport, UsageDef};
 
 
 struct GamepadMapping {
@@ -19,6 +19,8 @@ const GAMEPAD_BUTTON_DEF_MAPPING: [&'static str; GamepadButton::COUNT] = [
     "face_up",
     "left_bumper",
     "right_bumper",
+    "left_trigger_button",
+    "right_trigger_button",
     "left_menu",
     "right_menu",
     "left_thumbstick",
@@ -38,7 +40,7 @@ const GAMEPAD_TRIGGER_DEF_MAPPING: [&'static str; 2] = [
 
 pub struct GenericDevice {
     pub(crate) handle: Option<NativeDeviceHandle>,
-
+    dev_type: DeviceType,
     gamepad: Option<(Gamepad, GamepadMapping)>,
 
     axis_info: Vec<InputAxisDefinition>
@@ -47,6 +49,7 @@ pub struct GenericDevice {
 impl GenericDevice {
     pub fn new(handle: NativeDeviceHandle, definition: &InputDeviceDefinition) -> Result<Self, NativeDeviceHandle> {
         let mut axis_info = Vec::new();
+        let mut dev_type = DeviceType::Other(String::new());
 
         let gamepad = if definition.kind.contains(DefinitionKind::Gamepad) {
             let mut buttons = [None; GamepadButton::COUNT];
@@ -71,6 +74,8 @@ impl GenericDevice {
             let gamepad = unsafe { Gamepad::new_no_handle() };
             axis_info.extend(gamepad.get_axes().iter().map(|axis| axis.clone()));
 
+            dev_type = DeviceType::Gamepad(GamepadFeatures::None);
+
             Some((
                 unsafe { Gamepad::new_no_handle() },
                 GamepadMapping {
@@ -86,6 +91,7 @@ impl GenericDevice {
 
         Ok(Self {
             handle: Some(handle),
+            dev_type,
             gamepad,
             axis_info,
         })
@@ -108,11 +114,11 @@ impl GenericDevice {
 }
 
 impl InputDevice for GenericDevice {
-    fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(crate::InputAxisId)) {
+    fn tick(&mut self, dt: f32, rebinder: &mut Rebinder) {
         
         
         if let Some(gamepad) = &mut self.gamepad {
-            gamepad.0.tick(dt, notify_rebind);
+            gamepad.0.tick(dt, rebinder);
         }
  
     }
@@ -139,11 +145,11 @@ impl InputDevice for GenericDevice {
                 DefinitionDPad::Hat{ usage, neutral } => {
                     let value = Self::get_raw_value(&input_report, usage).map_or(neutral as usize, |val| val as usize);
                     if neutral == 0 {
-                        gamepad.move_dpad(unsafe { DPadDirection::from_idx_unchecked(value) }, f32::MAX);
+                        gamepad.move_dpad(unsafe { HatSwitch::from_idx_unchecked(value) }, f32::MAX);
                     } else if value == 8 {
-                        gamepad.move_dpad(DPadDirection::Neutral, f32::MAX);
+                        gamepad.move_dpad(HatSwitch::Neutral, f32::MAX);
                     } else {
-                        gamepad.move_dpad(unsafe { DPadDirection::from_idx_unchecked(value + 1) }, f32::MAX);
+                        gamepad.move_dpad(unsafe { HatSwitch::from_idx_unchecked(value + 1) }, f32::MAX);
                     }
 
                 },
@@ -157,14 +163,14 @@ impl InputDevice for GenericDevice {
                     let down_left = buttons.contains(&diag.down_left.usage);
                     let down_right = buttons.contains(&diag.down_right.usage);
 
-                    gamepad.move_dpad(DPadDirection::from_8_button(up, up_right, right, down_right, down, down_left, left, up_left), f32::MAX);
+                    gamepad.move_dpad(HatSwitch::from_8_button(up, up_right, right, down_right, down, down_left, left, up_left), f32::MAX);
                 } else {
                     let up = buttons.contains(&up.usage);
                     let down = buttons.contains(&down.usage);
                     let left = buttons.contains(&left.usage);
                     let right = buttons.contains(&right.usage);
 
-                    gamepad.move_dpad(DPadDirection::from_4_button(up, down, left, right), f32::MAX);
+                    gamepad.move_dpad(HatSwitch::from_4_button(up, down, left, right), f32::MAX);
                 },
             }
             
@@ -173,14 +179,14 @@ impl InputDevice for GenericDevice {
                 if let Some(thumbstick) = thumbstick {
                     let x = Self::calculate_axis_value(hid_dev, &input_report, thumbstick.0).map_or(0.0, |val| val * 2.0 - 1.0);
                     let y = Self::calculate_axis_value(hid_dev, &input_report, thumbstick.1).map_or(0.0, |val| val * 2.0 - 1.0);
-                    gamepad.move_stick(idx == 1, f32v2::new(x, y), f32::MAX, GamepadReleaseCurve::Instant);
+                    gamepad.move_stick(idx == 1, f32v2::new(x, y), f32::MAX, ReleaseCurve::Instant);
                 }
             }
 
             for (idx, trigger) in mapping.triggers.iter().enumerate() {
                 if let Some(trigger) = trigger {
                     let val = Self::calculate_axis_value(hid_dev, &input_report, *trigger).unwrap_or(0.0);
-                    gamepad.move_trigger(idx == 1, val, f32::MAX, GamepadReleaseCurve::Instant);
+                    gamepad.move_trigger(idx == 1, val, f32::MAX, ReleaseCurve::Instant);
                 }
             }
         }
@@ -194,7 +200,7 @@ impl InputDevice for GenericDevice {
         self.handle.as_ref().unwrap()
     }
 
-    fn get_axis_value(&self, axis: &crate::InputAxisId) -> Option<crate::AxisValue> {
+    fn get_axis_value(&self, axis: &crate::AxisId) -> Option<crate::AxisValue> {
         if let Some(axis) = self.gamepad.as_ref().map(|gamepad| gamepad.0.get_axis_value(axis)) {
             return axis;
         }
@@ -205,12 +211,40 @@ impl InputDevice for GenericDevice {
         &self.axis_info
     }
 
-    fn get_device_type(&self) -> crate::DeviceType {
-        // TODO
-        crate::DeviceType::Gamepad(crate::GamepadSubType::Dualsense)
+    fn get_device_type(&self) -> DeviceType {
+        self.dev_type.clone()
     }
 
     fn take_native_handle(&mut self) -> crate::NativeDeviceHandle {
         core::mem::take(&mut self.handle).unwrap()
+    }
+
+    fn get_battery_info(&self) -> Option<crate::BatteryInfo> {
+        None
+    }
+
+    fn get_output_info<'a>(&'a self) -> &'a OutputInfo<'a> {
+        &OutputInfo {
+            rumble: RumbleSupport::None,
+            trigger_feedback: None,
+            led_support: &[],
+            output_axes: &[]
+        }
+    }
+
+    fn set_rumble(&self, _rumble: crate::RumbleState) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_trigger_feedback(&self, _right_trigger: bool, _trigger_feedback: crate::TriggerFeedback) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_led_state(&self, _index: u16, _state: crate::LedState) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_output_axis(&self, _axis: AxisId, _value: AxisValue) {
+        // Nothing to do here, as we don't support output
     }
 }

@@ -1,12 +1,11 @@
 use std::ffi::c_void;
 
-use onca_common::dynlib::DynLib;
+use onca_common::{dynlib::DynLib, sync::Mutex};
 use onca_hid as hid;
-use onca_logging::log_warning;
 use onca_math::Vec2;
 use windows::Win32::UI::Input::XboxController::*;
 
-use crate::{Gamepad, NativeDeviceHandle, InputDevice, GamepadReleaseCurve, LOG_INPUT_CAT, DPadDirection, GamepadButton};
+use crate::{AxisId, AxisValue, Gamepad, GamepadButton, HatSwitch, InputDevice, NativeDeviceHandle, OutputInfo, Rebinder, ReleaseCurve, RumbleState, RumbleSupport};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -63,6 +62,7 @@ pub struct XInputGamepad {
     gamepad:       Gamepad,
     xinput_idx:    u32,
     cur_packet_id: u32,
+    rumble_state:  Mutex<RumbleState>,
 }
 
 impl XInputGamepad {
@@ -76,12 +76,13 @@ impl XInputGamepad {
             gamepad: Gamepad::new(handle)?,
             xinput_idx,
             cur_packet_id: 0,
+            rumble_state: Mutex::new(RumbleState::default()),
         })
     }
 }
 
 impl InputDevice for XInputGamepad {
-    fn tick(&mut self, _dt: f32, notify_rebind: &mut dyn FnMut(crate::InputAxisId)) {
+    fn tick(&mut self, dt: f32, rebinder: &mut Rebinder) {
         let mut state = XINPUT_STATE::default();
         unsafe { XInputGetState(self.xinput_idx, &mut state) };
 
@@ -92,23 +93,12 @@ impl InputDevice for XInputGamepad {
             let left = state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_DPAD_LEFT);
             let right = state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_DPAD_RIGHT);
 
-            match (up, down, left, right) {
-                (false, false, false, false) => self.gamepad.move_dpad(DPadDirection::Neutral, f32::MAX),
-                (true , false, false, false) => self.gamepad.move_dpad(DPadDirection::Up, f32::MAX),
-                (true , false, false, true ) => self.gamepad.move_dpad(DPadDirection::UpRight, f32::MAX),
-                (false, false, false, true ) => self.gamepad.move_dpad(DPadDirection::Right, f32::MAX),
-                (false, true , false, true ) => self.gamepad.move_dpad(DPadDirection::DownRight, f32::MAX),
-                (false, true , false, false) => self.gamepad.move_dpad(DPadDirection::Down, f32::MAX),
-                (false, true , true , false) => self.gamepad.move_dpad(DPadDirection::DownLeft, f32::MAX),
-                (false, false, true , false) => self.gamepad.move_dpad(DPadDirection::Left, f32::MAX),
-                (true , false, true , false) => self.gamepad.move_dpad(DPadDirection::UpLeft, f32::MAX),
-                _ => log_warning!(LOG_INPUT_CAT, "Invalid DPAD state (up: {up}, down: {down}, left: {left}, right: {right})"),
-            }
+            self.gamepad.move_dpad(HatSwitch::from_4_button(up, down, left, right), f32::MAX);
 
-            if up { notify_rebind(Gamepad::DPAD_UP); }
-            if down { notify_rebind(Gamepad::DPAD_DOWN); }
-            if left { notify_rebind(Gamepad::DPAD_LEFT); }
-            if right { notify_rebind(Gamepad::DPAD_RIGHT); }
+            if up { rebinder.notify(&[Gamepad::DPAD_UP]); }
+            if down { rebinder.notify(&[Gamepad::DPAD_DOWN]); }
+            if left { rebinder.notify(&[Gamepad::DPAD_LEFT]); }
+            if right { rebinder.notify(&[Gamepad::DPAD_RIGHT]); }
 
             // Buttons
             self.gamepad.set_button(GamepadButton::FaceBottom, f32::MAX, state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_A));
@@ -122,44 +112,52 @@ impl InputDevice for XInputGamepad {
             self.gamepad.set_button(GamepadButton::LeftThumbstick, f32::MAX, state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_LEFT_THUMB));
             self.gamepad.set_button(GamepadButton::RightThumbsstick, f32::MAX, state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_RIGHT_THUMB));
 
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_A) { notify_rebind(Gamepad::FACE_BOTTOM); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_B) { notify_rebind(Gamepad::FACE_RIGHT); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_X) { notify_rebind(Gamepad::FACE_LEFT); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_Y) { notify_rebind(Gamepad::FACE_TOP); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_LEFT_SHOULDER) { notify_rebind(Gamepad::LEFT_BUMPER); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_RIGHT_SHOULDER) { notify_rebind(Gamepad::RIGHT_BUMPER); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_BACK) { notify_rebind(Gamepad::LEFT_SPECIAL); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_START) { notify_rebind(Gamepad::RIGHT_SPECIAL); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_LEFT_THUMB) { notify_rebind(Gamepad::LEFT_THUMB_BUTTON); }
-            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_RIGHT_THUMB) { notify_rebind(Gamepad::RIGHT_THUMB_BUTTON); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_A) { rebinder.notify(&[Gamepad::FACE_BOTTOM]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_B) { rebinder.notify(&[Gamepad::FACE_RIGHT]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_X) { rebinder.notify(&[Gamepad::FACE_LEFT]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_Y) { rebinder.notify(&[Gamepad::FACE_TOP]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_LEFT_SHOULDER) { rebinder.notify(&[Gamepad::LEFT_BUMPER]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_RIGHT_SHOULDER) { rebinder.notify(&[Gamepad::RIGHT_BUMPER]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_BACK) { rebinder.notify(&[Gamepad::LEFT_MENU]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_START) { rebinder.notify(&[Gamepad::RIGHT_MENU]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_LEFT_THUMB) { rebinder.notify(&[Gamepad::LEFT_THUMB_BUTTON]); }
+            if state.Gamepad.wButtons.contains(XINPUT_GAMEPAD_RIGHT_THUMB) { rebinder.notify(&[Gamepad::RIGHT_THUMB_BUTTON]); }
 
             // Thumbsticks
             let lx = (state.Gamepad.sThumbLX as i32 - i16::MIN as i32) as f32 / (u16::MAX / 2) as f32 - 1.0;
             let ly = (state.Gamepad.sThumbLY as i32 - i16::MIN as i32) as f32 / (u16::MAX / 2) as f32 - 1.0;
-            self.gamepad.move_stick(false, Vec2::new(lx, ly), f32::MAX, GamepadReleaseCurve::Instant);
+            self.gamepad.move_stick(false, Vec2::new(lx, ly), f32::MAX, ReleaseCurve::Instant);
 
-            if lx.abs() > 0.5 { notify_rebind(Gamepad::LEFT_THUMB_X); }
-            if ly.abs() > 0.5 { notify_rebind(Gamepad::LEFT_THUMB_Y); }
+            if lx.abs() > 0.5 { rebinder.notify(&[Gamepad::LEFT_THUMB_X]); }
+            if ly.abs() > 0.5 { rebinder.notify(&[Gamepad::LEFT_THUMB_Y]); }
 
             let rx = (state.Gamepad.sThumbRX as i32 - i16::MIN as i32) as f32 / (i16::MAX / 2) as f32 - 1.0;
             let ry = (state.Gamepad.sThumbRY as i32 - i16::MIN as i32) as f32 / (i16::MAX / 2) as f32 - 1.0;
-            self.gamepad.move_stick(true, Vec2::new(rx, ry), f32::MAX, GamepadReleaseCurve::Instant);
+            self.gamepad.move_stick(true, Vec2::new(rx, ry), f32::MAX, ReleaseCurve::Instant);
 
-            if rx.abs() > 0.5 { notify_rebind(Gamepad::RIGHT_THUMB_X); }
-            if ry.abs() > 0.5 { notify_rebind(Gamepad::RIGHT_THUMB_Y); }
+            if rx.abs() > 0.5 { rebinder.notify(&[Gamepad::RIGHT_THUMB_X]); }
+            if ry.abs() > 0.5 { rebinder.notify(&[Gamepad::RIGHT_THUMB_Y]); }
 
             // Triggers
             let lt = state.Gamepad.bLeftTrigger as f32 / 255.0;
-            self.gamepad.move_trigger(false, lt, f32::MAX, GamepadReleaseCurve::Instant);
+            self.gamepad.move_trigger(false, lt, f32::MAX, ReleaseCurve::Instant);
             let rt = state.Gamepad.bRightTrigger as f32 / 255.0;
-            self.gamepad.move_trigger(true, rt, f32::MAX, GamepadReleaseCurve::Instant);
+            self.gamepad.move_trigger(true, rt, f32::MAX, ReleaseCurve::Instant);
 
-            if lt > 0.5 { notify_rebind(Gamepad::LEFT_TRIGGER) };
-            if rt > 0.5 { notify_rebind(Gamepad::RIGHT_TRIGGER) };
-
+            if lt > 0.5 { rebinder.notify(&[Gamepad::LEFT_TRIGGER]) };
+            if rt > 0.5 { rebinder.notify(&[Gamepad::RIGHT_TRIGGER]) };
 
             self.cur_packet_id = state.dwPacketNumber;
         }
+        self.gamepad.tick(dt, rebinder);
+
+        let rumble_state = self.rumble_state.lock();
+        let vibration = XINPUT_VIBRATION {
+            wLeftMotorSpeed:(rumble_state.low_frequency * 65535.0) as u16,
+            wRightMotorSpeed: (rumble_state.high_frequency * 65535.0) as u16,
+        };
+
+        unsafe { XInputSetState(self.xinput_idx, &vibration) };
     }
 
     fn handle_hid_input(&mut self, _input_report: &[u8]) {
@@ -174,7 +172,7 @@ impl InputDevice for XInputGamepad {
         self.gamepad.get_native_handle()
     }
 
-    fn get_axis_value(&self, axis: &crate::InputAxisId) -> Option<crate::AxisValue> {
+    fn get_axis_value(&self, axis: &crate::AxisId) -> Option<crate::AxisValue> {
         self.gamepad.get_axis_value(axis)
     }
 
@@ -188,5 +186,34 @@ impl InputDevice for XInputGamepad {
 
     fn take_native_handle(&mut self) -> NativeDeviceHandle {
         self.gamepad.take_native_handle()
+    }
+
+    fn get_battery_info(&self) -> Option<crate::BatteryInfo> {
+        None
+    }
+    fn get_output_info<'a>(&'a self) -> &'a OutputInfo<'a> {
+        const INFO: OutputInfo = OutputInfo {
+            rumble: RumbleSupport::LowFrequecy.bitor(RumbleSupport::HighFrequency),
+            trigger_feedback: None,
+            led_support: &[],
+            output_axes: &[]
+        };
+        &INFO
+    }
+
+    fn set_rumble(&self, rumble: crate::RumbleState) {
+        *self.rumble_state.lock() = rumble;
+    }
+
+    fn set_trigger_feedback(&self, _right_trigger: bool, _trigger_feedback: crate::TriggerFeedback) {
+        // Nothing to do here
+    }
+
+    fn set_led_state(&self, _index: u16, _state: crate::LedState) {
+        // Nothing to do here
+    }
+
+    fn set_output_axis(&self, _axis: AxisId, _value: AxisValue) {
+        // Nothing to do here
     }
 }

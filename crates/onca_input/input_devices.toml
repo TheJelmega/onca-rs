@@ -20,6 +20,17 @@
 # - touch
 # - sensor
 #
+# Usages
+# ======
+#
+# Controls are defined using inline tables, which represent a simple usage for an input.
+# These all contain at least the HID usage page and usage that are used to represent the value/button.
+# In addition, values may contain an additional report index, which defines the report in the HID value array, if this is not supplied, it will default to 0.
+#
+# Below are examples of both 
+#
+# { page = 0x..., usage = 0x... }
+# { page = 0x..., usage = 0x..., report = 0 }
 #
 # Common sections
 # ===============
@@ -100,14 +111,21 @@
 # [definition.touch]
 #
 # This is a table of touch sensors with there corresponding axes.
-# It contains a single element called `touch` which is either a signle axis or an array of axes
+# It contains a single element called `touch` which is either a single axis or an array of axes
 # Each identifier is an index in an array of touch indices
 # There are 2 types of supported axes: 1D (e.g. capacitive slider) and 2D (e.g. touchpad).
 # The inline table contains the HID page and usage for each axis component, when only an x-axis is needed, the sub-table can contain the properties directly.
 #
-# 0 = { page = 0x..., usage = 0x... }
-# 1 = { x = { page = 0x..., usage = 0x... } }
-# 2 = { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... } }
+# touch = { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... } }
+#
+# OR
+#
+# touch = [
+#     { page = 0x..., usage = 0x... },
+#     { x = { page = 0x..., usage = 0x... } },
+#     { x = { page = 0x..., usage = 0x... }, y = { page = 0x..., usage = 0x... } },
+# ]
+#
 #
 # Sensor sections
 # ===============
@@ -130,43 +148,41 @@
 # Some device types can be very difficult to define via HID, these are currently not supported
 #
 # - keyboard
-
-[[definition]]
-name = "Dualsense wireless controller (PS5)"
-kind = "gamepad"
-vid = 0x054C
-pid = 0x0CE6
-
-[definition.buttons]
-face_bottom = { page = 0x9, usage = 0x2 }
-face_right = { page = 0x9, usage = 0x3 }
-face_left = { page = 0x9, usage = 0x1 }
-face_up = { page = 0x9, usage = 0x4 }
-left_bumper = { page = 0x9, usage = 0x5 }
-right_bumper = { page = 0x9, usage = 0x6 }
-left_menu = { page = 0x9, usage = 0x9 }
-right_menu = { page = 0x9, usage = 0xA }
-left_thumbstick = { page = 0x9, usage = 0xB }
-right_thumbstick = { page = 0x9, usage = 0xC }
-guide = { page = 0x9, usage = 0xD }
-
-# Touchpad button: { page = 0x9, usage = 0xE }
-# Guide button: { page = 0x9, usage = 0xD }
-# Mute button: { page = 0x9, usage = 0xF }
-# Left trigger button: { page = 0x9, usage = 0x7 }
-# Right trigger button: { page = 0x9, usage = 0x8 }
-# Unknown: { page = 0xFF0, usage = 0x21 }
-
-[definition.dpad]
-kind = "hat"
-hat = { page = 0x1, usage = 0x39 }
-neutral = 8
-
-[definition.axes]
-left_thumbstick = { x = {page = 0x1, usage = 0x30}, y = {page = 0x1, usage = 0x31}  }
-right_thumbstick = { x = {page = 0x1, usage = 0x32}, y = {page = 0x1, usage = 0x35}  }
-left_trigger = { page = 0x1, usage = 0x33 }
-right_trigger = { page = 0x1, usage = 0x34 }
-
-[definition.touch]
-touch = { x = {page = 0x0, usage = 0x0}, y = {page = 0x0, usage = 0x0}  }
+#
+# Current limitation
+# ==================
+#
+# Currently only gamepads are supported
+#
+# Example
+# =======
+# 
+# [[definition]]
+# name = "Dualsense wireless controller (PS5)"
+# kind = "gamepad"
+# vid = 0x054C
+# pid = 0x0CE6
+# 
+# [definition.buttons]
+# face_bottom = { page = 0x9, usage = 0x2 }
+# face_right = { page = 0x9, usage = 0x3 }
+# face_left = { page = 0x9, usage = 0x1 }
+# face_up = { page = 0x9, usage = 0x4 }
+# left_bumper = { page = 0x9, usage = 0x5 }
+# right_bumper = { page = 0x9, usage = 0x6 }
+# left_menu = { page = 0x9, usage = 0x9 }
+# right_menu = { page = 0x9, usage = 0xA }
+# left_thumbstick = { page = 0x9, usage = 0xB }
+# right_thumbstick = { page = 0x9, usage = 0xC }
+# guide = { page = 0x9, usage = 0xD }
+# 
+# [definition.dpad]
+# kind = "hat"
+# hat = { page = 0x1, usage = 0x39 }
+# neutral = 8
+# 
+# [definition.axes]
+# left_thumbstick = { x = {page = 0x1, usage = 0x30}, y = {page = 0x1, usage = 0x31}  }
+# right_thumbstick = { x = {page = 0x1, usage = 0x32}, y = {page = 0x1, usage = 0x35}  }
+# left_trigger = { page = 0x1, usage = 0x33 }
+# right_trigger = { page = 0x1, usage = 0x34 }

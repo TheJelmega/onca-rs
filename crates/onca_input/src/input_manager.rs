@@ -16,7 +16,7 @@ use onca_window::WindowManager;
 use crate::{
     os::{self, OSInput},
     input_devices::{Keyboard, InputDevice},
-    LOG_INPUT_CAT, Mouse, Gamepad, ControlScheme, User, DeviceType, AxisValue, ControlSchemeID, InputAxisId, MappingContext, NativeDeviceHandle, Handle, parse_definitions, GenericDevice
+    LOG_INPUT_CAT, Mouse, Gamepad, ControlScheme, User, DeviceType, AxisValue, ControlSchemeID, AxisId, MappingContext, NativeDeviceHandle, Handle, parse_definitions, GenericDevice, DualSense
 };
 
 
@@ -93,10 +93,10 @@ impl DeviceStorage {
         }
     }
 
-    fn tick(&mut self, dt: f32, rebind_notify: &mut dyn FnMut(InputAxisId)) {
+    fn tick(&mut self, dt: f32, rebinder: &mut Rebinder) {
         for (_, opt) in &mut self.devices {
             if let Some(dev) = opt {
-                dev.tick(dt, rebind_notify);
+                dev.tick(dt, rebinder);
             }
         }
     }
@@ -123,16 +123,36 @@ pub enum RebindResult {
     /// Continue to try and rebind the key, e.g. invalid axis
     Continue,
     /// Accept a rebind with the given axis, e.g. confirmed by `confirm` key and return the actual key
-    Accept(InputAxisId),
+    Accept(AxisId),
     /// Cancel the rebind
     Cancel,
 }
 
 struct RebindContext {
-    binding_name    : String,
-    context_name    : Option<String>,
-    rebind_callback : Box<dyn Fn(InputAxisId) -> RebindResult>,
+    binding_name:    String,
+    context_name:    Option<String>,
+    rebind_callback: Box<dyn Fn(AxisId) -> RebindResult>,
 }
+
+pub struct Rebinder {
+    enabled:       bool,
+    rebind_buffer: Vec<AxisId>,
+}
+
+
+impl Rebinder {
+    fn new() -> Self {
+        Self { enabled: false, rebind_buffer: Vec::with_capacity(8) }
+    }
+
+    /// Notify the context that a button is triggered for rebind
+    pub fn notify(&mut self, axes: &[AxisId]) {
+        if self.enabled {
+            self.rebind_buffer.extend(axes.iter().map(|axis| axis.clone()))
+        }
+    }
+}
+
 
 type CreateDevicePtr = Box<dyn Fn(NativeDeviceHandle) -> Result<Box<dyn InputDevice>, NativeDeviceHandle>>;
 
@@ -156,7 +176,8 @@ pub struct InputManager {
     unused_devices:          Mutex<Vec<Handle>>,
     has_init_devices:        AtomicBool,
 
-    rebind_context:          Mutex<Option<RebindContext>>
+    rebind_context:          Mutex<Option<RebindContext>>,
+    rebinder:                Mutex<Rebinder>,
 }
 
 impl InputManager {
@@ -186,6 +207,7 @@ impl InputManager {
             has_init_devices: AtomicBool::new(false),
             unused_devices: Mutex::new(Vec::new()),
             rebind_context: Mutex::new(None),
+            rebinder: Mutex::new(Rebinder::new()),
         });
         ptr.raw_input_listener.lock().init(&ptr);
         window_manager.register_raw_input_listener(ptr.raw_input_listener.clone());
@@ -314,7 +336,7 @@ impl InputManager {
     /// An identifier for the mapping context can be optionally supplied, limiting the rebind only to the given context, and not to all bindings with the given rebind name.
     pub fn rebind<F>(&mut self, binding_name: &str, mapping_context_identifier: Option<&str>, rebind_callback: F)
     where
-        F : Fn(InputAxisId) -> RebindResult + 'static
+        F : Fn(AxisId) -> RebindResult + 'static
     {
         let mut rebind_context = self.rebind_context.lock();
         if rebind_context.is_some() {
@@ -343,15 +365,13 @@ impl InputManager {
         self.os_input.lock().tick();
         
         // Update devices
-        let mut rebind_axes = Vec::new();
-        let mut callback = |input: InputAxisId| if self.rebind_context.lock().is_none() { rebind_axes.push(input) };
-        
-        self.device_store.write().tick(dt.get_dt(), &mut callback);
-        
-        for axis in rebind_axes {
-            self.notify_rebind(axis);
-        }
+        let mut rebinder = self.rebinder.lock();
+        rebinder.enabled = self.rebind_context.lock().is_some();
+        self.device_store.write().tick(dt.get_dt(), &mut rebinder);
 
+        self.notify_rebind(&rebinder.rebind_buffer);
+        rebinder.rebind_buffer.clear();
+        
         let device_store = self.device_store.read();
         let mut users = self.users.write();
         if users.len() != 1 {
@@ -470,14 +490,10 @@ impl InputManager {
         let input_dev = store.get_device(handle).unwrap();
         let iden = input_dev.get_hid_identifier();
         let usage = iden.usage;
-        let vendor = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
-            || String::new(),
-            |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.vendor.to_string())
-        );
-        let product = input_dev.get_native_handle().hid_dev.as_ref().map_or_else(
-            || String::new(),
-            |dev| dev.get_vendor_string().unwrap_or(input_dev.get_hid_identifier().vendor_device.device.to_string())
-        );
+
+        // We can't get info from the device anymore at this point, so get it from the identifier
+        let vendor = input_dev.get_hid_identifier().vendor_device.vendor.to_string();
+        let product = input_dev.get_hid_identifier().vendor_device.device.to_string();
 
         if vendor.is_empty() || product.is_empty() {
             log_info!(LOG_INPUT_CAT, "Removed input device '{}' for usage {usage}", input_dev.get_hid_identifier().vendor_device);
@@ -507,29 +523,37 @@ impl InputManager {
         }
     }
 
-    pub(crate) fn notify_rebind(&self, input: InputAxisId) {
+    pub(crate) fn notify_rebind(&self, input: &[AxisId]) {
         let mut rebind_context = self.rebind_context.lock();
-
+        let mut cancel = false;
         if let Some(ctx) = &mut *rebind_context {
-            match (ctx.rebind_callback)(input) {
-                RebindResult::Continue => (),
-                RebindResult::Accept(input) => {
-                    // Update the source context
-                    for mapping_context in &mut *self.mapping_contexts.lock() {
-                        if let Some(ident) = &ctx.context_name && mapping_context.identifier != *ident {
-                            continue;
+            for input in input {
+                match (ctx.rebind_callback)(input.clone()) {
+                    RebindResult::Continue => (),
+                    RebindResult::Accept(input) => {
+                        // Update the source context
+                        for mapping_context in &mut *self.mapping_contexts.lock() {
+                            if let Some(ident) = &ctx.context_name && mapping_context.identifier != *ident {
+                                continue;
+                            }
                         }
-                    }
-
-                    // Propagate to context instances
-                    let mut users = self.users.write();
-                    for user in &mut *users {
-                        user.rebind(&ctx.binding_name, ctx.context_name.as_ref(), input.clone());
-                    }
-                },
-                // We can safely set it to `None` as we won't be using ctx after this
-                RebindResult::Cancel => *rebind_context = None,
+                        
+                        // Propagate to context instances
+                        let mut users = self.users.write();
+                        for user in &mut *users {
+                            user.rebind(&ctx.binding_name, ctx.context_name.as_ref(), input.clone());
+                        }
+                    },
+                    // We can safely set it to `None` as we won't be using ctx after this
+                    RebindResult::Cancel => {
+                        cancel = true;
+                        break;
+                    },
+                }
             }
+        }
+        if cancel {
+            *rebind_context = None
         }
     }
 
@@ -588,6 +612,14 @@ impl InputManager {
             res
         }));
 
+        // TODO: Should be in same plugin as Dualsense input device
+        self.register_product_create_device(hid::VendorProduct::from_u16(0x054C, 0x0CE6), &[], |handle| DualSense::new(handle).map(|x| {
+            // We need to get around rust not realizing that `Box` could `CoerseUnsized` directly in a return statement
+            // This could be one of those "std::boxed::Box is special" cases, as the first line clearly shows that it works
+            let res: Box<dyn InputDevice> = Box::new(x);
+            res
+        }));
+
         // Create devices for unloaded devices
         //let native_dev_handles = self.os_input.get_devices().unwrap();
         //for handle in native_dev_handles {
@@ -632,7 +664,7 @@ impl InputManager {
         None
     }
     
-    fn get_input_for_any(&self, axis_path: &InputAxisId, device_store: &DeviceStorage) -> AxisValue {
+    fn get_input_for_any(&self, axis_path: &AxisId, device_store: &DeviceStorage) -> AxisValue {
         for opt in &device_store.devices {
             if let (_, Some(dev)) = opt {
                 if let Some(val) = dev.get_axis_value(axis_path) {
@@ -644,7 +676,7 @@ impl InputManager {
         AxisValue::Digital(false)
     }
 
-    fn get_input_for_user(user: &User, axis_path: &InputAxisId, device_store: &DeviceStorage) -> AxisValue {
+    fn get_input_for_user(user: &User, axis_path: &AxisId, device_store: &DeviceStorage) -> AxisValue {
         match user.control_set() {
             Some(control_set) => {
                 for handle in control_set.devices() {

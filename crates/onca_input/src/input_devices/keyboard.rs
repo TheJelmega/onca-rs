@@ -10,7 +10,7 @@ use onca_logging::log_warning;
 use onca_logging::log_verbose;
 use windows::Win32::UI::Input::RAWKEYBOARD;
 
-use crate::{os::{self, OSKeyboard}, LOG_INPUT_CAT, InputAxisDefinition, AxisType, AxisValue, DeviceType, InputAxisId, NativeDeviceHandle};
+use crate::{os::{self, OSKeyboard}, AxisDefinition, AxisId, AxisValue, DeviceType, InputAxisDefinition, NativeDeviceHandle, OutputInfo, Rebinder, RumbleSupport, LOG_INPUT_CAT};
 
 use super::InputDevice;
 
@@ -657,8 +657,8 @@ impl KeyCode {
         }
     }
 
-    pub fn to_input_axis(self) -> InputAxisId {
-        InputAxisId::new(self.as_str())
+    pub fn to_input_axis(self) -> AxisId {
+        AxisId::new(self.as_str())
     }
 }             
 
@@ -883,130 +883,129 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-
-    pub const ANY:             InputAxisId = InputAxisId::new(keycode_name::ANY            );
-    pub const SHIFT:           InputAxisId = InputAxisId::new(keycode_name::SHIFT          );
-    pub const LSHIFT:          InputAxisId = InputAxisId::new(keycode_name::LSHIFT         );
-    pub const RSHIFT:          InputAxisId = InputAxisId::new(keycode_name::RSHIFT         );
-    pub const CTRL:            InputAxisId = InputAxisId::new(keycode_name::CTRL           );
-    pub const LCTR:            InputAxisId = InputAxisId::new(keycode_name::LCTR           );
-    pub const RCTR:            InputAxisId = InputAxisId::new(keycode_name::RCTR           );
-    pub const ALT:             InputAxisId = InputAxisId::new(keycode_name::ALT            );
-    pub const LALT:            InputAxisId = InputAxisId::new(keycode_name::LALT           );
-    pub const RALT:            InputAxisId = InputAxisId::new(keycode_name::RALT           );
-    pub const LCOMMAND:        InputAxisId = InputAxisId::new(keycode_name::LCOMMAND       );
-    pub const RCOMMAND:        InputAxisId = InputAxisId::new(keycode_name::RCOMMAND       );
-    pub const MENU:            InputAxisId = InputAxisId::new(keycode_name::MENU           );
-    pub const SPACE:           InputAxisId = InputAxisId::new(keycode_name::SPACE          );
-    pub const BACKSPACE:       InputAxisId = InputAxisId::new(keycode_name::BACKSPACE      );
-    pub const TAB:             InputAxisId = InputAxisId::new(keycode_name::TAB            );
-    pub const ENTER:           InputAxisId = InputAxisId::new(keycode_name::ENTER          );
-    pub const ESCAPE:          InputAxisId = InputAxisId::new(keycode_name::ESCAPE         );
-    pub const DELETE:          InputAxisId = InputAxisId::new(keycode_name::DELETE         );
-    pub const INSERT:          InputAxisId = InputAxisId::new(keycode_name::INSERT         );
-    pub const HOME:            InputAxisId = InputAxisId::new(keycode_name::HOME           );
-    pub const END:             InputAxisId = InputAxisId::new(keycode_name::END            );
-    pub const PG_DOWN:         InputAxisId = InputAxisId::new(keycode_name::PG_DOWN        );
-    pub const PG_UP:           InputAxisId = InputAxisId::new(keycode_name::PG_UP          );
-    pub const PRINT_SCREEN:    InputAxisId = InputAxisId::new(keycode_name::PRINT_SCREEN   );
-    pub const CAPS_LOCK:       InputAxisId = InputAxisId::new(keycode_name::CAPS_LOCK      );
-    pub const NUM_LOCK:        InputAxisId = InputAxisId::new(keycode_name::NUM_LOCK       );
-    pub const SCROLL_LOCK:     InputAxisId = InputAxisId::new(keycode_name::SCROLL_LOCK    );
-    pub const UP:              InputAxisId = InputAxisId::new(keycode_name::UP             );
-    pub const DOWN:            InputAxisId = InputAxisId::new(keycode_name::DOWN           );
-    pub const LEFT:            InputAxisId = InputAxisId::new(keycode_name::LEFT           );
-    pub const RIGHT:           InputAxisId = InputAxisId::new(keycode_name::RIGHT          );
-    pub const BREAK:           InputAxisId = InputAxisId::new(keycode_name::BREAK          );
-    pub const CLEAR:           InputAxisId = InputAxisId::new(keycode_name::CLEAR          );
-    pub const F1:              InputAxisId = InputAxisId::new(keycode_name::F1             );
-    pub const F2:              InputAxisId = InputAxisId::new(keycode_name::F2             );
-    pub const F3:              InputAxisId = InputAxisId::new(keycode_name::F3             );
-    pub const F4:              InputAxisId = InputAxisId::new(keycode_name::F4             );
-    pub const F5:              InputAxisId = InputAxisId::new(keycode_name::F5             );
-    pub const F6:              InputAxisId = InputAxisId::new(keycode_name::F6             );
-    pub const F7:              InputAxisId = InputAxisId::new(keycode_name::F7             );
-    pub const F8:              InputAxisId = InputAxisId::new(keycode_name::F8             );
-    pub const F9:              InputAxisId = InputAxisId::new(keycode_name::F9             );
-    pub const F10:             InputAxisId = InputAxisId::new(keycode_name::F10            );
-    pub const F11:             InputAxisId = InputAxisId::new(keycode_name::F11            );
-    pub const F12:             InputAxisId = InputAxisId::new(keycode_name::F12            );
-    pub const NUMPAD0:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD0        );
-    pub const NUMPAD1:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD1        );
-    pub const NUMPAD2:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD2        );
-    pub const NUMPAD3:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD3        );
-    pub const NUMPAD4:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD4        );
-    pub const NUMPAD5:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD5        );
-    pub const NUMPAD6:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD6        );
-    pub const NUMPAD7:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD7        );
-    pub const NUMPAD8:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD8        );
-    pub const NUMPAD9:         InputAxisId = InputAxisId::new(keycode_name::NUMPAD9        );
-    pub const NUMPAD_MULTIPY:  InputAxisId = InputAxisId::new(keycode_name::NUMPAD_MULTIPY );
-    pub const NUMPAD_ADD:      InputAxisId = InputAxisId::new(keycode_name::NUMPAD_ADD     );
-    pub const NUMPAD_SUBTRACT: InputAxisId = InputAxisId::new(keycode_name::NUMPAD_SUBTRACT);
-    pub const NUMPAD_DECIMAL:  InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DECIMAL );
-    pub const NUMPAD_DIVIDE:   InputAxisId = InputAxisId::new(keycode_name::NUMPAD_DIVIDE  );
-    pub const A:               InputAxisId = InputAxisId::new(keycode_name::A              );
-    pub const B:               InputAxisId = InputAxisId::new(keycode_name::B              );
-    pub const C:               InputAxisId = InputAxisId::new(keycode_name::C              );
-    pub const D:               InputAxisId = InputAxisId::new(keycode_name::D              );
-    pub const E:               InputAxisId = InputAxisId::new(keycode_name::E              );
-    pub const F:               InputAxisId = InputAxisId::new(keycode_name::F              );
-    pub const G:               InputAxisId = InputAxisId::new(keycode_name::G              );
-    pub const H:               InputAxisId = InputAxisId::new(keycode_name::H              );
-    pub const I:               InputAxisId = InputAxisId::new(keycode_name::I              );
-    pub const J:               InputAxisId = InputAxisId::new(keycode_name::J              );
-    pub const K:               InputAxisId = InputAxisId::new(keycode_name::K              );
-    pub const L:               InputAxisId = InputAxisId::new(keycode_name::L              );
-    pub const M:               InputAxisId = InputAxisId::new(keycode_name::M              );
-    pub const N:               InputAxisId = InputAxisId::new(keycode_name::N              );
-    pub const O:               InputAxisId = InputAxisId::new(keycode_name::O              );
-    pub const P:               InputAxisId = InputAxisId::new(keycode_name::P              );
-    pub const Q:               InputAxisId = InputAxisId::new(keycode_name::Q              );
-    pub const R:               InputAxisId = InputAxisId::new(keycode_name::R              );
-    pub const S:               InputAxisId = InputAxisId::new(keycode_name::S              );
-    pub const T:               InputAxisId = InputAxisId::new(keycode_name::T              );
-    pub const U:               InputAxisId = InputAxisId::new(keycode_name::U              );
-    pub const V:               InputAxisId = InputAxisId::new(keycode_name::V              );
-    pub const W:               InputAxisId = InputAxisId::new(keycode_name::W              );
-    pub const X:               InputAxisId = InputAxisId::new(keycode_name::X              );
-    pub const Y:               InputAxisId = InputAxisId::new(keycode_name::Y              );
-    pub const Z:               InputAxisId = InputAxisId::new(keycode_name::Z              );
-    pub const N0:              InputAxisId = InputAxisId::new(keycode_name::N0             );
-    pub const N1:              InputAxisId = InputAxisId::new(keycode_name::N1             );
-    pub const N2:              InputAxisId = InputAxisId::new(keycode_name::N2             );
-    pub const N3:              InputAxisId = InputAxisId::new(keycode_name::N3             );
-    pub const N4:              InputAxisId = InputAxisId::new(keycode_name::N4             );
-    pub const N5:              InputAxisId = InputAxisId::new(keycode_name::N5             );
-    pub const N6:              InputAxisId = InputAxisId::new(keycode_name::N6             );
-    pub const N7:              InputAxisId = InputAxisId::new(keycode_name::N7             );
-    pub const N8:              InputAxisId = InputAxisId::new(keycode_name::N8             );
-    pub const N9:              InputAxisId = InputAxisId::new(keycode_name::N9             );
-    pub const SEMICOLON:       InputAxisId = InputAxisId::new(keycode_name::SEMICOLON      );
-    pub const EQUALS:          InputAxisId = InputAxisId::new(keycode_name::EQUALS         );
-    pub const COMMA:           InputAxisId = InputAxisId::new(keycode_name::COMMA          );
-    pub const HYPHEN:          InputAxisId = InputAxisId::new(keycode_name::HYPHEN         );
-    pub const UNDERSCORE:      InputAxisId = InputAxisId::new(keycode_name::UNDERSCORE     );
-    pub const PERIOD:          InputAxisId = InputAxisId::new(keycode_name::PERIOD         );
-    pub const SLASH:           InputAxisId = InputAxisId::new(keycode_name::SLASH          );
-    pub const BACKTICK:        InputAxisId = InputAxisId::new(keycode_name::BACKTICK       );
-    pub const LBRACKET:        InputAxisId = InputAxisId::new(keycode_name::LBRACKET       );
-    pub const RBRACKET:        InputAxisId = InputAxisId::new(keycode_name::RBRACKET       );
-    pub const BACKSLASH:       InputAxisId = InputAxisId::new(keycode_name::BACKSLASH      );
-    pub const APOSTROPHE:      InputAxisId = InputAxisId::new(keycode_name::APOSTROPHE     );
-    pub const QUOTE:           InputAxisId = InputAxisId::new(keycode_name::QUOTE          );
-    pub const LPAREN:          InputAxisId = InputAxisId::new(keycode_name::LPAREN         );
-    pub const RPAREN:          InputAxisId = InputAxisId::new(keycode_name::RPAREN         );
-    pub const AMPERSAND:       InputAxisId = InputAxisId::new(keycode_name::AMPERSAND      );
-    pub const ASTERISK:        InputAxisId = InputAxisId::new(keycode_name::ASTERISK       );
-    pub const CARET:           InputAxisId = InputAxisId::new(keycode_name::CARET          );
-    pub const DOLLAR:          InputAxisId = InputAxisId::new(keycode_name::DOLLAR         );
-    pub const EXCLAMATION:     InputAxisId = InputAxisId::new(keycode_name::EXCLAMATION    );
-    pub const COLON:           InputAxisId = InputAxisId::new(keycode_name::COLON          );
-    pub const EACUTE:          InputAxisId = InputAxisId::new(keycode_name::EACUTE         );
-    pub const EGRAVE:          InputAxisId = InputAxisId::new(keycode_name::EGRAVE         );
-    pub const AGRAVE:          InputAxisId = InputAxisId::new(keycode_name::AGRAVE         );
-    pub const CCEDILLA:        InputAxisId = InputAxisId::new(keycode_name::CCEDILLA       );
-    pub const SECTION:         InputAxisId = InputAxisId::new(keycode_name::SECTION        );
+    pub const ANY:             AxisId = AxisId::new(keycode_name::ANY            );
+    pub const SHIFT:           AxisId = AxisId::new(keycode_name::SHIFT          );
+    pub const LSHIFT:          AxisId = AxisId::new(keycode_name::LSHIFT         );
+    pub const RSHIFT:          AxisId = AxisId::new(keycode_name::RSHIFT         );
+    pub const CTRL:            AxisId = AxisId::new(keycode_name::CTRL           );
+    pub const LCTR:            AxisId = AxisId::new(keycode_name::LCTR           );
+    pub const RCTR:            AxisId = AxisId::new(keycode_name::RCTR           );
+    pub const ALT:             AxisId = AxisId::new(keycode_name::ALT            );
+    pub const LALT:            AxisId = AxisId::new(keycode_name::LALT           );
+    pub const RALT:            AxisId = AxisId::new(keycode_name::RALT           );
+    pub const LCOMMAND:        AxisId = AxisId::new(keycode_name::LCOMMAND       );
+    pub const RCOMMAND:        AxisId = AxisId::new(keycode_name::RCOMMAND       );
+    pub const MENU:            AxisId = AxisId::new(keycode_name::MENU           );
+    pub const SPACE:           AxisId = AxisId::new(keycode_name::SPACE          );
+    pub const BACKSPACE:       AxisId = AxisId::new(keycode_name::BACKSPACE      );
+    pub const TAB:             AxisId = AxisId::new(keycode_name::TAB            );
+    pub const ENTER:           AxisId = AxisId::new(keycode_name::ENTER          );
+    pub const ESCAPE:          AxisId = AxisId::new(keycode_name::ESCAPE         );
+    pub const DELETE:          AxisId = AxisId::new(keycode_name::DELETE         );
+    pub const INSERT:          AxisId = AxisId::new(keycode_name::INSERT         );
+    pub const HOME:            AxisId = AxisId::new(keycode_name::HOME           );
+    pub const END:             AxisId = AxisId::new(keycode_name::END            );
+    pub const PG_DOWN:         AxisId = AxisId::new(keycode_name::PG_DOWN        );
+    pub const PG_UP:           AxisId = AxisId::new(keycode_name::PG_UP          );
+    pub const PRINT_SCREEN:    AxisId = AxisId::new(keycode_name::PRINT_SCREEN   );
+    pub const CAPS_LOCK:       AxisId = AxisId::new(keycode_name::CAPS_LOCK      );
+    pub const NUM_LOCK:        AxisId = AxisId::new(keycode_name::NUM_LOCK       );
+    pub const SCROLL_LOCK:     AxisId = AxisId::new(keycode_name::SCROLL_LOCK    );
+    pub const UP:              AxisId = AxisId::new(keycode_name::UP             );
+    pub const DOWN:            AxisId = AxisId::new(keycode_name::DOWN           );
+    pub const LEFT:            AxisId = AxisId::new(keycode_name::LEFT           );
+    pub const RIGHT:           AxisId = AxisId::new(keycode_name::RIGHT          );
+    pub const BREAK:           AxisId = AxisId::new(keycode_name::BREAK          );
+    pub const CLEAR:           AxisId = AxisId::new(keycode_name::CLEAR          );
+    pub const F1:              AxisId = AxisId::new(keycode_name::F1             );
+    pub const F2:              AxisId = AxisId::new(keycode_name::F2             );
+    pub const F3:              AxisId = AxisId::new(keycode_name::F3             );
+    pub const F4:              AxisId = AxisId::new(keycode_name::F4             );
+    pub const F5:              AxisId = AxisId::new(keycode_name::F5             );
+    pub const F6:              AxisId = AxisId::new(keycode_name::F6             );
+    pub const F7:              AxisId = AxisId::new(keycode_name::F7             );
+    pub const F8:              AxisId = AxisId::new(keycode_name::F8             );
+    pub const F9:              AxisId = AxisId::new(keycode_name::F9             );
+    pub const F10:             AxisId = AxisId::new(keycode_name::F10            );
+    pub const F11:             AxisId = AxisId::new(keycode_name::F11            );
+    pub const F12:             AxisId = AxisId::new(keycode_name::F12            );
+    pub const NUMPAD0:         AxisId = AxisId::new(keycode_name::NUMPAD0        );
+    pub const NUMPAD1:         AxisId = AxisId::new(keycode_name::NUMPAD1        );
+    pub const NUMPAD2:         AxisId = AxisId::new(keycode_name::NUMPAD2        );
+    pub const NUMPAD3:         AxisId = AxisId::new(keycode_name::NUMPAD3        );
+    pub const NUMPAD4:         AxisId = AxisId::new(keycode_name::NUMPAD4        );
+    pub const NUMPAD5:         AxisId = AxisId::new(keycode_name::NUMPAD5        );
+    pub const NUMPAD6:         AxisId = AxisId::new(keycode_name::NUMPAD6        );
+    pub const NUMPAD7:         AxisId = AxisId::new(keycode_name::NUMPAD7        );
+    pub const NUMPAD8:         AxisId = AxisId::new(keycode_name::NUMPAD8        );
+    pub const NUMPAD9:         AxisId = AxisId::new(keycode_name::NUMPAD9        );
+    pub const NUMPAD_MULTIPY:  AxisId = AxisId::new(keycode_name::NUMPAD_MULTIPY );
+    pub const NUMPAD_ADD:      AxisId = AxisId::new(keycode_name::NUMPAD_ADD     );
+    pub const NUMPAD_SUBTRACT: AxisId = AxisId::new(keycode_name::NUMPAD_SUBTRACT);
+    pub const NUMPAD_DECIMAL:  AxisId = AxisId::new(keycode_name::NUMPAD_DECIMAL );
+    pub const NUMPAD_DIVIDE:   AxisId = AxisId::new(keycode_name::NUMPAD_DIVIDE  );
+    pub const A:               AxisId = AxisId::new(keycode_name::A              );
+    pub const B:               AxisId = AxisId::new(keycode_name::B              );
+    pub const C:               AxisId = AxisId::new(keycode_name::C              );
+    pub const D:               AxisId = AxisId::new(keycode_name::D              );
+    pub const E:               AxisId = AxisId::new(keycode_name::E              );
+    pub const F:               AxisId = AxisId::new(keycode_name::F              );
+    pub const G:               AxisId = AxisId::new(keycode_name::G              );
+    pub const H:               AxisId = AxisId::new(keycode_name::H              );
+    pub const I:               AxisId = AxisId::new(keycode_name::I              );
+    pub const J:               AxisId = AxisId::new(keycode_name::J              );
+    pub const K:               AxisId = AxisId::new(keycode_name::K              );
+    pub const L:               AxisId = AxisId::new(keycode_name::L              );
+    pub const M:               AxisId = AxisId::new(keycode_name::M              );
+    pub const N:               AxisId = AxisId::new(keycode_name::N              );
+    pub const O:               AxisId = AxisId::new(keycode_name::O              );
+    pub const P:               AxisId = AxisId::new(keycode_name::P              );
+    pub const Q:               AxisId = AxisId::new(keycode_name::Q              );
+    pub const R:               AxisId = AxisId::new(keycode_name::R              );
+    pub const S:               AxisId = AxisId::new(keycode_name::S              );
+    pub const T:               AxisId = AxisId::new(keycode_name::T              );
+    pub const U:               AxisId = AxisId::new(keycode_name::U              );
+    pub const V:               AxisId = AxisId::new(keycode_name::V              );
+    pub const W:               AxisId = AxisId::new(keycode_name::W              );
+    pub const X:               AxisId = AxisId::new(keycode_name::X              );
+    pub const Y:               AxisId = AxisId::new(keycode_name::Y              );
+    pub const Z:               AxisId = AxisId::new(keycode_name::Z              );
+    pub const N0:              AxisId = AxisId::new(keycode_name::N0             );
+    pub const N1:              AxisId = AxisId::new(keycode_name::N1             );
+    pub const N2:              AxisId = AxisId::new(keycode_name::N2             );
+    pub const N3:              AxisId = AxisId::new(keycode_name::N3             );
+    pub const N4:              AxisId = AxisId::new(keycode_name::N4             );
+    pub const N5:              AxisId = AxisId::new(keycode_name::N5             );
+    pub const N6:              AxisId = AxisId::new(keycode_name::N6             );
+    pub const N7:              AxisId = AxisId::new(keycode_name::N7             );
+    pub const N8:              AxisId = AxisId::new(keycode_name::N8             );
+    pub const N9:              AxisId = AxisId::new(keycode_name::N9             );
+    pub const SEMICOLON:       AxisId = AxisId::new(keycode_name::SEMICOLON      );
+    pub const EQUALS:          AxisId = AxisId::new(keycode_name::EQUALS         );
+    pub const COMMA:           AxisId = AxisId::new(keycode_name::COMMA          );
+    pub const HYPHEN:          AxisId = AxisId::new(keycode_name::HYPHEN         );
+    pub const UNDERSCORE:      AxisId = AxisId::new(keycode_name::UNDERSCORE     );
+    pub const PERIOD:          AxisId = AxisId::new(keycode_name::PERIOD         );
+    pub const SLASH:           AxisId = AxisId::new(keycode_name::SLASH          );
+    pub const BACKTICK:        AxisId = AxisId::new(keycode_name::BACKTICK       );
+    pub const LBRACKET:        AxisId = AxisId::new(keycode_name::LBRACKET       );
+    pub const RBRACKET:        AxisId = AxisId::new(keycode_name::RBRACKET       );
+    pub const BACKSLASH:       AxisId = AxisId::new(keycode_name::BACKSLASH      );
+    pub const APOSTROPHE:      AxisId = AxisId::new(keycode_name::APOSTROPHE     );
+    pub const QUOTE:           AxisId = AxisId::new(keycode_name::QUOTE          );
+    pub const LPAREN:          AxisId = AxisId::new(keycode_name::LPAREN         );
+    pub const RPAREN:          AxisId = AxisId::new(keycode_name::RPAREN         );
+    pub const AMPERSAND:       AxisId = AxisId::new(keycode_name::AMPERSAND      );
+    pub const ASTERISK:        AxisId = AxisId::new(keycode_name::ASTERISK       );
+    pub const CARET:           AxisId = AxisId::new(keycode_name::CARET          );
+    pub const DOLLAR:          AxisId = AxisId::new(keycode_name::DOLLAR         );
+    pub const EXCLAMATION:     AxisId = AxisId::new(keycode_name::EXCLAMATION    );
+    pub const COLON:           AxisId = AxisId::new(keycode_name::COLON          );
+    pub const EACUTE:          AxisId = AxisId::new(keycode_name::EACUTE         );
+    pub const EGRAVE:          AxisId = AxisId::new(keycode_name::EGRAVE         );
+    pub const AGRAVE:          AxisId = AxisId::new(keycode_name::AGRAVE         );
+    pub const CCEDILLA:        AxisId = AxisId::new(keycode_name::CCEDILLA       );
+    pub const SECTION:         AxisId = AxisId::new(keycode_name::SECTION        );
 
     /// Create a new keyboard.
     pub fn new(handle: NativeDeviceHandle) -> Result<Self, NativeDeviceHandle> {
@@ -1091,7 +1090,7 @@ impl InputDevice for Keyboard {
         self.handle.as_ref().unwrap()
     }
 
-    fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(InputAxisId)) {
+    fn tick(&mut self, dt: f32, rebinder: &mut Rebinder) {
         let mut key_changes = self.key_changes.lock();
         let mut state = self.state.write();
         
@@ -1119,7 +1118,7 @@ impl InputDevice for Keyboard {
                 }
                 processed_buttons.enable(key_idx);
 
-                notify_rebind(InputAxisId::new(self.get_axes()[key_idx].path));
+                rebinder.notify(self.get_axes()[key_idx].ids);
 
                 // Process input
                 if self.has_text_intercept() && change.key.is_text_input_key() {
@@ -1211,7 +1210,7 @@ impl InputDevice for Keyboard {
         }
     }
 
-    fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
+    fn get_axis_value(&self, axis_path: &AxisId) -> Option<AxisValue> {
         let keycode = match *axis_path {
             Self::ANY             => KeyCode::Any,
             Self::SHIFT           => KeyCode::Shift,
@@ -1343,129 +1342,129 @@ impl InputDevice for Keyboard {
 
     fn get_axes(&self) -> &[InputAxisDefinition] {
         &[
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ANY            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SHIFT          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LSHIFT         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RSHIFT         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CTRL           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LCTR           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RCTR           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ALT            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LALT           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RALT           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LCOMMAND       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RCOMMAND       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::MENU           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SPACE          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKSPACE      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::TAB            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ENTER          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ESCAPE         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DELETE         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::INSERT         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::HOME           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::END            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PG_DOWN        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PG_UP          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PRINT_SCREEN   , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CAPS_LOCK      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUM_LOCK       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SCROLL_LOCK    , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::UP             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DOWN           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LEFT           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RIGHT          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BREAK          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CLEAR          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F1             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F2             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F3             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F4             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F5             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F6             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F7             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F8             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F9             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F10            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F11            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F12            , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD0        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD1        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD2        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD3        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD4        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD5        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD6        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD7        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD8        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD9        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_MULTIPY , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_ADD     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_SUBTRACT, axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_DECIMAL , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::NUMPAD_DIVIDE  , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::A              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::B              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::C              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::D              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::E              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::F              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::G              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::H              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::I              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::J              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::K              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::L              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::M              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::O              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::P              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Q              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::R              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::S              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::T              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::U              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::V              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::W              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::X              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Y              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::Z              , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N0             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N1             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N2             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N3             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N4             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N5             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N6             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N7             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N8             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::N9             , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SEMICOLON      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EQUALS         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::COMMA          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::HYPHEN         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::UNDERSCORE     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::PERIOD         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SLASH          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKTICK       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LBRACKET       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RBRACKET       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::BACKSLASH      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::APOSTROPHE     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::QUOTE          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::LPAREN         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::RPAREN         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::AMPERSAND      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::ASTERISK       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CARET          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::DOLLAR         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EXCLAMATION    , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::COLON          , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EACUTE         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::EGRAVE         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::AGRAVE         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::CCEDILLA       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Keyboard, path: keycode_name::SECTION        , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::ANY]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SHIFT]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LSHIFT]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RSHIFT]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::CTRL]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LCTR]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RCTR]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::ALT]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LALT]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RALT]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LCOMMAND]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RCOMMAND]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::MENU]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SPACE]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::BACKSPACE]      , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::TAB]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::ENTER]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::ESCAPE]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::DELETE]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::INSERT]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::HOME]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::END]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::PG_DOWN]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::PG_UP]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::PRINT_SCREEN]   , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::CAPS_LOCK]      , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUM_LOCK]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SCROLL_LOCK]    , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::UP]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::DOWN]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LEFT]           , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RIGHT]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::BREAK]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::CLEAR]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F1]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F2]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F3]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F4]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F5]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F6]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F7]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F8]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F9]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F10]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F11]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F12]            , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD0]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD1]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD2]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD3]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD4]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD5]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD6]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD7]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD8]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD9]        , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD_MULTIPY] , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD_ADD]     , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD_SUBTRACT], axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD_DECIMAL] , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::NUMPAD_DIVIDE]  , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::A]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::B]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::C]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::D]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::E]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::F]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::G]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::H]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::I]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::J]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::K]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::L]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::M]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::O]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::P]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::Q]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::R]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::S]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::T]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::U]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::V]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::W]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::X]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::Y]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::Z]              , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N0]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N1]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N2]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N3]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N4]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N5]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N6]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N7]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N8]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::N9]             , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SEMICOLON]      , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::EQUALS]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::COMMA]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::HYPHEN]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::UNDERSCORE]     , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::PERIOD]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SLASH]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::BACKTICK]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LBRACKET]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RBRACKET]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::BACKSLASH]      , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::APOSTROPHE]     , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::QUOTE]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::LPAREN]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::RPAREN]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::AMPERSAND]      , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::ASTERISK]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::CARET]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::DOLLAR]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::EXCLAMATION]    , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::COLON]          , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::EACUTE]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::EGRAVE]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::AGRAVE]         , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::CCEDILLA]       , axis: AxisDefinition::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Keyboard, ids: &[Self::SECTION]        , axis: AxisDefinition::Digital, can_rebind: true },
         ]
     }
 
@@ -1475,5 +1474,34 @@ impl InputDevice for Keyboard {
     
     fn take_native_handle(&mut self) -> NativeDeviceHandle {
         core::mem::take(&mut self.handle).unwrap()
+    }
+
+    fn get_battery_info(&self) -> Option<crate::BatteryInfo> {
+        None
+    }
+
+    fn get_output_info<'a>(&'a self) -> &'a OutputInfo<'a> {
+        &OutputInfo {
+            rumble: RumbleSupport::None,
+            trigger_feedback: None,
+            led_support: &[],
+            output_axes: &[]
+        }
+    }
+
+    fn set_rumble(&self, _rumble: crate::RumbleState) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_trigger_feedback(&self, _right_trigger: bool, _trigger_feedback: crate::TriggerFeedback) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_led_state(&self, _index: u16, _state: crate::LedState) {
+        // Nothing to do here, as we don't support output
+    }
+
+    fn set_output_axis(&self, _axis: AxisId, _value: AxisValue) {
+        // Nothing to do here, as we don't support output
     }
 }

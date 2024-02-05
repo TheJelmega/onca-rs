@@ -1,19 +1,18 @@
 // TODO: Currently developed over parsec, which makes any controller act as the same type of device, so the current implementation (specifically trigger may not work as intended)
 
-use crate::{InputDevice, InputAxisDefinition, AxisValue, AxisType, DeviceType, GamepadSubType, InputAxisId, NativeDeviceHandle};
+use crate::{AxisDefinition, AxisId, AxisMove, AxisValue, ButtonChange, DeviceType, GamepadFeatures, HatSwitch, InputAxisDefinition, InputDevice, NativeDeviceHandle, OutputInfo, Rebinder, ReleaseCurve, RumbleSupport};
 #[cfg(feature = "raw_input_logging")]
 use crate::LOG_INPUT_CAT;
 use onca_common::{
     prelude::*,
     collections::BitSet,
-    sync::{Mutex, RwLock}
+    sync::{Mutex, RwLock},
 };
 use onca_common_macros::{EnumCount, EnumFromIndex, EnumDisplay};
 
 #[cfg(feature = "raw_input_logging")]
 use onca_logging::log_verbose;
-use onca_logging::log_warning;
-use onca_math::{f32v2, Zero, MathConsts, SmoothStep};
+use onca_math::{f32v2, Zero};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, EnumCount, EnumFromIndex, EnumDisplay)]
 pub enum GamepadButton {
@@ -35,6 +34,12 @@ pub enum GamepadButton {
     /// Right bumper
     #[display("right bumper")]
     RightBumper,
+    /// Left trigger button
+    #[display("left trigger button")]
+    LeftTrigger,
+    /// Right trigger button
+    #[display("right trigger button")]
+    RightTrigger,
     /// Left special button (e.g. menu, etc)
     #[display("left menu")]
     LeftMenu,
@@ -51,251 +56,47 @@ pub enum GamepadButton {
     #[display("guide button")]
     Guide,
 }
-const NUM_BUTTONS_BITS : usize = GamepadButton::COUNT.next_power_of_two();
+const NUM_BUTTONS_BITS: usize = GamepadButton::COUNT.next_power_of_two();
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, EnumFromIndex, EnumDisplay)]
-pub enum DPadDirection {
-    /// DPad is in the neutral position
-    #[display("neutral")]
-    Neutral,
-    /// Up is pressed
-    #[display("up")]
-    Up,
-    /// Up and right are pressed
-    #[display("up-right")]
-    UpRight,
-    /// Right is pressed
-    #[display("right")]
-    Right,
-    /// Down and right are pressed
-    #[display("down-right")]
-    DownRight,
-    /// Down is pressed
-    #[display("down")]
-    Down,
-    /// Down and left are pressed
-    #[display("down-left")]
-    DownLeft,
-    /// :eft is pressed
-    #[display("left")]
-    Left,
-    /// Up and left are pressed
-    #[display("up-left")]
-    UpLeft,
-}
 
-impl DPadDirection {
-    /// Check if the down button is down
-    pub fn is_bottom_down(&self) -> bool {
-        matches!(self, DPadDirection::DownRight | DPadDirection::Down | DPadDirection::DownLeft)
-    }
-    
-    /// Check if the right button is down
-    pub fn is_right_down(&self) -> bool {
-        matches!(self, DPadDirection::UpRight | DPadDirection::Right | DPadDirection::DownRight)
-    }
-    
-    /// Check if the left button is down
-    pub fn is_left_down(&self) -> bool {
-        matches!(self, DPadDirection::DownLeft | DPadDirection::Left | DPadDirection::UpLeft)
-    }
-    
-    /// Check if the up button is down
-    pub fn is_up_down(&self) -> bool {
-        matches!(self, DPadDirection::UpRight | DPadDirection::Up | DPadDirection::UpLeft)
-    }
+const TRIGGER_AXIS_MAPPING: [&[AxisId]; 2] = [
+    &[Gamepad::LEFT_THUMB ],
+    &[Gamepad::RIGHT_THUMB],
+];
 
-    /// Get a vector representing the current DPad direction
-    pub fn get_direction(&self) -> f32v2 {
-        match self {
-            DPadDirection::Neutral   => f32v2::new( 0f32                  ,  0f32),
-            DPadDirection::Up        => f32v2::new( 0f32                  ,  1f32),
-            DPadDirection::UpRight   => f32v2::new( f32::ONE_OVER_ROOT_TWO,  f32::ONE_OVER_ROOT_TWO),
-            DPadDirection::Right     => f32v2::new( 1f32                  ,  0f32),
-            DPadDirection::DownRight => f32v2::new( f32::ONE_OVER_ROOT_TWO, -f32::ONE_OVER_ROOT_TWO),
-            DPadDirection::Down      => f32v2::new( 0f32                  , -1f32),
-            DPadDirection::DownLeft  => f32v2::new(-f32::ONE_OVER_ROOT_TWO, -f32::ONE_OVER_ROOT_TWO),
-            DPadDirection::Left      => f32v2::new(-1f32                  ,  0f32),
-            DPadDirection::UpLeft    => f32v2::new(-f32::ONE_OVER_ROOT_TWO,  f32::ONE_OVER_ROOT_TWO),
-        }
-    }
-
-    pub fn from_4_button(up: bool, down: bool, left: bool, right: bool) -> Self {
-        match (up, down, left, right) {
-            (false, false, false, false) => DPadDirection::Neutral,
-            (true , false, false, false) => DPadDirection::Up,
-            (true , false, false, true ) => DPadDirection::UpRight,
-            (false, false, false, true ) => DPadDirection::Right,
-            (false, true , false, true ) => DPadDirection::DownRight,
-            (false, true , false, false) => DPadDirection::Down,
-            (false, true , true , false) => DPadDirection::DownLeft,
-            (false, false, true , false) => DPadDirection::Left,
-            (true , false, true , false) => DPadDirection::UpLeft,
-            _ => {
-                log_warning!(LOG_INPUT_CAT, "Invalid DPAD state (up: {up}, down: {down}, left: {left}, right: {right})");
-                DPadDirection::Neutral
-            },
-        }
-    }
-
-    pub fn from_8_button(up: bool, up_right: bool, right: bool, down_right: bool, down: bool, down_left: bool, left: bool, up_left: bool) -> DPadDirection {
-        match (up, up_right, right, down_right, down, down_left, left, up_left) {
-            (true , false, false, false, false, false, false, false) => DPadDirection::Up,
-            (false, true , false, false, false, false, false, false) => DPadDirection::UpRight,
-            (false, false, true , false, false, false, false, false) => DPadDirection::Right,
-            (false, false, false, true , false, false, false, false) => DPadDirection::DownRight,
-            (false, false, false, false, true , false, false, false) => DPadDirection::Down,
-            (false, false, false, false, false, true , false, false) => DPadDirection::DownLeft,
-            (false, false, false, false, false, false, true , false) => DPadDirection::Left,
-            (false, false, false, false, false, false, false, true ) => DPadDirection::UpLeft,
-            _ => {
-                log_warning!(LOG_INPUT_CAT, "Only 1 button of an 8-button dpad can be pressed at any time, returning to neutral");
-                DPadDirection::Neutral
-            }    
-        }
-    }
-}
-
-/// How will the stick be released if emulated
-#[derive(Clone, Copy, Debug)]
-pub enum GamepadReleaseCurve {
-    /// The stick will instantaniously return to center.
-    Instant,
-    /// The stick will return to center in a linear way, over a given time (in seconds).
-    Linear(f32),
-    /// The stick will return to center in a smooth way (smoothstep), over a given time (in seconds).
-    Smooth(f32),
-}
-
-impl GamepadReleaseCurve {
-    fn interpolate_v2(&self, from: f32v2, time_passed: f32) -> f32v2 {
-        match self {
-            GamepadReleaseCurve::Instant => f32v2::zero(),
-            // lerping from 0, is the same as * (1 - interpolant)
-            GamepadReleaseCurve::Linear(max_time) => from * (1f32 - time_passed / max_time),
-            GamepadReleaseCurve::Smooth(max_time) => from * (1f32 - (time_passed / max_time).smooth_step(0.0, 1.0)),
-        }
-    }
-
-    fn interpolate(&self, from: f32, time_passed: f32) -> f32 {
-        match self {
-            GamepadReleaseCurve::Instant => 0f32,
-            // lerping from 0, is the same as * (1 - interpolant)
-            GamepadReleaseCurve::Linear(max_time) => from * (1f32 - time_passed / max_time),
-            // lerping from 0, is the same as * (1 - interpolant)
-            GamepadReleaseCurve::Smooth(max_time) => from * (1f32 - (time_passed / max_time).smooth_step(0.0, 1.0)),
-        }
-    }
-
-    fn time_out(&self, time: f32) -> bool {
-        match self {
-            GamepadReleaseCurve::Instant => true,
-            GamepadReleaseCurve::Linear(max_time) => time >= *max_time,
-            GamepadReleaseCurve::Smooth(max_time) => time >= *max_time,
-        }
-    }
-}
-
-struct ButtonChange {
-    button:  GamepadButton,
-    time:    f32,
-    pressed: bool,
-}
-
-struct StickMove {
-    pos:   f32v2,
-    time:  f32,
-    curve: GamepadReleaseCurve,
-}
-
-impl StickMove {
-    fn new() -> Self {
-        Self { pos: f32v2::zero(), time: 0f32, curve: GamepadReleaseCurve::Instant }
-    }
-
-    fn update(&mut self, dt: f32) -> f32v2 {
-        self.time -= dt;
-        if self.time > 0f32 {
-            self.pos
-        } else {
-            let passed_time = -self.time;
-            if self.curve.time_out(passed_time) {
-                f32v2::zero()
-            } else {
-                self.curve.interpolate_v2(self.pos, passed_time)
-            }
-        }
-    }
-}
-
-struct TriggerMove {
-    val    : f32,
-    time   : f32,
-    curve  : GamepadReleaseCurve,
-}
-
-impl TriggerMove {
-    fn new() -> Self {
-        Self { val: 0f32, time: 0f32, curve: GamepadReleaseCurve::Instant }
-    }
-
-    fn update(&mut self, dt: f32) -> f32 {
-        self.time -= dt;
-        if self.time > 0f32 {
-            self.val
-        } else {
-            let passed_time = -self.time;
-            if self.curve.time_out(passed_time) {
-                0f32
-            } else {
-                self.curve.interpolate(self.val, passed_time)
-            }
-        }
-    }
-}
 
 struct GamepadState {
-    buttons       : BitSet<NUM_BUTTONS_BITS>,
-    dpad          : DPadDirection,
-    left_stick    : f32v2,
-    right_stick   : f32v2,
-    left_trigger  : f32,
-    right_trigger : f32,
+    buttons:  BitSet<NUM_BUTTONS_BITS>,
+    dpad:     HatSwitch,
+    sticks:    [f32v2; 2],
+    triggers: [f32; 2],
 }
 
-impl GamepadState
-{
+impl GamepadState {
     fn new() -> Self {
         Self {
             buttons: BitSet::new(),
-            dpad: DPadDirection::Neutral,
-            left_stick: f32v2::zero(),
-            right_stick: f32v2::zero(),
-            left_trigger: 0f32,
-            right_trigger: 0f32,
+            dpad: HatSwitch::Neutral,
+            sticks: Default::default(),
+            triggers: Default::default(),
         }
-    }
-
-    pub fn is_button_down(&self, button: GamepadButton) -> bool {
-        let idx = button as usize;
-        self.buttons.get(idx)
     }
 }
 
 struct GamepadChangeState {
-    buttons:  Vec<ButtonChange>,
-    dpad:     (DPadDirection, f32),
-    sticks:   [StickMove; 2],
-    triggers: [TriggerMove; 2],
+    buttons:  Vec<ButtonChange<GamepadButton>>,
+    dpad:     (HatSwitch, f32),
+    sticks:   [AxisMove<f32v2>; 2],
+    triggers: [AxisMove<f32>; 2],
 }
 
 impl GamepadChangeState {
     pub fn new() -> Self {
         Self {
             buttons: Vec::new(),
-            dpad: (DPadDirection::Neutral, 0.0),
-            sticks: [StickMove::new(), StickMove::new()],
-            triggers: [TriggerMove::new(), TriggerMove::new()],
+            dpad: (HatSwitch::Neutral, 0.0),
+            sticks: [AxisMove::default(), AxisMove::default()],
+            triggers: [AxisMove::default(), AxisMove::default()],
         }
     }
 }
@@ -312,56 +113,36 @@ pub struct Gamepad {
 }
 
 impl Gamepad {
-    // TODO: Make all InputAxisIds when moved to interned strings (static string ids)
-    pub const LEFT_THUMB_STR:         &'static str = "Gamepad Left Thumbstick 2D-Axis";
-    pub const LEFT_THUMB_X_STR:       &'static str = "Gamepad Left Thumbstick X-Axis";
-    pub const LEFT_THUMB_Y_STR:       &'static str = "Gamepad Left Thumbstick Y-Axis";
-    pub const LEFT_THUMB_BUTTON_STR:  &'static str = "Gamepad Left Thumbstick Button";
-    pub const RIGHT_THUMB_STR:        &'static str = "Gamepad Right Thumbstick 2D-Axis";
-    pub const RIGHT_THUMB_X_STR:      &'static str = "Gamepad Right Thumbstick X-Axis";
-    pub const RIGHT_THUMB_Y_STR:      &'static str = "Gamepad Right Thumbstick Y-Axis";
-    pub const RIGHT_THUMB_BUTTON_STR: &'static str = "Gamepad Right Thumbstick Button";
-    pub const DPAD_DIR_STR:           &'static str = "Gamepad D-Pad Direction";
-    pub const DPAD_UP_STR:            &'static str = "Gamepad D-Pad Up";
-    pub const DPAD_DOWN_STR:          &'static str = "Gamepad D-Pad Down";
-    pub const DPAD_LEFT_STR:          &'static str = "Gamepad D-Pad Left";
-    pub const DPAD_RIGHT_STR:         &'static str = "Gamepad D-Pad Right";
-    pub const FACE_BOTTOM_STR:        &'static str = "Gamepad Face Button Bottom";
-    pub const FACE_RIGHT_STR:         &'static str = "Gamepad Face Button Right";
-    pub const FACE_LEFT_STR:          &'static str = "Gamepad Face Button Left";
-    pub const FACE_UP_STR:            &'static str = "Gamepad Face Button Top";
-    pub const LEFT_SPECIAL_STR:       &'static str = "Gamepad Left Special";
-    pub const RIGHT_SPECIAL_STR:      &'static str = "Gamepad Right Special";
-    pub const LEFT_BUMPER_STR:        &'static str = "Gamepad Left Bumper";
-    pub const RIGHT_BUMPER_STR:       &'static str = "Gamepad Right Bumper";
-    pub const LEFT_TRIGGER_STR:       &'static str = "Gamepad Left Trigger";
-    pub const RIGHT_TRIGGER_STR:      &'static str = "Gamepad Right Trigger";
-    pub const GUIDE_STR:              &'static str = "Gamepad Guide button";
+    // Input
+    pub const LEFT_THUMB:           AxisId = AxisId::new("Gamepad Left Thumbstick 2D-Axis");
+    pub const LEFT_THUMB_X:         AxisId = AxisId::new("Gamepad Left Thumbstick X-Axis");
+    pub const LEFT_THUMB_Y:         AxisId = AxisId::new("Gamepad Left Thumbstick Y-Axis");
+    pub const LEFT_THUMB_BUTTON:    AxisId = AxisId::new("Gamepad Left Thumbstick Button");
+    pub const RIGHT_THUMB:          AxisId = AxisId::new("Gamepad Right Thumbstick 2D-Axis");
+    pub const RIGHT_THUMB_X:        AxisId = AxisId::new("Gamepad Right Thumbstick X-Axis");
+    pub const RIGHT_THUMB_Y:        AxisId = AxisId::new("Gamepad Right Thumbstick Y-Axis");
+    pub const RIGHT_THUMB_BUTTON:   AxisId = AxisId::new("Gamepad Right Thumbstick Button");
+    pub const DPAD_DIR:             AxisId = AxisId::new("Gamepad D-Pad Direction");
+    pub const DPAD_UP:              AxisId = AxisId::new("Gamepad D-Pad Up");
+    pub const DPAD_DOWN:            AxisId = AxisId::new("Gamepad D-Pad Down");
+    pub const DPAD_LEFT:            AxisId = AxisId::new("Gamepad D-Pad Left");
+    pub const DPAD_RIGHT:           AxisId = AxisId::new("Gamepad D-Pad Right");
+    pub const FACE_BOTTOM:          AxisId = AxisId::new("Gamepad Face Button Bottom");
+    pub const FACE_RIGHT:           AxisId = AxisId::new("Gamepad Face Button Right");
+    pub const FACE_LEFT:            AxisId = AxisId::new("Gamepad Face Button Left");
+    pub const FACE_TOP:             AxisId = AxisId::new("Gamepad Face Button Top");
+    pub const LEFT_MENU:            AxisId = AxisId::new("Gamepad Left Menu");
+    pub const RIGHT_MENU:           AxisId = AxisId::new("Gamepad Right Menu");
+    pub const LEFT_BUMPER:          AxisId = AxisId::new("Gamepad Left Bumper");
+    pub const RIGHT_BUMPER:         AxisId = AxisId::new("Gamepad Right Bumper");
+    pub const LEFT_TRIGGER:         AxisId = AxisId::new("Gamepad Left Trigger");
+    pub const LEFT_TRIGGER_BUTTON:  AxisId = AxisId::new("Gamepad Left Trigger Button");
+    pub const RIGHT_TRIGGER:        AxisId = AxisId::new("Gamepad Right Trigger");
+    pub const RIGHT_TRIGGER_BUTTON: AxisId = AxisId::new("Gamepad Right Trigger Button");
+    pub const GUIDE:                AxisId = AxisId::new("Gamepad Guide button");
 
-    pub const LEFT_THUMB:         InputAxisId = InputAxisId::new(Self::LEFT_THUMB_STR        );
-    pub const LEFT_THUMB_X:       InputAxisId = InputAxisId::new(Self::LEFT_THUMB_X_STR      );
-    pub const LEFT_THUMB_Y:       InputAxisId = InputAxisId::new(Self::LEFT_THUMB_Y_STR      );
-    pub const LEFT_THUMB_BUTTON:  InputAxisId = InputAxisId::new(Self::LEFT_THUMB_BUTTON_STR );
-    pub const RIGHT_THUMB:        InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_STR       );
-    pub const RIGHT_THUMB_X:      InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_X_STR     );
-    pub const RIGHT_THUMB_Y:      InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_Y_STR     );
-    pub const RIGHT_THUMB_BUTTON: InputAxisId = InputAxisId::new(Self::RIGHT_THUMB_BUTTON_STR);
-    pub const DPAD_DIR:           InputAxisId = InputAxisId::new(Self::DPAD_DIR_STR          );
-    pub const DPAD_UP:            InputAxisId = InputAxisId::new(Self::DPAD_UP_STR           );
-    pub const DPAD_DOWN:          InputAxisId = InputAxisId::new(Self::DPAD_DOWN_STR         );
-    pub const DPAD_LEFT:          InputAxisId = InputAxisId::new(Self::DPAD_LEFT_STR         );
-    pub const DPAD_RIGHT:         InputAxisId = InputAxisId::new(Self::DPAD_RIGHT_STR        );
-    pub const FACE_BOTTOM:        InputAxisId = InputAxisId::new(Self::FACE_BOTTOM_STR       );
-    pub const FACE_RIGHT:         InputAxisId = InputAxisId::new(Self::FACE_RIGHT_STR        );
-    pub const FACE_LEFT:          InputAxisId = InputAxisId::new(Self::FACE_LEFT_STR         );
-    pub const FACE_TOP:           InputAxisId = InputAxisId::new(Self::FACE_UP_STR           );
-    pub const LEFT_SPECIAL:       InputAxisId = InputAxisId::new(Self::LEFT_SPECIAL_STR      );
-    pub const RIGHT_SPECIAL:      InputAxisId = InputAxisId::new(Self::RIGHT_SPECIAL_STR     );
-    pub const LEFT_BUMPER:        InputAxisId = InputAxisId::new(Self::LEFT_BUMPER_STR       );
-    pub const RIGHT_BUMPER:       InputAxisId = InputAxisId::new(Self::RIGHT_BUMPER_STR      );
-    pub const LEFT_TRIGGER:       InputAxisId = InputAxisId::new(Self::LEFT_TRIGGER_STR      );
-    pub const RIGHT_TRIGGER:      InputAxisId = InputAxisId::new(Self::RIGHT_TRIGGER_STR     );
-    pub const GUIDE:              InputAxisId = InputAxisId::new(Self::GUIDE_STR     );
+    // Output
+    pub const OUT_PLAYER_INDICATOR: AxisId = AxisId::new("Gamepad Player Indicator");
 
     pub fn new(handle: NativeDeviceHandle) -> Result<Gamepad, NativeDeviceHandle> {
         Ok(Self {
@@ -381,36 +162,6 @@ impl Gamepad {
         }
     }
 
-    /// Check if a button is down
-    pub fn is_button_down(&self, button: GamepadButton) -> bool {
-        self.state.read().is_button_down(button)
-    }
-
-    /// Get the dpad direction
-    pub fn dpad(&self) -> DPadDirection {
-        self.state.read().dpad
-    }
-
-    /// Get the left stick axis
-    pub fn left_stick(&self) -> f32v2 {
-        self.state.read().left_stick
-    }
-
-    /// Get the right stick axis
-    pub fn right_stick(&self) -> f32v2 {
-        self.state.read().right_stick
-    }
-
-    /// Get the left trigger axis
-    pub fn left_trigger(&self) -> f32 {
-        self.state.read().left_trigger
-    }
-
-    /// Get the right trigger axis
-    pub fn right_trigger(&self) -> f32 {
-        self.state.read().right_trigger
-    }
-
     /// Emulate a button press or release
     pub fn set_button(&self, button: GamepadButton, time: f32, pressed: bool) {
         self.changes.lock().buttons.push(ButtonChange { button, time, pressed })
@@ -419,7 +170,7 @@ impl Gamepad {
     /// Emulate a dpad movement
     /// 
     /// When `time` has passed, the dpad will return to neutral
-    pub fn move_dpad(&self, dir: DPadDirection, time: f32) {
+    pub fn move_dpad(&self, dir: HatSwitch, time: f32) {
         self.changes.lock().dpad = (dir, time);
     }
 
@@ -427,12 +178,12 @@ impl Gamepad {
     /// 
     /// When `time` has passed, the joystick will return to center
     // TODO: Return to center with a curve?
-    pub fn move_stick(&self, right: bool, pos: f32v2, time: f32, curve: GamepadReleaseCurve) {
-        self.changes.lock().sticks[right as usize] = StickMove{ pos, time, curve };
+    pub fn move_stick(&self, right: bool, pos: f32v2, time: f32, curve: ReleaseCurve) {
+        self.changes.lock().sticks[right as usize] = AxisMove::new(pos, time, curve);
     }
 
-    pub fn move_trigger(&self, right: bool, val: f32, time: f32, curve: GamepadReleaseCurve) {
-        self.changes.lock().triggers[right as usize] = TriggerMove{ val, time, curve };
+    pub fn move_trigger(&self, right: bool, val: f32, time: f32, curve: ReleaseCurve) {
+        self.changes.lock().triggers[right as usize] = AxisMove::new(val, time, curve);
     }
 }
 
@@ -441,7 +192,7 @@ impl InputDevice for Gamepad {
         self.handle.as_ref().unwrap()
     }
 
-    fn tick(&mut self, dt: f32, notify_rebind: &mut dyn FnMut(InputAxisId)) {
+    fn tick(&mut self, dt: f32, rebinder: &mut Rebinder) {
         let mut state = self.state.write();
         let mut changes = self.changes.lock();
 
@@ -458,7 +209,7 @@ impl InputDevice for Gamepad {
 
             const BUTTON_OFFSET : usize = 13;
             if change.pressed {
-                notify_rebind(InputAxisId::new(self.get_axes()[BUTTON_OFFSET + button_idx].path));
+                rebinder.notify(self.get_axes()[BUTTON_OFFSET + button_idx].ids);
             }
 
             #[cfg(feature = "raw_input_logging")]
@@ -482,51 +233,32 @@ impl InputDevice for Gamepad {
             }
         }
         
-        let left_stick = changes.sticks[0].update(dt);
-        let right_stick = changes.sticks[1].update(dt);
-
-        #[cfg(feature = "raw_input_logging")]
-        {
-            if state.left_stick.dist_sq(left_stick) > 0.0001 {
-                log_verbose!(LOG_INPUT_CAT, "Left stick moved to ({}, {})", left_stick.x, left_stick.y);
+        for i in 0..state.sticks.len() {
+            let stick = changes.sticks[i].update(dt, f32v2::zero());
+            #[cfg(feature = "raw_input_logging")]
+            if state.sticks[i].dist_sq(stick) > 0.0001 {
+                log_verbose!(LOG_INPUT_CAT, "{} stick moved to ({}, {})", if i == 0 { "Left" } else { "Right" }, stick.x, stick.y);
             }
-            if state.right_stick.dist_sq(right_stick) > 0.0001 {
-                log_verbose!(LOG_INPUT_CAT, "Right stick moved to ({}, {})", left_stick.x, left_stick.y);
+            state.sticks[i] = stick;
+        }
+        
+        for i in 0..state.triggers.len() {
+            let trigger = changes.triggers[i].update(dt, 0.0);
+            if trigger > 0.5 {
+                rebinder.notify(TRIGGER_AXIS_MAPPING[i]);
             }
+
+            #[cfg(feature = "raw_input_logging")]
+            if f32::abs(state.triggers[i] * state.triggers[i] - trigger * trigger) > 0.0001 {
+                log_verbose!(LOG_INPUT_CAT, "{} trigger moved to {trigger}", if i == 0 { "Left" } else { "Right" });
+            }
+            state.triggers[i] = trigger;
         }
 
-        state.left_stick = left_stick;
-        state.right_stick = right_stick;
-        
-        
-        let left_trigger = changes.triggers[0].update(dt);
-        if left_trigger > 0.5 {
-            notify_rebind(Self::LEFT_TRIGGER);
-        }
-
-        #[cfg(feature = "raw_input_logging")]
-        if f32::abs(state.left_trigger * state.left_trigger - left_trigger * left_trigger) > 0.0001 {
-            log_verbose!(LOG_INPUT_CAT, "Left trigger moved to {left_trigger}");
-        }
-
-        state.left_trigger = left_trigger;
-
-        let right_trigger = changes.triggers[1].update(dt);
-        if right_trigger > 0.5 {
-            notify_rebind(Self::RIGHT_TRIGGER);
-        }
-
-        #[cfg(feature = "raw_input_logging")]
-        if f32::abs(state.right_trigger * state.right_trigger - right_trigger * right_trigger) > 0.0001 {
-            log_verbose!(LOG_INPUT_CAT, "Right trigger moved to {right_trigger}");
-        }
-
-        state.right_trigger = right_trigger;
-        
         // Return dpad back to neutral when it time runs out, otherwise just assign it and update the time
         let (dpad, dpad_time) = &mut changes.dpad;
         if *dpad_time == 0f32 {
-            state.dpad = DPadDirection::Neutral;
+            state.dpad = HatSwitch::Neutral;
         } else {
             #[cfg(feature = "raw_input_logging")]
             if state.dpad != *dpad {
@@ -537,16 +269,16 @@ impl InputDevice for Gamepad {
             *dpad_time = (*dpad_time - dt).max(0f32);
 
             if dpad.is_up_down() {
-                notify_rebind(Self::DPAD_UP);
+                rebinder.notify(&[Self::DPAD_UP]);
             }
             else if dpad.is_bottom_down() {
-                notify_rebind(Self::DPAD_DOWN);
+                rebinder.notify(&[Self::DPAD_DOWN]);
             }
             if dpad.is_left_down() {
-                notify_rebind(Self::DPAD_LEFT);
+                rebinder.notify(&[Self::DPAD_LEFT]);
             }
             else if dpad.is_right_down() {
-                notify_rebind(Self::DPAD_RIGHT);
+                rebinder.notify(&[Self::DPAD_RIGHT]);
             }
         }
     }
@@ -559,70 +291,104 @@ impl InputDevice for Gamepad {
         // Nothing to do here
     }
 
-    fn get_axis_value(&self, axis_path: &InputAxisId) -> Option<AxisValue> {
+    fn get_axis_value(&self, axis_path: &AxisId) -> Option<AxisValue> {
         match *axis_path {
-            Self::LEFT_THUMB         => Some(AxisValue::Axis2D(self.state.read().left_stick)),
-            Self::LEFT_THUMB_X       => Some(AxisValue::Axis(self.state.read().left_stick.x)),
-            Self::LEFT_THUMB_Y       => Some(AxisValue::Axis(self.state.read().left_stick.y)),
-            Self::RIGHT_THUMB        => Some(AxisValue::Axis2D(self.state.read().right_stick)),
-            Self::RIGHT_THUMB_X      => Some(AxisValue::Axis(self.state.read().right_stick.x)),
-            Self::RIGHT_THUMB_Y      => Some(AxisValue::Axis(self.state.read().right_stick.y)),
-            Self::DPAD_DIR           => Some(AxisValue::Axis2D(self.state.read().dpad.get_direction())),
-            Self::DPAD_UP            => Some(AxisValue::Digital(self.state.read().dpad.is_up_down())),
-            Self::DPAD_DOWN          => Some(AxisValue::Digital(self.state.read().dpad.is_bottom_down())),
-            Self::DPAD_LEFT          => Some(AxisValue::Digital(self.state.read().dpad.is_left_down())),
-            Self::DPAD_RIGHT         => Some(AxisValue::Digital(self.state.read().dpad.is_right_down())),
-            Self::FACE_BOTTOM        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceBottom as usize))),
-            Self::FACE_RIGHT         => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceRight as usize))),
-            Self::FACE_LEFT          => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceLeft as usize))),
-            Self::FACE_TOP           => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceTop as usize))),
-            Self::LEFT_BUMPER        => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftBumper as usize))),
-            Self::RIGHT_BUMPER       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightBumper as usize))),
-            Self::LEFT_SPECIAL       => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftMenu as usize))),
-            Self::RIGHT_SPECIAL      => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightMenu as usize))),
-            Self::LEFT_THUMB_BUTTON  => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftThumbstick as usize))),
-            Self::RIGHT_THUMB_BUTTON => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightThumbsstick as usize))),
-            Self::LEFT_TRIGGER       => Some(AxisValue::Axis(self.state.read().left_trigger)),
-            Self::RIGHT_TRIGGER      => Some(AxisValue::Axis(self.state.read().right_trigger)),
-            Self::GUIDE              => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::Guide as usize))),
+            Self::LEFT_THUMB           => Some(AxisValue::Axis2D(self.state.read().sticks[0])),
+            Self::LEFT_THUMB_X         => Some(AxisValue::Axis(self.state.read().sticks[0].x)),
+            Self::LEFT_THUMB_Y         => Some(AxisValue::Axis(self.state.read().sticks[0].y)),
+            Self::RIGHT_THUMB          => Some(AxisValue::Axis2D(self.state.read().sticks[1])),
+            Self::RIGHT_THUMB_X        => Some(AxisValue::Axis(self.state.read().sticks[1].x)),
+            Self::RIGHT_THUMB_Y        => Some(AxisValue::Axis(self.state.read().sticks[1].y)),
+            Self::DPAD_DIR             => Some(AxisValue::Axis2D(self.state.read().dpad.get_direction(true))),
+            Self::DPAD_UP              => Some(AxisValue::Digital(self.state.read().dpad.is_up_down())),
+            Self::DPAD_DOWN            => Some(AxisValue::Digital(self.state.read().dpad.is_bottom_down())),
+            Self::DPAD_LEFT            => Some(AxisValue::Digital(self.state.read().dpad.is_left_down())),
+            Self::DPAD_RIGHT           => Some(AxisValue::Digital(self.state.read().dpad.is_right_down())),
+            Self::FACE_BOTTOM          => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceBottom as usize))),
+            Self::FACE_RIGHT           => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceRight as usize))),
+            Self::FACE_LEFT            => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceLeft as usize))),
+            Self::FACE_TOP             => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::FaceTop as usize))),
+            Self::LEFT_BUMPER          => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftBumper as usize))),
+            Self::RIGHT_BUMPER         => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightBumper as usize))),
+            Self::LEFT_TRIGGER_BUTTON  => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftTrigger as usize))),
+            Self::RIGHT_TRIGGER_BUTTON => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightTrigger as usize))),
+            Self::LEFT_MENU            => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftMenu as usize))),
+            Self::RIGHT_MENU           => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightMenu as usize))),
+            Self::LEFT_THUMB_BUTTON    => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::LeftThumbstick as usize))),
+            Self::RIGHT_THUMB_BUTTON   => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::RightThumbsstick as usize))),
+            Self::LEFT_TRIGGER         => Some(AxisValue::Axis(self.state.read().triggers[0])),
+            Self::RIGHT_TRIGGER        => Some(AxisValue::Axis(self.state.read().triggers[0])),
+            Self::GUIDE                => Some(AxisValue::Digital(self.state.read().buttons.get(GamepadButton::Guide as usize))),
             _ => None
         }
     }
 
     fn get_axes(&self) -> &[InputAxisDefinition] {
+        const ONE_V2:  f32v2 = f32v2{ x: 1.0, y: 1.0 };
+        const MONE_V2: f32v2 = f32v2{ x: -1.0, y: -1.0 };
+
         &[
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_STR        , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_X_STR      , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_Y_STR      , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_STR       , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_X_STR     , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_Y_STR     , axis_type: AxisType::Axis   , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_DIR_STR          , axis_type: AxisType::Axis2D , can_rebind: false },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_UP_STR           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_DOWN_STR         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_LEFT_STR         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::DPAD_RIGHT_STR        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_BOTTOM_STR       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_RIGHT_STR        , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_LEFT_STR         , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::FACE_UP_STR           , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_SPECIAL_STR     , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_BUMPER_STR      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_SPECIAL_STR      , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_BUMPER_STR       , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_THUMB_BUTTON_STR , axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_THUMB_BUTTON_STR, axis_type: AxisType::Digital, can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::LEFT_TRIGGER_STR      , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::RIGHT_TRIGGER_STR     , axis_type: AxisType::Axis   , can_rebind: true },
-            InputAxisDefinition { dev_type: DeviceType::Gamepad(GamepadSubType::Generic), path: Self::GUIDE_STR             , axis_type: AxisType::Digital, can_rebind: true },
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_THUMB]        , axis: AxisDefinition::Axis2D(MONE_V2, ONE_V2), can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_THUMB_X]      , axis: AxisDefinition::Axis  (-1.0   , 1.0)   , can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_THUMB_Y]      , axis: AxisDefinition::Axis  (-1.0   , 1.0)   , can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_THUMB]       , axis: AxisDefinition::Axis2D(MONE_V2, ONE_V2), can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_THUMB_X]     , axis: AxisDefinition::Axis  (-1.0   , 1.0)   , can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_THUMB_Y]     , axis: AxisDefinition::Axis  (-1.0   , 1.0)   , can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::DPAD_DIR]          , axis: AxisDefinition::Axis2D(MONE_V2, ONE_V2), can_rebind: false},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::DPAD_UP]           , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::DPAD_DOWN]         , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::DPAD_LEFT]         , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::DPAD_RIGHT]        , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::FACE_BOTTOM]       , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::FACE_RIGHT]        , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::FACE_LEFT]         , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::FACE_TOP]          , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_MENU]        , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_BUMPER]      , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_MENU]         , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_BUMPER]       , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_THUMB_BUTTON] , axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_THUMB_BUTTON], axis: AxisDefinition::Digital                , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::LEFT_TRIGGER]      , axis: AxisDefinition::Axis  (0.0    , 1.0)   , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::RIGHT_TRIGGER]     , axis: AxisDefinition::Axis  (0.0    , 1.0)   , can_rebind: true},
+            InputAxisDefinition{ dev_type: DeviceType::Gamepad(GamepadFeatures::None), ids: &[Self::GUIDE]             , axis: AxisDefinition::Digital                , can_rebind: true},
         ]
     }
 
     fn get_device_type(&self) -> DeviceType {
-        DeviceType::Gamepad(GamepadSubType::Generic)
+        DeviceType::Gamepad(GamepadFeatures::None)
     }
     
     fn take_native_handle(&mut self) -> NativeDeviceHandle {
         core::mem::take(&mut self.handle).unwrap()
+    }
+
+    fn get_battery_info(&self) -> Option<crate::BatteryInfo> {
+        None
+    }
+
+    fn get_output_info<'a>(&'a self) -> &'a OutputInfo<'a> {
+        &OutputInfo {
+            rumble: RumbleSupport::None,
+            trigger_feedback: None,
+            led_support: &[],
+            output_axes: &[]
+        }
+    }
+
+    fn set_rumble(&self, _rumble: crate::RumbleState) {
+        // Nothing to do here, as we don't support output yes
+    }
+
+    fn set_trigger_feedback(&self, _right_trigger: bool, _trigger_feedback: crate::TriggerFeedback) {
+        // Nothing to do here, as we don't support output yes
+    }
+
+    fn set_led_state(&self, _index: u16, _state: crate::LedState) {
+        // Nothing to do here, as we don't support output yes
+    }
+
+    fn set_output_axis(&self, _axis: AxisId, _value: AxisValue) {
+        // Nothing to do here, as we don't support output yes
     }
 }
