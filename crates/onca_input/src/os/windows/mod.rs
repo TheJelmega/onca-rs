@@ -150,6 +150,7 @@ impl OSInput {
                     };
 
                     let iden = native_handle.native.get_hid_identifier();
+                    #[cfg(feature = "raw_input_logging")]
                     log_verbose!(LOG_EVENT_CAT, "Devices connected with id: {iden}");
 
                     if manager.can_create_device_for(*iden) {
