@@ -1,5 +1,7 @@
-use std::{ops::{Mul, MulAssign}, fmt::Display};
+use std::{ops::*, fmt::Display};
 use crate::{*, angle::Radians};
+
+generic_matrix!{doc = "3x3 matrix (row-major order)"; Mat3, 3, 3}
 
 impl<T: Real> Mat3<T> {
     /// Create a new matrix with the given values

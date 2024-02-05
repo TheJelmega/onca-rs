@@ -1,10 +1,5 @@
 use crate::*;
 
-use core::{
-    mem,
-    ops::*,
-};
-
 mod mat4;
 pub use mat4::*;
 
@@ -34,13 +29,14 @@ macro_rules! matrix_pre_multiplication {
         )*
     };
 }
+pub(crate) use matrix_pre_multiplication;
 
 macro_rules! generic_matrix {
     {$docs:meta; $name:ident, $m:literal, $n:literal} => {
         #[$docs]
         #[derive(Clone, Copy, PartialEq, Debug)]
         pub struct $name<T: Real> {
-            vals : [T; $m * $n]
+            pub(crate) vals: [T; $m * $n]
         }
 
         impl<T: Real> $name<T> {
@@ -55,14 +51,14 @@ macro_rules! generic_matrix {
             #[inline(always)]
             #[must_use]
             pub fn ref_from_array(vals: &[T; $m * $n]) -> &Self {
-                unsafe { mem::transmute(vals) }
+                unsafe { core::mem::transmute(vals) }
             }
 
             /// Interpret a mutable reference to an array as a mutable reference to a vector
             #[inline(always)]
             #[must_use]
             pub fn mut_from_array(vals: &mut [T; $m * $n]) -> &mut Self {
-                unsafe { mem::transmute(vals) }
+                unsafe { core::mem::transmute(vals) }
             }
 
             /// Get the content of the vector as an array
@@ -76,14 +72,14 @@ macro_rules! generic_matrix {
             #[inline(always)]
             #[must_use]
             pub fn as_array(&self) -> &[T; $m * $n] {
-                unsafe{ mem::transmute(self) }
+                unsafe{ core::mem::transmute(self) }
             }
 
             /// Interpret a mutable reference to an vector as a mutable reference to a array
             #[inline(always)]
             #[must_use]
             pub fn as_mut_array(&mut self) -> &mut [T; $m * $n] {
-                unsafe{ mem::transmute(self) }
+                unsafe{ core::mem::transmute(self) }
             }
         }
 
@@ -238,8 +234,4 @@ macro_rules! generic_matrix {
         matrix_pre_multiplication!{$name, $m, $n, f32, f64}
     };
 }
-
-generic_matrix!{doc = "4x4 matrix (row-major order)"; Mat4, 4, 4}
-generic_matrix!{doc = "3x3 matrix (row-major order)"; Mat3, 3, 3}
-generic_matrix!{doc = "2x2 matrix (row-major order)"; Mat2, 2, 2}
-generic_matrix!{doc = "4x3 matrix (row-major order), with an implicit (0, 0, 0, 1) column at the end"; Mat4x3, 4, 3}
+pub(crate) use generic_matrix;
