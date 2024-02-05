@@ -5,21 +5,15 @@ use core::{
     num::NonZeroU32,
     ptr::null_mut,
 };
-use onca_common::{
-    prelude::*,
-    time::Duration,
-};
+use onca_common::prelude::*;
 use onca_logging::{log_warning, log_error};
 use windows::{
     Win32::{
         Devices::HumanInterfaceDevice::*,
-        Foundation::{HANDLE, GetLastError, CloseHandle, BOOL, ERROR_IO_PENDING, WAIT_OBJECT_0, BOOLEAN},
+        Foundation::{HANDLE, GetLastError, CloseHandle, BOOLEAN},
         Storage::FileSystem::{CreateFileA, ReadFile, WriteFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
-        System::{
-            Threading::{CreateEventA, WaitForSingleObject}, IO::{OVERLAPPED, GetOverlappedResult, CancelIoEx},
-        },
     },
-    core::{HRESULT, PCSTR},
+    core::PCSTR,
 };
 
 use crate::*;
@@ -69,7 +63,7 @@ pub fn create_os_device(_handle: &DeviceHandle) -> Option<OSDevice> {
     Some(OSDevice)
 }
 
-pub fn destroy_os_device(os_dev: &mut OSDevice) {
+pub fn destroy_os_device(_os_dev: &mut OSDevice) {
 }
 
 pub fn get_preparse_data(handle: DeviceHandle) -> Option<PreparseData> {

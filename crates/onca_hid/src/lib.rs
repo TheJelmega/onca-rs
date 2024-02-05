@@ -3,13 +3,12 @@
 
 use core::{
 	num::NonZeroU32,
-	mem,
 	fmt,
 	ops::{self, RangeInclusive, RangeBounds},
 };
 use std::fmt::Write;
 
-use onca_common::{time::Duration, fmt::Indenter};
+use onca_common::fmt::Indenter;
 
 use onca_common::prelude::*;
 use onca_common_macros::{EnumDisplay, EnumCount, EnumFromIndex};
