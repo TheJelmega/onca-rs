@@ -79,11 +79,11 @@ impl WindowManagerData {
             let atom = RegisterClassExA(&wndclassex);
             if atom == 0 {
                 let err_code = GetLastError().map_or_else(|err| err.code().0, |_| 0);
-                log_error!(LOG_CAT, Self::register_wndclassex, "Failed to create WNDCLASSEX (err: {err_code:x})");
+                log_error!(LOG_CAT, "Failed to create WNDCLASSEX (err: {err_code:x})");
                 None
             } else {
                 self.wnd_classes.insert(search_key, (atom, 1));
-                log_debug!(LOG_CAT, Self::register_wndclassex, "Registered new WNDCLASSEX `{atom}`");
+                log_debug!(LOG_CAT, "Registered new WNDCLASSEX `{atom}`");
                 Some(atom)
             }
         }

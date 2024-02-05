@@ -25,7 +25,7 @@ pub struct VulkanRal {
 impl VulkanRal {
     pub fn new(alloc: AllocId, settings: ral::Settings) -> VkResult<Self> {
         let entry = unsafe { ash::Entry::load() }.map_err(|err| {
-            log_error!(LOG_CAT, VulkanRal::new, "Failed to load vulkan library: {err}");
+            log_error!(LOG_CAT, "Failed to load vulkan library: {err}");
             vk::Result::ERROR_INITIALIZATION_FAILED
         })?;
         let allocation_callbacks = AllocationCallbacks::new(alloc);
@@ -48,7 +48,7 @@ impl ral::Interface for VulkanRal {
         match get_physical_devices(&self.instance) {
             Ok(arr) => Ok(arr),
             Err(err) => {
-                log_error!(LOG_CAT, Self::get_physical_devices, "Failed to get physical devices: {err}");
+                log_error!(LOG_CAT, "Failed to get physical devices: {err}");
                 Err(err)
             },
         }

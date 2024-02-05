@@ -296,7 +296,6 @@ impl OSWindowHandle {
                 None => {
                     log_error!(
                         LOG_CAT,
-                        Self::begin_drag,
                         "Failed getting the mouse's position before dragging. ({})",
                         GetLastError().unwrap_err()
                     );
@@ -308,7 +307,6 @@ impl OSWindowHandle {
             if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
-                    Self::begin_drag,
                     "Failed to release mouse capture before starting to drag window. ({err})"
                 );
                 return false;
@@ -323,7 +321,6 @@ impl OSWindowHandle {
             if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
-                    Self::begin_drag,
                     "Failed to send message to start dragging the window. ({err})"
                 );
                 return false;
@@ -340,7 +337,6 @@ impl OSWindowHandle {
                 None => {
                     log_error!(
                         LOG_CAT,
-                        Self::begin_drag,
                         "Failed getting the mouse's position before sizing. (err: {})",
                         GetLastError().unwrap_err()
                     );
@@ -352,7 +348,6 @@ impl OSWindowHandle {
             if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
-                    Self::begin_drag,
                     "Failed to release mouse capture before starting to size window. ({err})"
                 );
                 return false;
@@ -378,7 +373,6 @@ impl OSWindowHandle {
             if let Err(err) = res {
                 log_error!(
                     LOG_CAT,
-                    Self::begin_drag,
                     "Failed to send message before sizing the window. ({err})"
                 );
                 return false;
@@ -414,7 +408,6 @@ impl OSWindowHandle {
         if let Err(err)= res {
             log_error!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "Failed to destroy an HWND ({err})"
             );
         }
@@ -461,13 +454,11 @@ impl OSWindowData {
             match res {
                 Ok(_) => log_debug!(
                     LOG_CAT,
-                    Self::create_and_register_drop_handler,
                     "Initialized drop handler for window {}",
                     window.id()
                 ),
                 Err(err) => log_error!(
                     LOG_CAT,
-                    Self::create_and_register_drop_handler,
                     "Failed to register drop handler for window {}. (HRESULT: {:X})",
                     window.id(),
                     err.code().0
@@ -584,7 +575,6 @@ unsafe extern "system" fn wnd_proc(
                         window.settings.flags.set(Flags::HasResized, false);
                         log_debug!(
                             LOG_MSG_CAT,
-                            wnd_proc,
                             "Window {} has been maximized with size {width}x{height}",
                             window.id
                         );
@@ -599,7 +589,6 @@ unsafe extern "system" fn wnd_proc(
                     if !is_size_move {
                         log_debug!(
                             LOG_MSG_CAT,
-                            wnd_proc,
                             "Window {} has been minimized with size {width}x{height}",
                             window.id
                         );
@@ -614,7 +603,6 @@ unsafe extern "system" fn wnd_proc(
                     if !is_size_move {
                         log_debug!(
                             LOG_MSG_CAT,
-                            wnd_proc,
                             "Window {} has been restored with size {width}x{height}",
                             window.id
                         );
@@ -629,7 +617,6 @@ unsafe extern "system" fn wnd_proc(
         WM_ENTERSIZEMOVE => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_ENTERSIZEMOVE for window {}",
                 window.id
             );
@@ -640,7 +627,6 @@ unsafe extern "system" fn wnd_proc(
         WM_EXITSIZEMOVE => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_EXITSIZEMOVE for window {}",
                 window.id
             );
@@ -687,7 +673,6 @@ unsafe extern "system" fn wnd_proc(
 
                 log_debug!(
                     LOG_MSG_CAT,
-                    wnd_proc,
                     "Window was moved to ({}, {})",
                     pos.x,
                     pos.y
@@ -707,7 +692,6 @@ unsafe extern "system" fn wnd_proc(
         WM_DPICHANGED => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_DPICHANGED for window {}",
                 window.id
             );
@@ -715,7 +699,6 @@ unsafe extern "system" fn wnd_proc(
                 let dpi = wparam.0 as u16;
                 log_debug!(
                     LOG_MSG_CAT,
-                    wnd_proc,
                     "Window {} has changed DPI to {dpi}",
                     window.id
                 );
@@ -736,7 +719,6 @@ unsafe extern "system" fn wnd_proc(
         WM_SHOWWINDOW => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_SHOWWINDOW for window {} with value {}",
                 window.id,
                 wparam.0
@@ -749,7 +731,6 @@ unsafe extern "system" fn wnd_proc(
         WM_ENABLE => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_ENABLE for window {} with value {}",
                 window.id,
                 wparam.0
@@ -769,7 +750,6 @@ unsafe extern "system" fn wnd_proc(
             let minimized = (wparam.0 >> 16) as u16 != 0;
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_ACTIVATE for window {} with value {active} and minimized={minimized}",
                 window.id
             );
@@ -781,7 +761,6 @@ unsafe extern "system" fn wnd_proc(
                 WA_INACTIVE => window.send_window_event(WindowEvent::Unfocused),
                 val => log_error!(
                     LOG_MSG_CAT,
-                    wnd_proc,
                     "Unexpected WA_* value supplied by WM_ACTIVATE: {val}"
                 ),
             }
@@ -790,7 +769,6 @@ unsafe extern "system" fn wnd_proc(
         WM_SETFOCUS => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_SETFOCUS for window {}",
                 window.id
             );
@@ -800,7 +778,6 @@ unsafe extern "system" fn wnd_proc(
         WM_KILLFOCUS => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_KILLFOCUS for window {}",
                 window.id
             );
@@ -811,14 +788,13 @@ unsafe extern "system" fn wnd_proc(
             let bpp = wparam.0 as u8;
             let width = lparam.0 as u16;
             let height = (lparam.0 >> 16) as u16;
-            log_debug!(LOG_MSG_CAT, wnd_proc, "received WM_DISPLAYCHANGE for window {} with size {width}x{height} and {bpp} bits per pixel", window.id);
+            log_debug!(LOG_MSG_CAT, "received WM_DISPLAYCHANGE for window {} with size {width}x{height} and {bpp} bits per pixel", window.id);
             window.send_window_event(WindowEvent::DisplayResolutionChanges(width, height, bpp));
             PROCESSED
         }
         WM_CLOSE => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_CLOSE for window {}",
                 window.id
             );
@@ -835,7 +811,6 @@ unsafe extern "system" fn wnd_proc(
         WM_NCDESTROY => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_NCDESTROY for window {}",
                 window.id
             );
@@ -845,7 +820,6 @@ unsafe extern "system" fn wnd_proc(
         WM_DROPFILES => {
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "received WM_DROPFILES for window {}",
                 window.id
             );
@@ -856,7 +830,6 @@ unsafe extern "system" fn wnd_proc(
             if !res {
                 log_debug!(
                     LOG_MSG_CAT,
-                    wnd_proc,
                     "Files dropped on window border for  window {}",
                     window.id
                 );
@@ -869,7 +842,6 @@ unsafe extern "system" fn wnd_proc(
             let num_files = DragQueryFileA(hdrop, 0xFFFF_FFFF, None);
             log_debug!(
                 LOG_MSG_CAT,
-                wnd_proc,
                 "Dropped {num_files} files in window {}",
                 window.id
             );
@@ -886,7 +858,6 @@ unsafe extern "system" fn wnd_proc(
                     let file = String::from_utf8_unchecked(buf);
                     log_debug!(
                         LOG_MSG_CAT,
-                        wnd_proc,
                         "Dropped file '{file}' at index {i} in window {}",
                         window.id
                     );
@@ -894,7 +865,6 @@ unsafe extern "system" fn wnd_proc(
                 } else {
                     log_error!(
                         LOG_MSG_CAT,
-                        wnd_proc,
                         "Failed to get path of file at index {i} for window {}",
                         window.id
                     );
@@ -906,7 +876,7 @@ unsafe extern "system" fn wnd_proc(
         },
         WM_MOUSEMOVE => {
             if !window.settings().is_mouse_in_window() {
-                log_debug!(LOG_MSG_CAT, wnd_proc, "mouse has entered window {}", window.id);
+                log_debug!(LOG_MSG_CAT, "mouse has entered window {}", window.id);
                 window.settings.flags.set(Flags::MouseInWindow, true);
 
                 let mut track_mouse_event = TRACKMOUSEEVENT::default();
@@ -916,7 +886,7 @@ unsafe extern "system" fn wnd_proc(
 
                 let res = TrackMouseEvent(&mut track_mouse_event);
                 if let Err(err) = res {
-                    log_error!(LOG_MSG_CAT, wnd_proc, "Failed to setup mouse leave event ({err})");
+                    log_error!(LOG_MSG_CAT, "Failed to setup mouse leave event ({err})");
                 }
 
                 window.send_window_event(WindowEvent::MouseEnter);
@@ -924,7 +894,7 @@ unsafe extern "system" fn wnd_proc(
             PROCESSED
         },
         WM_MOUSELEAVE => {
-            log_debug!(LOG_MSG_CAT, wnd_proc, "mouse has left window {}", window.id);
+            log_debug!(LOG_MSG_CAT, "mouse has left window {}", window.id);
             window.settings.flags.set(Flags::MouseInWindow, false);
             window.send_window_event(WindowEvent::MouseLeave);
             PROCESSED
@@ -1006,7 +976,6 @@ pub(crate) fn create(
         if hwnd == HWND(0) {
             log_error!(
                 LOG_CAT,
-                create,
                 "Failed to create a window (win32 err: {:X})",
                 GetLastError().map_or_else(|e| e.code().0, |_| 0)
             );
@@ -1032,7 +1001,7 @@ pub(crate) fn create(
                     SWP_NOMOVE | SWP_NOZORDER,
                 );
                 if let Err(err) = res {
-                    log_error!(LOG_CAT, create, "Failed to resize a window to have the correct DPI scaling (win32 err: {:X})", err.code().0);
+                    log_error!(LOG_CAT, "Failed to resize a window to have the correct DPI scaling (win32 err: {:X})", err.code().0);
                     window_ptr.settings.size = old_size.into();
                 }
             }
@@ -1045,7 +1014,6 @@ pub(crate) fn create(
         let PhysicalSize { width, height } = window_ptr.settings().size();
         log_debug!(
             LOG_CAT,
-            create,
             "Created new window '{title_str}' at ({}, {}) with size {width}x{height}",
             pos.x,
             pos.y

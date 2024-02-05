@@ -154,10 +154,7 @@ pub fn get_func_name<F>(_: F) -> &'static str {
 #[macro_export]
 macro_rules! log_location {
     () => {
-        $crate::LogLocation::new(file!(), line!(), "", onca_common::time::get_timestamp())
-    };
-    ($func: expr) => {
-        $crate::LogLocation::new(file!(), line!(), $crate::get_func_name($func), onca_common::time::get_timestamp())
+        $crate::LogLocation::new(file!(), line!(), onca_common::prelude::func_name!(), onca_common::time::get_timestamp())
     };
 }
 
@@ -333,31 +330,31 @@ impl Drop for Logger {
 
 #[macro_export]
 macro_rules! log {
-    ($category:expr, $level:expr, $func:expr, $text:expr) => {
-        $crate::get_logger().log_fmt($category, $level, $crate::log_location!($func), format_args!($text));
+    ($category:expr, $level:expr, $text:expr) => {
+        $crate::get_logger().log_fmt($category, $level, $crate::log_location!(), format_args!($text));
     };
-    ($category:expr, $level:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::get_logger().log_fmt($category, $level, $crate::log_location!($func), format_args!($format, $($arg),*));
+    ($category:expr, $level:expr, $format:expr, $($arg:expr),*) => {
+        $crate::get_logger().log_fmt($category, $level, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_severe {
-    ($category:expr, $func:expr, $text:expr) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($text));
+    ($category:expr, $text:expr) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!(), format_args!($text));
     };
-    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!($func), format_args!($format, $($arg),*));
+    ($category:expr, $format:expr, $($arg:expr),*) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Severe, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
 #[macro_export]
 macro_rules! log_error {
-    ($category:expr, $func:expr, $text:expr) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($text));
+    ($category:expr, $text:expr) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!(), format_args!($text));
     };
-    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!($func), format_args!($format, $($arg),*));
+    ($category:expr, $format:expr, $($arg:expr),*) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Error, $crate::log_location!(), format_args!($format, $($arg),*));
     };
 }
 
@@ -393,19 +390,11 @@ macro_rules! log_verbose {
 
 #[macro_export]
 macro_rules! log_debug {
-    ($category:expr, $func:expr, $text:expr) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($text));
+    ($category:expr, $text:expr) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!(), format_args!($text));
     };
-    ($category:expr, $func:expr, $format:expr, $($arg:expr),*) => {
-        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!($func), format_args!($format, $($arg),*));
+    ($category:expr, $format:expr, $($arg:expr),*) => {
+        $crate::get_logger().log_fmt($category, $crate::LogLevel::Debug, $crate::log_location!(), format_args!($format, $($arg),*));
     };
-}
-
-pub fn test() {
-    let category = LogCategory::new("cat");
-    let other = 1u32;
-
-    log_severe!(category, test, "Something happened");
-    log_severe!(category, test, "Something happened in {other}");
 }
 

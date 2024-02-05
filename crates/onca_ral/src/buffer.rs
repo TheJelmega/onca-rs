@@ -165,11 +165,11 @@ impl BufferHandle {
         {
             let mut validation = self.validation.lock();
             if !validation.is_mapped {
-                log_error!(LOG_CAT, &Self::unmap, "Trying to unmap memory that's not mapped");
+                log_error!(LOG_CAT, "Trying to unmap memory that's not mapped");
                 return;
             }
             if unsafe { memory.ptr() } != validation.mapped_ptr {
-                log_error!(LOG_CAT, &Self::unmap, "Trying to unmap memory from another buffer");
+                log_error!(LOG_CAT, "Trying to unmap memory from another buffer");
                 return;
             }
             

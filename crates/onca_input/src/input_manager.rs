@@ -105,7 +105,7 @@ impl DeviceStorage {
         if let Some(dev) = self.get_device_mut(handle) {
             dev.handle_hid_input(raw_report);
         } else {
-            log_error!(LOG_INPUT_CAT, DeviceStorage::handle_hid_input, "Failed to find device to process hid report")
+            log_error!(LOG_INPUT_CAT, "Failed to find device to process hid report")
         }
     }
 
@@ -113,7 +113,7 @@ impl DeviceStorage {
         if let Some(dev) = self.get_device_mut(handle) {
             dev.handle_native_input(native_data);
         } else {
-            log_error!(LOG_INPUT_CAT, DeviceStorage::handle_hid_input, "Failed to find device to process hid report")
+            log_error!(LOG_INPUT_CAT, "Failed to find device to process hid report")
         }
     }
 }
@@ -187,7 +187,7 @@ impl InputManager {
         let main_window = match window_manager.get_main_window() {
             Some(window) => window,
             None => {
-                log_error!(LOG_INPUT_CAT, Self::new, "Cannot create the window manager before the main window is created");
+                log_error!(LOG_INPUT_CAT, "Cannot create the window manager before the main window is created");
                 return Err(0);
             },
         };

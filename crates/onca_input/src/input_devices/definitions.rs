@@ -113,7 +113,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
     let item = match item {
         toml::Item::Table(item) => item,
         _ => {
-            log_error!(LOG_INPUT_CAT, parse_definition, "Expected a table to parse a device definition");
+            log_error!(LOG_INPUT_CAT, "Expected a table to parse a device definition");
             return None;
         }
     };
@@ -121,7 +121,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
     let kind = if let Some(kind_str) = item.get::<String>("kind") {
         let kind = DefinitionKind::from_single_str(&kind_str);
         if kind.is_none() {
-            log_error!(LOG_INPUT_CAT, parse_definition, "Unknown input device definition kind");
+            log_error!(LOG_INPUT_CAT, "Unknown input device definition kind");
                 return None;
         }
         kind
@@ -143,21 +143,21 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         }
         kind
     } else {
-        log_error!(LOG_INPUT_CAT, parse_definition, "An input device definition requires a kind to be specified");
+        log_error!(LOG_INPUT_CAT, "An input device definition requires a kind to be specified");
         return None;
     };
 
     let vid = if let Some(vid) = item.get::<i64>("vid") {
         vid
     } else {
-        log_error!(LOG_INPUT_CAT, parse_definition, "An input device definition requires a pid (product id) to be specified");
+        log_error!(LOG_INPUT_CAT, "An input device definition requires a pid (product id) to be specified");
         return None;
     };
 
     let pid = if let Some(pid) = item.get::<i64>("pid") {
         pid
     } else {
-        log_error!(LOG_INPUT_CAT, parse_definition, "An input device definition requires a pid (product id) to be specified");
+        log_error!(LOG_INPUT_CAT, "An input device definition requires a pid (product id) to be specified");
         return None;
     };
 
@@ -173,7 +173,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         for entry in button_table {
             match parse_usage(entry.1, "button") {
                 Ok(button) => _ = buttons.insert(entry.0.to_string(), button),
-                Err(err) => log_error!(LOG_INPUT_CAT, parse_definition, "Error processing device `{name}` (VID: {vid:X}, PID: {pid:X}): {err}"),
+                Err(err) => log_error!(LOG_INPUT_CAT, "Error processing device `{name}` (VID: {vid:X}, PID: {pid:X}): {err}"),
             }
         }
     }
@@ -183,7 +183,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         for entry in axis_table {
             match parse_axis(entry.1) {
                 Ok(axis) => _ = axes.insert(entry.0.to_string(), axis),
-                Err(err) => log_error!(LOG_INPUT_CAT, parse_definition, "{err}"),
+                Err(err) => log_error!(LOG_INPUT_CAT, "{err}"),
             }
         }
     }
@@ -192,7 +192,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         Some(table) => match parse_dpad(table) {
             Ok(dpad) => Some(dpad),
             Err(err) => {
-                log_error!(LOG_INPUT_CAT, parse_definition, "Error parsing device dpad `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
+                log_error!(LOG_INPUT_CAT, "Error parsing device dpad `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
                 None
             },
         },
@@ -203,7 +203,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         Some(table) => match parse_touch(table) {
             Ok(touch) => touch,
             Err(err) => {
-                log_error!(LOG_INPUT_CAT, parse_definition, "Error parsing device touch `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
+                log_error!(LOG_INPUT_CAT, "Error parsing device touch `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
                 Vec::new()
             },
         },
@@ -214,7 +214,7 @@ fn parse_definition(item: &toml::Item) -> Option<InputDeviceDefinition> {
         Some(table) => match parse_sensors(table) {
             Ok(sensors) => sensors,
             Err(err) => {
-                log_error!(LOG_INPUT_CAT, parse_definition, "Error parsing device sensors `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
+                log_error!(LOG_INPUT_CAT, "Error parsing device sensors `{name}` (VID: {vid:X}, PID: {pid:X}): {err}");
                 DefinitionSensors {
                     gyroscope: None,
                     accelerometer: None,

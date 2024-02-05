@@ -7,7 +7,7 @@ use std::{
 use onca_common::{
     prelude::*
 };
-use onca_logging::{get_logger, LogCategory, LogLevel, log_location};
+use onca_logging::{get_logger, log, log_location, LogCategory, LogLevel};
 use onca_ral::Settings;
 use ash::vk;
 
@@ -122,7 +122,7 @@ pub extern "system" fn debug_utils_messenger_callback(
         objects.push_str("]");
     }
 
-    get_logger().log_fmt(category, level, log_location!(debug_utils_messenger_callback), format_args!("debug_util: {message_id_name}({message_id}): {message} ({queues}{cmdbufs}{objects})"));
+    log!(category, level, "debug_util: {message_id_name}({message_id}): {message} ({queues}{cmdbufs}{objects})");
 
     vk::FALSE
 }

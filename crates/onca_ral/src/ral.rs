@@ -84,7 +84,7 @@ impl Settings {
         let toml = match Toml::parse(toml) {
             Ok(toml) => toml,
             Err(err) => {
-                log_error!(LOG_CAT, Self::load, "Failed to parse 'ral.toml', err: {err}");
+                log_error!(LOG_CAT, "Failed to parse 'ral.toml', err: {err}");
                 return None;
             }
         };
@@ -99,7 +99,7 @@ impl Settings {
                     ral_lib    => RalApi::Other(String::from(ral_lib))
                 };
             } else {
-                log_error!(LOG_CAT, Self::load, "No api specified");
+                log_error!(LOG_CAT, "No api specified");
                 return None;
             }
         }
@@ -240,7 +240,7 @@ impl Ral {
                 Some(func) => func(heap_ptr),
                 // If we don't have a destroy function, let the user know and don't deallocate the RAL
                 None => {
-                    log_error!(LOG_CAT, Self::drop_impl, "`destroy` ral does not exist for current RAL");
+                    log_error!(LOG_CAT, "`destroy` ral does not exist for current RAL");
                     _ = ManuallyDrop::new(heap_ptr)
                 },
             }

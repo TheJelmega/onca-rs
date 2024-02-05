@@ -50,7 +50,7 @@ impl Interface for Dx12Ral {
         match physical_device::get_physical_devices(&self.dxgi_factory) {
             Ok(arr) => Ok(arr),
             Err(err) => {
-                log_error!(LOG_CAT, &Self::get_physical_devices, "Failed to get physical devices, err: {}", err);
+                log_error!(LOG_CAT, "Failed to get physical devices, err: {}", err);
                 Err(ral::Error::Unknown)
             },
         }

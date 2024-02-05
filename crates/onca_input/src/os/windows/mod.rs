@@ -133,7 +133,7 @@ impl OSInput {
                         let raw_report = core::slice::from_raw_parts(rawinput.data.hid.bRawData.as_ptr(), rawinput.data.hid.dwSizeHid as usize);
                         manager.handle_hid_input(handle, raw_report);
                     },
-                    invalid => log_error!(LOG_EVENT_CAT, OSInput::process_window_event, "Received an invalid RAWINPUT type: {invalid}"),
+                    invalid => log_error!(LOG_EVENT_CAT, "Received an invalid RAWINPUT type: {invalid}"),
                 }
             },
             onca_window::RawInputEvent::DeviceChanged(raw_ptr) => {
@@ -144,7 +144,7 @@ impl OSInput {
                     let native_handle = match DeviceHandle::new(native_handle) {
                         Ok(handle) => handle,
                         Err(_) => {
-                            log_error!(LOG_EVENT_CAT, Self::process_window_event, "Failed to create native handle for device");
+                            log_error!(LOG_EVENT_CAT, "Failed to create native handle for device");
                             return;
                         },
                     };
@@ -190,7 +190,7 @@ impl OSInput {
         }
 
         if let Err(err) = unsafe { RegisterRawInputDevices(&raw_input_devices, mem::size_of::<RAWINPUTDEVICE>() as u32) } {
-            log_error!(LOG_INPUT_CAT, Self::new, "Failed to create a raw input device for the usages ({err}).");
+            log_error!(LOG_INPUT_CAT, "Failed to create a raw input device for the usages ({err}).");
             false
         } else {
             true

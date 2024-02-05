@@ -86,7 +86,7 @@ impl WindowManager {
         scoped_alloc!(self.alloc);
 
         if self.main_window.is_none() {
-            log_error!(LOG_CAT, Self::create_window, "Cannot create additional windows before the main window is created");
+            log_error!(LOG_CAT, "Cannot create additional windows before the main window is created");
             return None;
         }
 

@@ -59,3 +59,15 @@ macro_rules! count_exprs {
         0usize
     };
 }
+
+/// Get the name of the surrounding function
+#[macro_export]
+macro_rules! func_name {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            core::any::type_name::<T>()
+        }
+        type_name_of(f).strip_suffix("::f").unwrap()
+    }};
+}

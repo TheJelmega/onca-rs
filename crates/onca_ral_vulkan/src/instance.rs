@@ -83,7 +83,7 @@ impl Instance {
         if cfg!(windows) {
             extensions.push(String::from("VK_KHR_win32_surface"));
         } else {
-            log_error!(LOG_CAT, Self::new, "No platfrom specific surface extension is found");
+            log_error!(LOG_CAT, "No platfrom specific surface extension is found");
             return Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT);
         }
 

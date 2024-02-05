@@ -47,7 +47,7 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
     match handle {
         Ok(handle) => Some(DeviceHandle(handle.0 as usize)),
         Err(err) => {
-            log_error!(LOG_HID_CAT, open_device, "Failed to open the HID device `{}`. ({})", path, err);
+            log_error!(LOG_HID_CAT, "Failed to open the HID device `{}`. ({})", path, err);
             None
         },
     }
@@ -55,7 +55,7 @@ pub fn open_device(path: &str) -> Option<DeviceHandle> {
 
 pub fn close_handle(handle: DeviceHandle) {
     if let Err(err) = unsafe { CloseHandle(HANDLE(handle.0 as isize)) } {
-        log_error!(LOG_HID_CAT, close_handle, "Failed to close the HID device. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to close the HID device. ({err})");
     }
 }
 
@@ -75,7 +75,7 @@ pub fn get_preparse_data(handle: DeviceHandle) -> Option<PreparseData> {
        Some(PreparseData(PreparseDataInternal::Address(preparse_data.0 as usize))) 
     } else {
         if let Err(err) = unsafe { GetLastError() } {
-            log_error!(LOG_HID_CAT, get_preparse_data, "Failed to retrieve preparse data. (error: {err})");
+            log_error!(LOG_HID_CAT, "Failed to retrieve preparse data. (error: {err})");
         }
         None
     }
@@ -87,7 +87,7 @@ pub fn free_preparse_data(preparse_data: &mut PreparseData) {
         let res = unsafe { HidD_FreePreparsedData(PHIDP_PREPARSED_DATA(preparse_data as isize)) }.as_bool();
         if !res {
             if let Err(err) = unsafe { GetLastError() } {
-                log_error!(LOG_HID_CAT, get_preparse_data, "Failed to free preparse data. (error: {err})");
+                log_error!(LOG_HID_CAT, "Failed to free preparse data. (error: {err})");
             }
         }
     }
@@ -105,7 +105,7 @@ pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Opt
     let res = unsafe { HidD_GetAttributes(handle, &mut attribs) }.as_bool();
     if !res {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, get_identifier, "Failed to retieve hid attributes. ({err})");
+            log_error!(LOG_HID_CAT, "Failed to retieve hid attributes. ({err})");
         }
         return None;
     }
@@ -113,7 +113,7 @@ pub fn get_identifier(handle: DeviceHandle, preparse_data: &PreparseData) -> Opt
     let mut caps = HIDP_CAPS::default();
     let res = unsafe { HidP_GetCaps(PHIDP_PREPARSED_DATA(preparse_data.get_address() as isize), &mut caps) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to retrieve hid usage page and usage. ({err})");
             return None;
     }
 
@@ -209,7 +209,7 @@ pub fn set_num_input_buffers(handle: DeviceHandle, num_buffers: u32) {
     let res = unsafe { HidD_SetNumInputBuffers(handle, num_buffers) }.as_bool();
     if !res {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, set_num_input_buffers, "Failed to set number of hid input buffers ({err})");
+            log_error!(LOG_HID_CAT, "Failed to set number of hid input buffers ({err})");
         }
     }
 }
@@ -220,7 +220,7 @@ pub fn flush_input_queue(handle: DeviceHandle) {
     let res = unsafe { HidD_FlushQueue(handle) }.as_bool();
     if !res {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, flush_input_queue, "Failed to flush input queue. ({err})");
+            log_error!(LOG_HID_CAT, "Failed to flush input queue. ({err})");
         }
     }
 }
@@ -229,7 +229,7 @@ pub fn get_capabilities(preparse_data: &PreparseData) -> Option<Capabilities> {
     let mut caps = HIDP_CAPS::default();
     let res = unsafe { HidP_GetCaps(PHIDP_PREPARSED_DATA(preparse_data.get_address() as isize), &mut caps) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_identifier, "Failed to retrieve hid usage page and usage. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to retrieve hid usage page and usage. ({err})");
         return None;
     }
 
@@ -294,7 +294,7 @@ fn get_button_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_data: isi
 
     let res = unsafe { HidP_GetButtonCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, PHIDP_PREPARSED_DATA(preparse_data)) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_button_capabilities, "Failed to retrieve input button capabilities ({err})");
+        log_error!(LOG_HID_CAT, "Failed to retrieve input button capabilities ({err})");
         return None;
     }
 
@@ -385,7 +385,7 @@ unsafe fn get_value_capabilities_for(report_type: HIDP_REPORT_TYPE, preparse_dat
 
     let res = HidP_GetValueCaps(report_type, win_caps.as_mut_ptr(), &mut num_caps, PHIDP_PREPARSED_DATA(preparse_data)).ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_button_capabilities, "Failed to retrieve input button capabilities ({err})");
+        log_error!(LOG_HID_CAT, "Failed to retrieve input button capabilities ({err})");
         return None;
     }
 
@@ -454,7 +454,7 @@ pub fn get_top_level_collection<'a>(dev: &'a Device) -> Option<TopLevelCollectio
     match err {
         Ok(_) => (),
         Err(err) => { 
-            log_error!(LOG_HID_CAT, get_top_level_collection,"Failed to get collections. ({err})");
+            log_error!(LOG_HID_CAT,"Failed to get collections. ({err})");
             return None;
         },
     }
@@ -506,7 +506,7 @@ fn process_collection_nodes(win_nodes: &Vec<HIDP_LINK_COLLECTION_NODE>, nodes: &
                 }
             },
             None => {
-                log_error!(LOG_HID_CAT, process_collection_nodes, "Invalid collection type: '{kind_u8}'");
+                log_error!(LOG_HID_CAT, "Invalid collection type: '{kind_u8}'");
             },
         };
 
@@ -536,7 +536,7 @@ pub fn create_report_data(dev: &Device, report_type: ReportType, report_id: u8) 
         match res {
             Ok(_) => Some(blob),
             Err(err) => {
-                log_error!(LOG_HID_CAT, get_top_level_collection,"Failed to create report data. ({err})");
+                log_error!(LOG_HID_CAT,"Failed to create report data. ({err})");
                 None
             },
         }
@@ -558,13 +558,13 @@ pub fn read_input_report(dev: &mut Device) -> Result<Option<InputReport>, ()> {
     match unsafe { ReadFile(handle, Some(&mut read_buffer), Some(&mut bytes_read), None) } {
         Ok(_) => (),
         Err(err) => {
-            log_error!(LOG_HID_CAT, read_input_report, "Failed to read input report ({err})");
+            log_error!(LOG_HID_CAT, "Failed to read input report ({err})");
             return Err(());
         },
     };
 
     if bytes_read < report_len {
-        log_error!(LOG_HID_CAT, read_input_report, "Failed to read full input report ({bytes_read}/{report_len} bytes read)");
+        log_error!(LOG_HID_CAT, "Failed to read full input report ({bytes_read}/{report_len} bytes read)");
     }
 
     unsafe { read_buffer.set_len(bytes_read as usize) };
@@ -578,7 +578,7 @@ pub fn write_output_report<'a>(dev: &mut Device, report: OutputReport<'a>) -> Re
     let mut bytes_written = 0;
     let data = report.data.get_data();
     unsafe { WriteFile(handle, Some(data), Some(&mut bytes_written), None) }.map_err(|err| {
-        log_error!(LOG_HID_CAT, write_output_report, "Failed to write output report (err: {err})");
+        log_error!(LOG_HID_CAT, "Failed to write output report (err: {err})");
         report
     })
 }
@@ -592,7 +592,7 @@ pub fn get_feature_report(dev: &mut Device, report_id: u8) -> Option<FeatureRepo
         Some(FeatureReport { data: ReportData::Blob(report_blob), device: dev })
     } else {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to get feature report ({err})");
+            log_error!(LOG_HID_CAT, "Failed to get feature report ({err})");
         }
         None
     }
@@ -607,7 +607,7 @@ pub fn set_feature_report<'a>(dev: &mut Device, report: FeatureReport<'a>) -> Re
         Ok(())
     } else {
         if let Err(err) = unsafe { GetLastError() } { 
-            log_error!(LOG_HID_CAT, write_output_report, "Failed to set feature report ({err})");
+            log_error!(LOG_HID_CAT, "Failed to set feature report ({err})");
         }
         Err(report)
     }
@@ -628,7 +628,7 @@ pub fn get_buttons(dev: &Device, collection_id: u16, report_type: ReportType, re
     
     let res = unsafe { HidP_GetUsagesEx(report_type, collection_id, win_buttons.as_mut_ptr(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. (error: {:X})", err.code().0);
+        log_error!(LOG_HID_CAT, "Failed to extract buttons from report. (error: {:X})", err.code().0);
         return None;
     }
     unsafe { win_buttons.set_len(button_count as usize) };
@@ -655,7 +655,7 @@ pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16,
     
     let res = unsafe { HidP_GetUsages(report_type, page.as_u16(), collection_id, win_buttons.as_mut_ptr(), &mut button_count, PHIDP_PREPARSED_DATA(preparse_data), report_data) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_buttons, "Failed to extract buttons from report. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to extract buttons from report. ({err})");
         return None;
     }
     unsafe { win_buttons.set_len(button_count as usize) };
@@ -669,7 +669,7 @@ pub fn get_buttons_for_page(dev: &Device, page: UsagePageId, collection_id: u16,
 pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type: ReportType, report: &[u8]) -> Option<RawValue> {
     let (report_count, bit_size) = get_value_report_count_and_bitsize_for_usage(dev, usage, collection_id, report_type);
     if report_count == 0 {
-        log_error!(LOG_HID_CAT, get_raw_value, "Failed to find any valid report counts for the current collection id '{}'", collection_id);
+        log_error!(LOG_HID_CAT, "Failed to find any valid report counts for the current collection id '{}'", collection_id);
         return None;
     }
 
@@ -682,7 +682,7 @@ pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type
         match res {
             Ok(_) => Some(RawValue::Single(value, bit_size)),
             Err(err) => {
-                log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. ({err})");
+                log_error!(LOG_HID_CAT, "Failed to get the value for a specific usage. ({err})");
                 None
             },
         }
@@ -695,7 +695,7 @@ pub fn get_raw_value(dev: &Device, usage: Usage, collection_id: u16, report_type
         match res {
             Ok(_) => Some(RawValue::Array(values, bit_size)),
             Err(err) => {
-                log_error!(LOG_HID_CAT, get_raw_value, "Failed to get the value for a specific usage. ({err})");
+                log_error!(LOG_HID_CAT, "Failed to get the value for a specific usage. ({err})");
                 None
             },
         }
@@ -729,7 +729,7 @@ pub fn get_scaled_value(dev: &Device, usage: Usage, collection_id: u16, report_t
     match res {
         Ok(_) => Some(value),
         Err(err) => {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to get the scaled value for a specific usage. ({err})");
+            log_error!(LOG_HID_CAT, "Failed to get the scaled value for a specific usage. ({err})");
             None
         },
     }
@@ -769,7 +769,7 @@ pub fn get_data(dev: &Device, report_type: ReportType, report: &[u8]) -> Option<
             )
         },
         Err(err) => {
-            log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set the scaled value for a specific usage. ({err})");
+            log_error!(LOG_HID_CAT, "Failed to set the scaled value for a specific usage. ({err})");
             None
         },
     }
@@ -795,7 +795,7 @@ pub fn set_buttons(dev: &Device, page: UsagePageId, collection_id: u16, usages: 
     let mut len = usages.len() as u32;
     let res = unsafe { HidP_SetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set buttons in the report. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to set buttons in the report. ({err})");
     }
 }
 
@@ -806,7 +806,7 @@ pub fn unset_buttons(dev: &Device, page: UsagePageId, collection_id: u16, usages
     let mut len = usages.len() as u32;
     let res = unsafe { HidP_UnsetUsages(report_type, page.as_u16(), collection_id, usages.as_mut_ptr() as *mut u16, &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to unset buttons in the report. ({err})");
     }
 }
 
@@ -816,7 +816,7 @@ pub fn set_value(dev: &Device, usage: Usage, collection_id: u16, raw_value: u32,
 
     let res = unsafe { HidP_SetUsageValue(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_value, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to unset buttons in the report. ({err})");
     }
 }
 
@@ -826,7 +826,7 @@ pub fn set_values(dev: &Device, usage: Usage, collection_id: u16, raw_values: &[
 
     let res = unsafe { HidP_SetUsageValueArray(report_type, usage.page.as_u16(), collection_id, usage.usage.as_u16(), raw_values, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to unset buttons in the report. ({err})");
+        log_error!(LOG_HID_CAT, "Failed to unset buttons in the report. ({err})");
     }
 }
 
@@ -850,7 +850,7 @@ pub fn set_data(dev: &Device, data: &[Data], report_type: ReportType, report: &m
     let mut len = win_data.len() as u32;
     let res = unsafe { HidP_SetData(report_type, win_data.as_mut_ptr(), &mut len, PHIDP_PREPARSED_DATA(preparse_data), report) }.ok();
     if let Err(err) = res {
-        log_error!(LOG_HID_CAT, get_scaled_value, "Failed to set data in the report.({err})");
+        log_error!(LOG_HID_CAT, "Failed to set data in the report.({err})");
     }
 }
 

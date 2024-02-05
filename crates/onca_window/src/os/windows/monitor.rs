@@ -56,7 +56,7 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
     let dpi = match res {
         Ok(_) => dpi_x as u16,
         Err(err) => {
-            log_error!(LOG_CAT, get_monitor, "Failed to retrieve monitor DPI, setting DPI to default {} (HRESULT err: {})", WindowSettings::DEFAULT_DPI, err.code().0);
+            log_error!(LOG_CAT, "Failed to retrieve monitor DPI, setting DPI to default {} (HRESULT err: {})", WindowSettings::DEFAULT_DPI, err.code().0);
             WindowSettings::DEFAULT_DPI
         },
     };
@@ -126,7 +126,7 @@ unsafe fn get_monitor(hmonitor: HMONITOR, want_primary: bool) -> Option<Monitor>
             modes: monitor_modes,
         })
     } else {
-        log_error!(LOG_CAT, get_monitor, "Failed to retrieve monitor info");
+        log_error!(LOG_CAT, "Failed to retrieve monitor info");
         None
     }
 }
@@ -139,7 +139,7 @@ pub(crate) fn enumerate_monitors() -> Vec<Monitor> {
         let res = EnumDisplayMonitors(HDC(0), None, Some(monitor_enum_proc), lparam).as_bool();
         if !res {
             let err_code = GetLastError().map_or_else(|e| e.code().0, |_| 0);
-            log_error!(LOG_CAT, enumerate_monitors, "Failed to enumerate monitors (err: {err_code})");
+            log_error!(LOG_CAT, "Failed to enumerate monitors (err: {err_code})");
         }
 
         monitors

@@ -88,7 +88,7 @@ impl DropHandler {
         let window = &mut *this.window;
 
         let hdrop = Self::iter_files(data_obj, |path| {
-            log_debug!(LOG_CAT, Self::DragEnter, "Started hovering file '{}' over window {} at location({}, {})", &path, window.id(), pt.x, pt.y);
+            log_debug!(LOG_CAT, "Started hovering file '{}' over window {} at location({}, {})", &path, window.id(), pt.x, pt.y);
             window.send_window_event(WindowEvent::HoverFileStarted(pt.x as u16, pt.y as u16, &path));
         });
         this.valid = hdrop.is_some();
@@ -118,7 +118,7 @@ impl DropHandler {
     unsafe extern "system" fn DragLeave(this: &mut DropHandlerData) -> HRESULT {
         if this.valid {
             let window = &mut *this.window;
-            log_debug!(LOG_CAT, Self::DragLeave, "Stopped hovering files over window {}", window.id());
+            log_debug!(LOG_CAT, "Stopped hovering files over window {}", window.id());
             window.send_window_event(WindowEvent::HoverFileHoverEnded);
             this.valid = false;
         }
@@ -132,7 +132,7 @@ impl DropHandler {
         let window = &mut *this.window;
 
         let hdrop = Self::iter_files(data_obj, |path| {
-            log_debug!(LOG_CAT, Self::Drop, "Dropped file '{}' over window {} at location({}, {})", &path, window.id(), pt.x, pt.y);
+            log_debug!(LOG_CAT, "Dropped file '{}' over window {} at location({}, {})", &path, window.id(), pt.x, pt.y);
             window.send_window_event(WindowEvent::DroppedFile(pt.x as u16, pt.y as u16, &path));
         });
         if let Some(hdrop) = hdrop {
@@ -177,7 +177,7 @@ impl DropHandler {
                     log_warning!(LOG_CAT, "Object dropped was not a file");
                     None
                 } else {
-                    log_error!(LOG_CAT, Self::iter_files::<F>, "Unexpected error occured while processing dropped/hovered item.");
+                    log_error!(LOG_CAT, "Unexpected error occured while processing dropped/hovered item.");
                     None
                 }
             },
