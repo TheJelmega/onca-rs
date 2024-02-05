@@ -87,6 +87,13 @@ macro_rules! generic_vec {
             }
         }
 
+        
+        impl<T: Numeric> Default for $iden<T> {
+            fn default() -> Self {
+                Self::zero()
+            }
+        }
+
         //------------------------------------------------------------------------------------------------------------------------------
 
         impl<T: Numeric> Mul for $iden<T> {
