@@ -160,6 +160,11 @@ impl FormatComponents {
         let size = FORMAT_COMPONENTS_INFO[self as usize].min_mip_size;
         (size.0 as u16, size.1 as u16)
     }
+
+    /// Get the supported swizzle components for the format
+    pub fn swizzle_support(self) -> FormatSwizzle {
+        FORMAT_COMPONENTS_INFO[self as usize].swizzle
+    }
     
     /// Does the format support 1D textures
     pub fn supports_1d(self) -> bool {
@@ -310,7 +315,7 @@ struct FormatComponentsInfo {
 /// 
 /// #NOTE
 /// 
-/// There is currently no support yet for video specific formats
+/// There is currently no support yet for video specific formats 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, EnumCount, EnumFromIndex, EnumDisplay)]
 pub enum Format {
     // 32-bit component RGBA

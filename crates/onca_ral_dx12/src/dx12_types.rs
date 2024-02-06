@@ -1,4 +1,4 @@
-use windows::Win32::{Foundation::BOOL, Graphics::Direct3D12::D3D12_FEATURE};
+use windows::Win32::Foundation::BOOL;
 
 //--------------------------------------------------------------
 
@@ -62,5 +62,3 @@ impl ::core::default::Default for D3D12_FEATURE_DATA_D3D12_OPTIONS19 {
         unsafe { ::core::mem::zeroed() }
     }
 }
-
-pub const D3D12_FEATURE_D3D12_OPTIONS19 : D3D12_FEATURE = D3D12_FEATURE(48);

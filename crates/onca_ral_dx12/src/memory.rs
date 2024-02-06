@@ -3,40 +3,40 @@ use windows::Win32::Graphics::Direct3D12::*;
 
 use crate::{device::Device, utils::ToRalError};
 
+// TODO
+// pub struct GpuAllocator {
 
-pub struct GpuAllocator {
+// }
 
-}
-
-impl GpuAllocator {
-    pub fn new() -> Self {
-        Self { }
-    }
+// impl GpuAllocator {
+//     pub fn new() -> Self {
+//         Self { }
+//     }
 
 
-    pub fn get_mem_properties(mem_type: ral::MemoryType) -> D3D12_HEAP_PROPERTIES {
-        let dx_mem_type = match mem_type {
-            ral::MemoryType::Gpu => D3D12_HEAP_TYPE_DEFAULT,
-            ral::MemoryType::Upload => D3D12_HEAP_TYPE_UPLOAD,
-            ral::MemoryType::Readback => D3D12_HEAP_TYPE_READBACK,
-        };
+//     pub fn get_mem_properties(mem_type: ral::MemoryType) -> D3D12_HEAP_PROPERTIES {
+//         let dx_mem_type = match mem_type {
+//             ral::MemoryType::Gpu => D3D12_HEAP_TYPE_DEFAULT,
+//             ral::MemoryType::Upload => D3D12_HEAP_TYPE_UPLOAD,
+//             ral::MemoryType::Readback => D3D12_HEAP_TYPE_READBACK,
+//         };
 
-        D3D12_HEAP_PROPERTIES {
-            Type: dx_mem_type,
-            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-            MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        }
-    }
-}
+//         D3D12_HEAP_PROPERTIES {
+//             Type: dx_mem_type,
+//             CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+//             MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
+//             CreationNodeMask: 0,
+//             VisibleNodeMask: 0,
+//         }
+//     }
+// }
 
 pub struct MemoryHeap {
     pub heap: ID3D12Heap
 }
 
 impl MemoryHeap {
-    pub unsafe fn alloc(device: &Device, size: u64, alignment: u64, memory_type: ral::MemoryType, mem_info: &ral::MemoryInfo) -> ral::Result<ral::MemoryHeapInterfaceHandle> {
+    pub unsafe fn alloc(device: &Device, size: u64, alignment: u64, memory_type: ral::MemoryType, _mem_info: &ral::MemoryInfo) -> ral::Result<ral::MemoryHeapInterfaceHandle> {
         let desc = D3D12_HEAP_DESC {
             SizeInBytes: size,
             Properties: Self::get_mem_properties(memory_type),

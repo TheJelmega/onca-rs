@@ -42,7 +42,7 @@ pub struct Device {
 }
 
 impl Device {
-    pub const REQUIRED_EXTENSIONS : [&str; 16] = [
+    pub const REQUIRED_EXTENSIONS : [&'static str; 16] = [
         VK_EXT_CUSTOM_BORDER_COLOR,
         VK_EXT_CONSERVATIVE_RASTERIZATION,
         VK_EXT_DESCRIPTOR_BUFFER,

@@ -14,7 +14,10 @@ use crate::{PhysicalDevice, Result, Error, DeviceInterfaceHandle, CommandQueue, 
 
 const LOG_CAT : LogCategory = LogCategory::new("Graphics RAL");
 
+// Allow improper definitions as they should only be called from a rust-to-rust interface
+#[allow(improper_ctypes_definitions)]
 pub type FnRalCreate = extern "C" fn(&MemoryManager, &Logger, AllocId, Settings) -> Result<Box<dyn Interface>>;
+#[allow(improper_ctypes_definitions)]
 pub type FnRalDestroy = extern "C" fn(Box<dyn Interface>);
 
 /// Render Abstraction Layer type

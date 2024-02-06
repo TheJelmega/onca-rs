@@ -4,10 +4,8 @@ use std::{
     fmt::Write,
 };
 
-use onca_common::{
-    prelude::*
-};
-use onca_logging::{get_logger, log, log_location, LogCategory, LogLevel};
+use onca_common::prelude::*;
+use onca_logging::{log, LogCategory, LogLevel};
 use onca_ral::Settings;
 use ash::vk;
 

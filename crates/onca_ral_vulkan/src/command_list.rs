@@ -145,7 +145,27 @@ impl ral::CommandListInterface for CommandList {
                     .dst_access_mask(after.access.to_vulkan())
                     .build()
                 ),
-                ral::Barrier::Buffer { before, after } => todo!(),
+                ral::Barrier::Buffer { before, after, buffer, offset, size, queue_transfer_op } => {
+                    let buffer = buffer.interface().as_concrete_type::<Buffer>().buffer;
+                    
+                    let (src_queue, dst_queue) = match queue_transfer_op {
+                        ral::BarrierQueueTransferOp::None => (cur_queue_idx, cur_queue_idx),
+                        ral::BarrierQueueTransferOp::From(idx) => (*idx, cur_queue_idx),
+                        ral::BarrierQueueTransferOp::To(idx) => (cur_queue_idx, *idx),
+                    };
+
+                    buffer_barriers.push(vk::BufferMemoryBarrier2::builder()
+                        .src_stage_mask(before.sync_point.to_vulkan())
+                        .src_access_mask(before.access.to_vulkan())
+                        .src_queue_family_index(src_queue.get() as u32)
+                        .dst_stage_mask(after.sync_point.to_vulkan())
+                        .dst_access_mask(after.access.to_vulkan())
+                        .dst_queue_family_index(dst_queue.get() as u32)
+                        .buffer(buffer)
+                        .offset(*offset)
+                        .size(*size)
+                        .build());
+                },
                 ral::Barrier::Texture { before, after, texture, subresource_range, queue_transfer_op } => {
                     let image = texture.interface().as_concrete_type::<Texture>().image;
 
@@ -458,9 +478,28 @@ impl ral::CommandListInterface for CommandList {
     }
 
     unsafe fn set_compute_descriptor_table(&self, index: u32, descriptor: ral::GpuDescriptor, layout: &ral::PipelineLayoutHandle) {
-        todo!()
-    }
+        scoped_alloc!(AllocId::TlsTemp);
 
+        let pipeline_layout = layout.interface().as_concrete_type::<PipelineLayout>().layout;
+
+        let heap = ral::WeakHandle::upgrade(descriptor.heap()).unwrap();
+        let handle_size = heap.interface().as_concrete_type::<DescriptorHeap>().handle_size;
+
+        let buffer_index = if heap.heap_type() == ral::DescriptorHeapType::Resources { 0 } else { 1 };
+        let offset = descriptor.index() as u64 * handle_size as u64;
+
+        let buffer_indices = [buffer_index];
+        let offsets = [offset];
+
+        self.descriptor_buffer.cmd_set_descriptor_buffer_offsets(
+            self.buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline_layout,
+            index,
+            &buffer_indices,
+            &offsets
+        );
+    }
 
     //==============================================================================================================================
     unsafe fn bind_graphics_pipeline_layout(&self, _pipeline_layout: &ral::PipelineLayoutHandle) {
@@ -586,7 +625,7 @@ impl ral::CommandListInterface for CommandList {
             if let Some((load_op, store_op)) = &depth_stencil.stencil_load_store_op {
                 let (load_op, clear_value) = match load_op {
                     ral::AttachmentLoadOp::Load => (vk::AttachmentLoadOp::LOAD, vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue::default() }),
-                    ral::AttachmentLoadOp::Clear(stencil) => (vk::AttachmentLoadOp::LOAD, vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: *stencil } }),
+                    ral::AttachmentLoadOp::Clear(stencil) => (vk::AttachmentLoadOp::LOAD, vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: *stencil as u32 } }),
                     ral::AttachmentLoadOp::DontCare => (vk::AttachmentLoadOp::DONT_CARE, vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue::default() }),
                 };
 

@@ -2653,34 +2653,42 @@ pub enum BarrierQueueTransferOp {
     To(QueueIndex),
 }
 
-/// Resource barrier
+/// Resource barrier.
 pub enum Barrier {
-    /// Global memory barrier
+    /// Global memory barrier.
     Global {
-        /// Resource state before transition
+        /// Resource state before transition.
         before: ResourceState,
-        /// Resource state after transition
+        /// Resource state after transition.
         after:  ResourceState,
     },
-    /// Buffer memory barrier
+    /// Buffer memory barrier.
     Buffer {
-        /// Resource state before transition
+        /// Resource state before transition.
         before: ResourceState,
-        /// Resource state after transition
+        /// Resource state after transition.
         after:  ResourceState,
-    },
-    /// Texture memory barrier
-    Texture {
-        /// Resource state before transition
-        before:            ResourceState,
-        /// Resource state after transition
-        after:             ResourceState,
-        /// Texture
-        texture:           TextureHandle,
-        /// Texture subresource range, `None` means the full texture
-        subresource_range: Option<TextureSubresourceRange>,
-        /// Queue transfer operation
+        /// Buffer.
+        buffer: BufferHandle,
+        /// Offset into the buffer.
+        offset: u64,
+        /// Size of the range in the buffer.
+        size:   u64,
+        /// Queue transfer operation.
         queue_transfer_op: BarrierQueueTransferOp
+    },
+    /// Texture memory barrier.
+    Texture {
+        /// Resource state before transition.
+        before:            ResourceState,
+        /// Resource state after transition.
+        after:             ResourceState,
+        /// Texture.
+        texture:           TextureHandle,
+        /// Texture subresource range, `None` means the full texture.
+        subresource_range: Option<TextureSubresourceRange>,
+        /// Queue transfer operation.
+        queue_transfer_op: BarrierQueueTransferOp,
     },
 }
 
@@ -2742,7 +2750,7 @@ impl Barrier {
     pub fn is_redundant_barrier(&self) -> bool {
         match self {
             Barrier::Global { before, after } => before == after,
-            Barrier::Buffer { before, after } => before == after,
+            Barrier::Buffer { before, after, .. } => before == after,
             Barrier::Texture { before, after, .. } => before == after,
         }
     }
@@ -2911,7 +2919,7 @@ pub struct DepthStencilAttachmentDesc {
     /// Depth attachment load and store operation. If `None`, depth will be ignored.
     pub depth_load_store_op:   Option<(AttachmentLoadOp<f32>, AttachmentStoreOp)>,
     /// Depth attachment load and store operation. If `None`, stencil will be ignored
-    pub stencil_load_store_op: Option<(AttachmentLoadOp<u32>, AttachmentStoreOp)>,
+    pub stencil_load_store_op: Option<(AttachmentLoadOp<u8>, AttachmentStoreOp)>,
 }
 
 impl DepthStencilAttachmentDesc {

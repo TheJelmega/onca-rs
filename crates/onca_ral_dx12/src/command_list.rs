@@ -1,6 +1,7 @@
-use core::mem::{ManuallyDrop, MaybeUninit};
+use core::mem::ManuallyDrop;
+use std::ptr;
 
-use onca_common::{prelude::*, sync::RwLock};
+use onca_common::prelude::*;
 use onca_ral as ral;
 use ral::{CommandListInterfaceHandle, CommandListType, HandleImpl};
 use windows::{Win32::Graphics::Direct3D12::*, core::ComInterface};
@@ -48,7 +49,6 @@ impl ral::CommandPoolInterface for CommandPool {
             list,
             alloc: self.alloc.clone(),
             list_type,
-            dynamic: RwLock::new(CommandListDynamic::new())
         }))
     }
 
@@ -57,25 +57,10 @@ impl ral::CommandPoolInterface for CommandPool {
     }   
 }
 
-pub struct CommandListDynamic {
-    rendering_rt_subresources:  [Vec<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>; 8],
-    rendering_dsv_subresources: Vec<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>,
-}
-
-impl CommandListDynamic {
-    pub fn new() -> Self {
-        Self {
-            rendering_rt_subresources:  [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-            rendering_dsv_subresources: Vec::new(),
-        }
-    }
-}
-
 pub struct CommandList {
     pub list:      ID3D12GraphicsCommandList9,
     pub alloc:     ID3D12CommandAllocator,
     pub list_type: ral::CommandListType,
-    pub dynamic:   RwLock<CommandListDynamic>,
 }
 
 impl ral::CommandListInterface for CommandList {
@@ -115,10 +100,23 @@ impl ral::CommandListInterface for CommandList {
                     AccessBefore: before.access.to_dx(),
                     AccessAfter: after.access.to_dx(),
                 }),
-                ral::Barrier::Buffer { before, after } => todo!(),
+                ral::Barrier::Buffer { before, after, buffer, offset, size, .. } => {
+                    let resource = &buffer.interface().as_concrete_type::<Buffer>().resource.cast().unwrap();
+                    // Since this will not be dropped, make sure we get a copy without incrementing the reference count
+                    let non_drop_resource = ManuallyDrop::new(Some(unsafe { ptr::read(resource as *const ID3D12Resource) }));
+
+                    buffer_barriers.push(D3D12_BUFFER_BARRIER {
+                        SyncBefore: sync_point_to_dx(before.sync_point, before.access),
+                        SyncAfter: sync_point_to_dx(after.sync_point, after.access),
+                        AccessBefore: before.access.to_dx(),
+                        AccessAfter: after.access.to_dx(),
+                        pResource: non_drop_resource,
+                        Offset: *offset,
+                        Size: *size,
+                    })
+                },
                 ral::Barrier::Texture { before, after, texture, subresource_range, .. } => {
-                    let resource = &texture.interface().as_concrete_type::<Texture>().resource.cast().unwrap();
-                    
+                    let resource = &texture.interface().as_concrete_type::<Texture>().resource.cast().unwrap();   
                     // Since this will not be dropped, make sure we get a copy without incrementing the reference count
                     let non_drop_resource = ManuallyDrop::new(Some(unsafe { core::ptr::read(resource as *const ID3D12Resource) }));
 
@@ -213,8 +211,8 @@ impl ral::CommandListInterface for CommandList {
 
         for region in regions {
             let (src_mip, src_layer) = match region.src_view.subresource {
-                ral::TextureSubresourceIndex::Texture { aspect, mip_level } => (mip_level as u32, 0),
-                ral::TextureSubresourceIndex::Array { aspect, mip_level, layer } => (mip_level as u32, layer as u32),
+                ral::TextureSubresourceIndex::Texture { aspect: _, mip_level } => (mip_level as u32, 0),
+                ral::TextureSubresourceIndex::Array { aspect: _, mip_level, layer } => (mip_level as u32, layer as u32),
             };
 
             let src_subresource_idx = calculate_subresource(src_mip, src_layer, 0, src_mips as u32, src_layers as u32);
@@ -228,8 +226,8 @@ impl ral::CommandListInterface for CommandList {
             };
 
             let (dst_mip, dst_layer) = match region.dst_view.subresource {
-                ral::TextureSubresourceIndex::Texture { aspect, mip_level } => (mip_level as u32, 0),
-                ral::TextureSubresourceIndex::Array { aspect, mip_level, layer } => (mip_level as u32, layer as u32),
+                ral::TextureSubresourceIndex::Texture { aspect: _, mip_level } => (mip_level as u32, 0),
+                ral::TextureSubresourceIndex::Array { aspect: _, mip_level, layer } => (mip_level as u32, layer as u32),
             };
 
             let dst_subresource_idx = calculate_subresource(dst_mip, dst_layer, 0, dst_mips as u32, dst_layers as u32);
@@ -417,10 +415,8 @@ impl ral::CommandListInterface for CommandList {
     unsafe fn begin_rendering(&self, rendering_info: &ral::RenderingInfo) {
         scoped_alloc!(AllocId::TlsTemp);
 
-        let dynamic = self.dynamic.write();
-
         let mut dx_rts = Vec::with_capacity(rendering_info.render_targets.len());
-        for (idx, rt) in rendering_info.render_targets.iter().enumerate() {
+        for rt in rendering_info.render_targets {
             let dx_rt = rt.rtv.interface().as_concrete_type::<RenderTargetView>();
             let begin_access = load_op_to_dx(rt.load_op, rt.rtv.desc().format);
 
@@ -444,20 +440,124 @@ impl ral::CommandListInterface for CommandList {
 
         let opt_dx_rts = if rendering_info.render_targets.is_empty() { None } else { Some(dx_rts.as_slice()) };
 
-        let depth_stencil = match &rendering_info.depth_stencil {
-            Some(depth_stencil) => {
-                Some(D3D12_RENDER_PASS_DEPTH_STENCIL_DESC {
-                    cpuDescriptor: todo!(),
-                    DepthBeginningAccess: todo!(),
-                    StencilBeginningAccess: todo!(),
-                    DepthEndingAccess: todo!(),
-                    StencilEndingAccess: todo!(),
-                })
-            },
-            None => None,
-        };
+        // TODO
+        // let depth_stencil = match &rendering_info.depth_stencil {
+        //     Some(depth_stencil) => {
+        //         let (begin_depth, end_depth) = if let Some((begin, end)) = depth_stencil.depth_load_store_op {
+        //             let begin = match begin {
+        //                 ral::AttachmentLoadOp::Load => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     // NOTE: there are PRESERVE_LOCAL versions in newer versions, that could be used to emulate sub-passes
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //                 },
+        //                 ral::AttachmentLoadOp::Clear(val) => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0 {
+        //                         Clear: D3D12_RENDER_PASS_BEGINNING_ACCESS_CLEAR_PARAMETERS {
+        //                             ClearValue: D3D12_CLEAR_VALUE {
+        //                                 Format: todo!(),
+        //                                 Anonymous: D3D12_CLEAR_VALUE_0 {
+        //                                     DepthStencil: D3D12_DEPTH_STENCIL_VALUE {
+        //                                         Depth: val,
+        //                                         Stencil: 0,
+        //                                     }
+        //                                 },
+        //                             },
+        //                         }
+        //                     },
+        //                 },
+        //                 ral::AttachmentLoadOp::DontCare => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //                 },
+        //             };
+        //             let end = match end {
+        //                 ral::AttachmentStoreOp::Store => D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //                 },
+        //                 ral::AttachmentStoreOp::DontCare => D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //                 },
+        //             };
 
-        let depth_stencil_ptr = depth_stencil.as_ref().map_or(None, |depth_stencil| Some(depth_stencil as *const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC));
+        //             (begin, end)
+        //         } else {
+        //             (D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                 Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS,
+        //                 Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //             },
+        //             D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                 Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS,
+        //                 Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //             })
+        //         };
+
+        //         let (begin_stencil, end_stencil) = if let Some((begin, end)) = depth_stencil.stencil_load_store_op {
+        //             let begin = match begin {
+        //                 ral::AttachmentLoadOp::Load => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     // NOTE: there are PRESERVE_LOCAL versions in newer versions, that could be used to emulate sub-passes
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //                 },
+        //                 ral::AttachmentLoadOp::Clear(val) => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0 {
+        //                         Clear: D3D12_RENDER_PASS_BEGINNING_ACCESS_CLEAR_PARAMETERS {
+        //                             ClearValue: D3D12_CLEAR_VALUE {
+        //                                 Format: todo!(),
+        //                                 Anonymous: D3D12_CLEAR_VALUE_0 {
+        //                                     DepthStencil: D3D12_DEPTH_STENCIL_VALUE {
+        //                                         Depth: 0.0,
+        //                                         Stencil: val,
+        //                                     }
+        //                                 },
+        //                             },
+        //                         }
+        //                     },
+        //                 },
+        //                 ral::AttachmentLoadOp::DontCare => D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD,
+        //                     Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //                 },
+        //             };
+        //             let end = match end {
+        //                 ral::AttachmentStoreOp::Store => D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //                 },
+        //                 ral::AttachmentStoreOp::DontCare => D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                     Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE,
+        //                     Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //                 },
+        //             };
+
+        //             (begin, end)
+        //         } else {
+        //             (D3D12_RENDER_PASS_BEGINNING_ACCESS {
+        //                 Type: D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS,
+        //                 Anonymous: D3D12_RENDER_PASS_BEGINNING_ACCESS_0::default(),
+        //             },
+        //             D3D12_RENDER_PASS_ENDING_ACCESS {
+        //                 Type: D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS,
+        //                 Anonymous: D3D12_RENDER_PASS_ENDING_ACCESS_0::default(),
+        //             })
+        //         };
+
+        //         Some(D3D12_RENDER_PASS_DEPTH_STENCIL_DESC {
+        //             cpuDescriptor: todo!(),
+        //             DepthBeginningAccess: begin_depth,
+        //             StencilBeginningAccess: begin_stencil,
+        //             DepthEndingAccess: end_depth,
+        //             StencilEndingAccess: end_stencil,
+        //         })
+        //     },
+        //     None => None,
+        // };
+
+        // let depth_stencil_ptr = depth_stencil.as_ref().map_or(None, |depth_stencil| Some(depth_stencil as *const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC));
+        let depth_stencil_ptr = None;
 
         let mut flags = D3D12_RENDER_PASS_FLAG_NONE;
         if rendering_info.flags.contains(ral::RenderingInfoFlags::BeginResumed) {
@@ -475,13 +575,6 @@ impl ral::CommandListInterface for CommandList {
 
     unsafe fn end_rendering(&self) {
         self.list.EndRenderPass();
-
-        // Clear sub-resource buffers
-        let mut dynamic = self.dynamic.write();
-        for sub_resources in &mut dynamic.rendering_rt_subresources {
-            sub_resources.clear();
-        }
-        dynamic.rendering_dsv_subresources.clear();
     }
 
     unsafe fn set_viewports(&self, viewports: &[ral::Viewport]) {
@@ -523,7 +616,6 @@ impl ral::CommandListInterface for CommandList {
 
     
 }
-
 
 pub fn load_op_to_dx(load_op: ral::AttachmentLoadOp<ral::ClearColor>, format: ral::Format) -> D3D12_RENDER_PASS_BEGINNING_ACCESS {
     match load_op {
