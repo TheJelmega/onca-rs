@@ -9,7 +9,9 @@ use static_assertions as sa;
 use onca_common::{prelude::*, sync::{Mutex, RwLock}, collections::BitSet};
 use onca_common_macros::{flags, EnumCount, EnumFromIndex};
 use onca_hid as hid;
-use onca_logging::{log_verbose, log_warning};
+use onca_logging::log_warning;
+#[cfg(feature = "raw_input_logging")]
+use onca_logging::log_verbose;
 use onca_math::{f32v2, f32v3, MathConsts, Zero};
 use crate::*;
 
@@ -600,7 +602,7 @@ impl DualsenseChangeState {
 #[derive(Clone, Copy, Debug, Default)]
 struct TouchState {
     pos: f32v2,
-    id:  u8,
+    _id:  u8,
 }
 
 pub struct DualsenseInputState {
@@ -764,7 +766,7 @@ impl DualSense {
     }
 
     pub fn move_touch(&self, is_touch_2: bool, pos: f32v2, id: u8) {
-        self.changes.lock().touch[is_touch_2 as usize] = Some(TouchState { pos, id });
+        self.changes.lock().touch[is_touch_2 as usize] = Some(TouchState { pos, _id: id });
     }
 
     pub fn set_angular_velocity(&self, vel: f32v3) {
