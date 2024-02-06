@@ -448,8 +448,8 @@ impl Window {
     }
 
     /// Unregister a window close callback
-    pub fn unregister_close_listener<'a>(&mut self, listener: &EventListenerRef<WindowEventListener>) {
-        self.listeners.lock().remove(listener);
+    pub fn unregister_window_listener<'a>(&mut self, listener: EventListenerRef<WindowEventListener>) {
+        self.listeners.lock().remove(&listener);
     }
 
     /// Register a window close callback.
