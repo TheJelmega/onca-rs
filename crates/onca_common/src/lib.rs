@@ -42,6 +42,7 @@ pub mod dynlib;
 pub mod guid;
 pub mod utils;
 pub mod hashing;
+pub mod index_handle;
 
 pub mod event_listener;
 

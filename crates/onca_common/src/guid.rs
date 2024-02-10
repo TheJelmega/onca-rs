@@ -92,7 +92,7 @@ impl From<Guid> for Rfc4122Guid {
 /// ```
 /// [00, 11, 22, 33, 44, 55, 66, 77, 88, 99, aa, bb, cc, dd, ee, ff]
 /// ```
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default, Debug)]
 pub struct Guid([u8; 16]);
 
 impl Guid {
@@ -202,6 +202,28 @@ impl Guid {
         Self(raw)
     }
     
+    /// Get the [`Guid`] as a [`u128`].
+    pub fn as_u128(self) -> u128 {
+        u128::from_be_bytes(self.0)
+    }
+
+    /// Get the [`Guid`] as a pair of low and high [`u64`]'s.
+    pub fn as_high_low(self) -> (u64, u64) {
+        let (high, low): (u64, u64) = unsafe { mem::transmute(self.0) };
+        (high.to_be(), low.to_be())
+    }
+
+    /// Get the [`Guid`] as its `8-4-4-4-12` representation.
+    pub fn as_8_4_4_4_12(self) -> (u32, u16, u16, u16, u64) {
+        let (high, low) = self.as_high_low();
+        let v0 = (high >> 32) as u32;
+        let v1 = (high >> 16) as u16;
+        let v2 = high as u16;
+        let v3 = (low >> 48) as u16;
+        let v4 = low & 0x0000_FFFF_FFFF_FFFF;
+        (v0, v1, v2, v3, v4)
+    }
+
     /// Get the variant from the [`Guid`].
     pub fn get_variant(&self) -> GuidVariant {
         let variant = self.0[8] >> 5;
@@ -231,32 +253,61 @@ impl Guid {
         }
     }
 
-    /// Get the [`Guid`] as a [`u128`].
-    pub fn as_u128(self) -> u128 {
-        u128::from_be_bytes(self.0)
+    /// Check if the [`Guid`] is valid, i.e. not {00000000-0000-0000-0000-000000000000}.
+    pub fn is_valid(&self) -> bool {
+        *self != Self::default()
     }
 
-    /// Get the [`Guid`] as a pair of low and high [`u64`]'s.
-    pub fn as_high_low(self) -> (u64, u64) {
-        let (high, low): (u64, u64) = unsafe { mem::transmute(self.0) };
-        (high.to_be(), low.to_be())
+    /// Parse a string into a Guid
+    /// 
+    /// Supported formats:
+    /// - "00000000000000000000000000000000" <- 32 hexadecimal digits
+    /// - "00000000-0000-0000-0000-000000000000" <- 32 hexadecimal digits separated by hyphens
+    /// - "{00000000-0000-0000-0000-000000000000}" <- 32 hexadecimal digits separated by hyphens, enclosed by braces
+    /// - "(00000000-0000-0000-0000-000000000000)" <- 32 hexadecimal digits separated by hyphens, enclosed by parentheses
+    pub fn parse(s: &str) -> Option<Self> {
+        if s.starts_with('(') {
+            let parens: &[_] = &['(', ')'];
+            let s = s.trim_matches(parens);
+            Self::parse_dashed(s)
+        } else if s.starts_with('{') {
+            let parens: &[_] = &['{', '}'];
+            let s = s.trim_matches(parens);
+            Self::parse_dashed(s)
+        } else if s.contains('-') {
+            Self::parse_dashed(s)
+        } else if s.len() == 32 {
+            u128::from_str_radix(s, 16).map_or(None, |val| Some(Guid::new_u128(val)))
+        } else {
+            None
+        }
     }
 
-    /// Get the [`Guid`] as its `8-4-4-4-12` representation.
-    pub fn as_8_4_4_4_12(self) -> (u32, u16, u16, u16, u64) {
-        let (high, low) = self.as_high_low();
-        let v0 = (high >> 32) as u32;
-        let v1 = (high >> 16) as u16;
-        let v2 = high as u16;
-        let v3 = (low >> 48) as u16;
-        let v4 = low & 0x0000_FFFF_FFFF_FFFF;
-        (v0, v1, v2, v3, v4)
+    fn parse_dashed(s: &str) -> Option<Self> {
+        let mut bytes = [0; 16];
+        for (idx, nibble) in s.bytes().filter(|val| *val != b'-').enumerate() {
+            let byte_idx = idx / 2;
+            let upper = idx & 0x1 == 0;
+
+            let nibble = if nibble >= b'0' && nibble <= b'9' {
+                nibble as u8 - b'0'
+            } else if nibble >= b'A' && nibble <= b'F' {
+                10 + nibble as u8 - b'A'
+            } else if nibble >= b'a' && nibble <= b'f' {
+                10 + nibble as u8 - b'a'
+            } else {
+                return None;
+            };
+            bytes[byte_idx] |= nibble << (upper as usize * 4);
+        }
+        /// SAFETY: Guid is parsed as expected
+        Some(unsafe { Self::from_raw(bytes) })
     }
 }
 
 impl fmt::Display for Guid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:02X}{:02x}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+        write!(f, "{{{:02X}{:02x}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}",
             self.0[0], self.0[1], self.0[2], self.0[3],
             self.0[4], self.0[5],
             self.0[6], self.0[7],   
@@ -278,6 +329,12 @@ impl From<Rfc4122Guid> for Guid {
 impl From<Guid> for u128 {
     fn from(value: Guid) -> Self {
         u128::from_be_bytes(value.0)
+    }
+}
+
+impl From<&str> for Guid {
+    fn from(value: &str) -> Self {
+        Self::parse(value).expect("Invalid guid format")
     }
 }
 
@@ -313,7 +370,21 @@ mod test {
         assert_eq!(v3, 0x8899);
         assert_eq!(v4, 0xAABBCCDDEEFF);
 
+        let expected_parse_guid = Guid::new([0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
 
+        let parsed = Guid::parse("0123456789ABCDEF8899AABBCCDDEEFF");
+        assert_eq!(parsed, Some(expected_parse_guid));
+
+        let parsed = Guid::parse("01234567-89AB-CDEF-8899-AABBCCDDEEFF");
+        assert_eq!(parsed, Some(expected_parse_guid));
+
+        let parsed = Guid::parse("(01234567-89AB-CDEF-8899-AABBCCDDEEFF)");
+        assert_eq!(parsed, Some(expected_parse_guid));
+
+        let parsed = Guid::parse("{01234567-89AB-CDEF-8899-AABBCCDDEEFF}");
+        assert_eq!(parsed, Some(expected_parse_guid));
+
+        
         let formatted = format!("{}", guid0);
         assert_eq!(formatted, "00112233-4455-6677-8899-AABBCCDDEEFF");
 
