@@ -432,6 +432,7 @@ impl RawMotorPowerLevel {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 struct RawTriggerForceFeedback([u8; 11]);
 

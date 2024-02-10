@@ -10,6 +10,8 @@ use onca_ral as ral;
 
 pub trait MakeDx12Version {
     fn from_feature_level(level: D3D_FEATURE_LEVEL) -> ral::Version;
+
+    #[allow(dead_code)]
     fn to_feature_level(&self) -> D3D_FEATURE_LEVEL;
 }
 
