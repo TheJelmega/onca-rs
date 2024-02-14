@@ -36,7 +36,7 @@ unsafe impl GlobalAlloc for OncaGlobalAlloc {
         let new_layout = Layout::from_size_align(new_size, layout.align()).unwrap();
         let new = self.alloc(new_layout);
 
-        let copy_size = layout.size().max(new_size);
+        let copy_size = layout.size().min(new_size);
         std::ptr::copy_nonoverlapping(ptr, new, copy_size);
 
         self.dealloc(ptr, layout);
