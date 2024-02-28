@@ -2794,7 +2794,7 @@ use crate::*;
 	}
 	write!(writer, "];\n\n").unwrap();
 
-	write_arr_index(&mut writer, "CATEGORIES", "UnicodeCategory", categories, true);
+	write_arr_index(&mut writer, "CATEGORIES", "Category", categories, true);
 	write_arr_index(&mut writer, "CANONICAL_COMBINE_CLASSES", "CanonicalCombiningClass", canon_combine_classes, true);
 	write_arr_index(&mut writer, "BIDIRECTIONAL_CLASSES", "BidirectionalClass", bidi_classes, true);
 	
@@ -2807,7 +2807,7 @@ use crate::*;
 	write_arr_char(&mut writer, "TO_LOWER", "Casing", to_lower, false);
 	write_arr_char(&mut writer, "TO_UPPER", "Casing", to_upper, false);
 	write_arr_char(&mut writer, "TO_TITLE", "Casing", to_title, false);
-	write_arr_index(&mut writer, "DERIVED_AGE", "UnicodeAge", uni_age, true);
+	write_arr_index(&mut writer, "DERIVED_AGE", "Age", uni_age, true);
 	write_arr_index(&mut writer, "NUMERIC_VALUES", "u8", numeric_values, false);
 	write_arr_index(&mut writer, "DIGIT_VALUES", "u8", digit_values, false);
 	write_arr_index(&mut writer, "RATIONAL_VALUES", "Rational", rational_values, false);

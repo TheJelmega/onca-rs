@@ -69,10 +69,10 @@ impl PartialOrd<u32> for UnicodeIndex {
         match self {
             UnicodeIndex::Single(val) => val.partial_cmp(other),
             UnicodeIndex::Range(begin, end) => {
-				if other < begin {
-					Some(core::cmp::Ordering::Less)
-				} else if other > end {
+				if begin > other {
 					Some(core::cmp::Ordering::Greater)
+				} else if end < other {
+					Some(core::cmp::Ordering::Less)
 				} else {
 					Some(core::cmp::Ordering::Equal)
 				}
@@ -108,7 +108,7 @@ impl Debug for UnicodeIndex {
 
 /// Unicode category
 #[flags(parse_from_name)]
-pub enum UnicodeCategory {
+pub enum Category {
 	/// Lu: An upper case letter.
 	#[parse_name("Lu")]
 	UppercaseLetter,
@@ -536,7 +536,7 @@ pub enum UnicodeFlags {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, EnumFromName)]
-pub enum UnicodeAge {
+pub enum Age {
 	Unknown,
 	#[parse_name("1.1")]
 	Version1_1,
@@ -2132,7 +2132,7 @@ pub fn get_flags(codepoint: u32) -> UnicodeFlags {
 }
 
 /// Get the category for the unicode codepoint, or `None`` when the codepoint is not valid or is part of the private use space
-pub fn get_category(codepoint: u32) -> Option<UnicodeCategory> {
+pub fn get_category(codepoint: u32) -> Option<Category> {
 	from_index(codepoint, &unicode::CATEGORIES)
 }
 
@@ -2211,8 +2211,8 @@ pub fn get_block(codepoint: u32) -> &'static str {
 }
 
 /// Get the age (unicode version in which the codepoint was added) for a unicode codepoint.
-pub fn get_age(codepoint: u32) -> UnicodeAge {
-	from_index_or(codepoint, &unicode::DERIVED_AGE, UnicodeAge::Unknown)
+pub fn get_age(codepoint: u32) -> Age {
+	from_index_or(codepoint, &unicode::DERIVED_AGE, Age::Unknown)
 }
 
 /// Get the east-asian width of the unicode codepoint, or `None` if there is no east-asian width for the codepoint.
