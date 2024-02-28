@@ -1,0 +1,18 @@
+[package]
+name = "onca_unicode_info"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+onca_base = { path = "../onca_base" }
+onca_common = { path = "../onca_common" }
+onca_common_macros = { path = "../onca_common_macros" }
+
+[build-dependencies]
+onca_base = { path = "../onca_base" }
+onca_common = { path = "../onca_common" }
+onca_common_macros = { path = "../onca_common_macros" }
+
+[features]
+# Allows retreival of shift-JIS codes for unicodecharacters
+emoji-sources = []
