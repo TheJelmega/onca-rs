@@ -3,7 +3,7 @@ use core::num::NonZeroU8;
 use onca_common::prelude::*;
 use onca_common_macros::{flags, EnumDisplay};
 
-use crate::{common::*, handle::InterfaceHandle, Version};
+use crate::{common::*, handle::InterfaceHandle};
 
 // Vulkan documentation: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceLimits.html
 

@@ -6,7 +6,6 @@ use core::{
 use onca_common::{
     prelude::*,
     utils::is_flag_set,
-    MiB,
 };
 use onca_logging::{log_warning, log_verbose};
 use onca_ral as ral;
@@ -15,8 +14,6 @@ use ral::{
     common::*,
     constants::*,
     physical_device::*,
-    PhysicalDeviceInterface, PhysicalDeviceInterfaceHandle,
-    Version, Format, VertexFormat, FormatSupport,
     Result,
 };
 use windows::{

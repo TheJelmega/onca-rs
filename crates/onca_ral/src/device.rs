@@ -1,6 +1,10 @@
 use onca_common::prelude::*;
 
-use crate::{*, handle::{InterfaceHandle, HandleImpl, create_ral_handle}, api::SwapChainResultInfo, shader::ShaderHandle};
+use crate::{
+    *,
+    handle::{InterfaceHandle, create_ral_handle},
+    api::SwapChainResultInfo
+};
 
 pub trait DeviceInterface {
     unsafe fn create_swap_chain(&self, phys_dev: &PhysicalDevice, create_info: &SwapChainDesc) -> Result<(SwapChainInterfaceHandle, SwapChainResultInfo)>;

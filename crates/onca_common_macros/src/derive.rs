@@ -1,5 +1,3 @@
-use std::collections::btree_map::Keys;
-
 use proc_macro2::*;
 use quote::quote;
 use syn::*;

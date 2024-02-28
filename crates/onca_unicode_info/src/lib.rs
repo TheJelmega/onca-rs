@@ -7,12 +7,9 @@
 use core::fmt;
 use std::{
 	fmt::Debug,
-	fs::File,
-	io::{self, BufRead, BufReader, LineWriter, Write},
-	path::Path,
 };
 
-use onca_base::{EnumFromIndexT, EnumFromNameT};
+use onca_base::EnumFromNameT;
 use onca_common_macros::{flags, EnumFromIndex, EnumFromName};
 
 
@@ -26,37 +23,6 @@ enum UnicodeIndex {
 }
 
 impl UnicodeIndex {
-	fn merge(self, other: Self) -> Option<Self> {
-		assert!(self < other);
-
-		match self {
-		    UnicodeIndex::Single(s) => match other {
-    		    UnicodeIndex::Single(o) => if s + 1 == o {
-					Some(Self::Range(s, o))
-				} else {
-					None
-				},
-    		    UnicodeIndex::Range(o_begin, o_end) => if s + 1 == o_begin {
-					Some(Self::Range(s, o_end))
-				} else {
-					None
-				}
-    		},
-		    UnicodeIndex::Range(s_begin, s_end) =>  match other {
-    		    UnicodeIndex::Single(o) => if s_end + 1 == o {
-					Some(Self::Range(s_begin, o))
-				} else {
-					None
-				}
-    		    UnicodeIndex::Range(o_begin, o_end) => if s_end + 1 == o_begin {
-					Some(Self::Range(s_begin, o_end))
-				} else {
-					None
-				},
-    		},
-		}
-	}
-
 	fn cmp_internal(&self, other: &Self) -> core::cmp::Ordering {
 		match self {
 		    UnicodeIndex::Single(s) => match other {

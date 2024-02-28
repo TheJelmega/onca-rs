@@ -1,5 +1,5 @@
 use proc_macro2::*;
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{punctuated::Punctuated, *};
 
 struct CommaSeparatedList {

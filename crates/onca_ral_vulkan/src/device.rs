@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 use std::sync::{Arc, Weak};
 
-use onca_common::{prelude::*, strings::ToString};
+use onca_common::prelude::*;
 use onca_common_macros::flags;
 use onca_ral as ral;
 use ash::{vk, extensions::ext};

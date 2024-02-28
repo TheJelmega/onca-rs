@@ -6,13 +6,13 @@
 
 use static_assertions as sa;
 
-use onca_common::{prelude::*, sync::{Mutex, RwLock}, collections::BitSet};
+use onca_common::{prelude::*, sync::RwLock, collections::BitSet};
 use onca_common_macros::{flags, EnumCount, EnumFromIndex};
 use onca_hid as hid;
 use onca_logging::log_warning;
 #[cfg(feature = "raw_input_logging")]
 use onca_logging::log_verbose;
-use onca_math::{f32v2, f32v3, MathConsts, Zero};
+use onca_math::{MathConsts, Zero};
 use crate::*;
 
 const BUTTON_AXIS_MAPPING: [&[AxisId]; 15] = [

@@ -1,5 +1,5 @@
 use std::{ops::*, fmt::Display};
-use crate::{*, angle::Radians};
+use crate::*;
 
 generic_matrix!{doc = "2x2 matrix (row-major order)"; Mat2, 2, 2}
 

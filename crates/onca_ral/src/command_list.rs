@@ -64,12 +64,7 @@ use onca_common::{
 };
 use onca_common_macros::flags;
 
-use crate::{
-    handle::{InterfaceHandle, HandleImpl},
-    *,
-};
-
-
+use crate::{*, handle::InterfaceHandle};
 
 //==============================================================================================================================
 // COMMAND POOL

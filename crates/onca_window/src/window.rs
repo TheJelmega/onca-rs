@@ -4,7 +4,6 @@ use crate::{
 };
 use core::fmt;
 use onca_common::{
-    alloc::ScopedAlloc,
     event_listener::{EventListenerArray, EventListenerRef, EventListener},
     prelude::*,
     sync::Mutex,

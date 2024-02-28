@@ -2746,7 +2746,7 @@ pub fn generate_unicode_data() {
 
 		// Deprecated property since Unicode 5.0.0, so ignore it
 		if elems[1] == "Grapheme_Link" {
-			return;;
+			return;
 		}
 
 		let index = UnicodeIndex::parse(elems[0]);

@@ -7,7 +7,7 @@ use core::{
 use std::collections::HashSet;
 use onca_common::prelude::*;
 use onca_common_macros::{flags, EnumCount, EnumDisplay, EnumFromIndex};
-use onca_logging::{log_verbose, LogCategory};
+use onca_logging::log_verbose;
 use crate::*;
 
 extern crate static_assertions as sa;

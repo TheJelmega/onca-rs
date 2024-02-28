@@ -4,10 +4,7 @@ use std::{
     sync::Arc, io::Seek,
 };
 
-use onca_common::{
-    sync::{RwLock, MappedRwLockReadGuard, RwLockReadGuard},
-    io,
-};
+use onca_common::sync::{RwLock, MappedRwLockReadGuard, RwLockReadGuard};
 use onca_common_macros::flags;
 
 use crate::*;
