@@ -22,3 +22,8 @@ pub trait EnumFromIndexT: Sized {
     /// The user is required to make sure that the index is an index of a valid enum variant
     unsafe fn from_idx_unchecked(idx: usize) -> Self;
 }
+
+pub trait EnumFromNameT: Sized {
+    /// Try to parse the enum from a string slice.
+    fn parse(s: &str) -> Option<Self>;
+}

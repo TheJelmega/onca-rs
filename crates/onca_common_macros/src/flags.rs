@@ -1,6 +1,17 @@
 use proc_macro2::*;
-use quote::quote;
-use syn::*;
+use quote::{quote, ToTokens};
+use syn::{punctuated::Punctuated, *};
+
+struct CommaSeparatedList {
+	list: Punctuated::<TokenStream, Token![,]>
+}
+
+impl syn::parse::Parse for CommaSeparatedList {
+    fn parse(input: parse::ParseStream) -> Result<Self> {
+        let list = Punctuated::parse_terminated(input)?;
+		Ok(Self { list })
+    }
+}
 
 pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	// While we don't exactly are deriving, the `#[flags]` macro is close enough
@@ -13,6 +24,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	let vis = input_parsed.vis;
 	let flag_name = input_parsed.ident;
 	let enum_attrs = input_parsed.attrs;
+	
 
 	// Extract the body
 	let body_data = match input_parsed.data {
@@ -29,11 +41,45 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut i : u128 = 1;
 	let mut max_val : u128 = 0;
 	let mut has_zero = false;
+	let mut parse_names = Vec::new();
+	let mut none_name = "None".to_string();
 	
 	// Extract each variant and the data needed
-	for it in body_data.variants.into_iter() {
+	for (idx, it) in body_data.variants.into_iter().enumerate() {
+		let ident_name = it.ident.to_string();
 		idents.push(it.ident);
-		attrs.push(it.attrs);
+
+		// Extract parse_name attribute for elements
+		let mut elem_attrs = Vec::new();
+		for attr in it.attrs {
+			if let Meta::List(meta_list) = &attr.meta {
+				if meta_list.path.get_ident().map_or(false, |iden| iden == "parse_name") {
+					if parse_names.len() != idx {
+						let error_msg = format!("Duplicate `parse_name` for member '{}'", ident_name);
+						return quote!(compile_error!(#error_msg));
+					}
+
+
+					let lit = match meta_list.parse_args::<LitStr>() {
+    				    Ok(lit) => lit,
+    				    Err(_) => {
+							let error_msg = format!("Expected a string literal as a `parse_name` for member '{}'", ident_name);
+							return quote!(compile_error!(#error_msg))
+						},
+    				};
+					parse_names.push(lit.value());
+					continue;
+				}
+			}
+			elem_attrs.push(attr);
+		}
+
+		if parse_names.len() == idx {
+			parse_names.push(ident_name.clone());
+		}
+
+
+		attrs.push(elem_attrs);
 		match it.discriminant {
 			Some((_, expr)) => {
 				let res = gen_bits_val_expr(expr, &flag_name, &u128_type);
@@ -46,6 +92,7 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 				if let Some(int) = int {
 					if int == 0 {
 						has_zero = true;
+						none_name = ident_name;
 					} else {
 						max_val = max_val.max(int);
 						i = int << 1u128;
@@ -78,20 +125,58 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 		)
 	};
 
-	let annotated_parsed_res = syn::parse2::<syn::Type>(args);
-	let base_type = match annotated_parsed_res {
-		Ok(typ) => typ,
-		Err(_) => if max_val <= u8::MAX as u128 {
-			syn::parse_str::<Type>("u8").unwrap()
-		} else if max_val <= u16::MAX as u128 {
-			syn::parse_str::<Type>("u16").unwrap()
-		} else if max_val <= u32::MAX as u128 {
-			syn::parse_str::<Type>("u32").unwrap()
-		} else if max_val <= u64::MAX as u128 {
-			syn::parse_str::<Type>("u64").unwrap()
-		} else {
-			syn::parse_str::<Type>("u128").unwrap()
+	
+	let args = match parse2::<CommaSeparatedList>(args) {
+		Ok(data) => data.list,
+		Err(err) => {
+			return TokenStream::from(err.to_compile_error());
 		}
+	};
+	
+	let mut base_type = None;
+	let mut parse_from_name = false;
+	for elem in args {
+		if let Ok(ty) = syn::parse2::<syn::TypePath>(elem.clone()) {
+			if ty.path.get_ident().map_or(false, |path| ["u8", "u16", "u32", "u64", "u128"].iter().any(|s| path == s)) {
+				base_type = Some(ty);
+				continue;
+			}
+		} 
+		if let Ok(iden) = syn::parse2::<Ident>(elem) {
+			if iden == "parse_from_name" {
+				parse_from_name = true;
+				continue;
+			}
+		}
+	}
+
+	let base_type = base_type.unwrap_or_else(|| if max_val <= u8::MAX as u128 {
+		syn::parse_str::<TypePath>("u8").unwrap()
+	} else if max_val <= u16::MAX as u128 {
+		syn::parse_str::<TypePath>("u16").unwrap()
+	} else if max_val <= u32::MAX as u128 {
+		syn::parse_str::<TypePath>("u32").unwrap()
+	} else if max_val <= u64::MAX as u128 {
+		syn::parse_str::<TypePath>("u64").unwrap()
+	} else {
+		syn::parse_str::<TypePath>("u128").unwrap()
+	});
+
+	let parse = if parse_from_name {
+		quote!{
+			#vis fn parse(name: &str) -> Option<Self> {
+				let mut flags = Self::none();
+				for sub_name in name.split("|").map(|val| val.trim()) {
+					flags |= match sub_name {
+						#(#parse_names => Self::#idents,)*
+						_ => return None
+					}
+				}
+				Some(flags)
+			}
+		}
+	} else {
+		quote!{}
 	};
 
 	// Write out the new structure
@@ -214,6 +299,8 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 			#vis const fn bitxor(self, rhs: Self) -> Self {
 				Self { bits: self.bits ^ rhs.bits }
 			}
+
+			#parse
 		}
 
 		impl ::core::ops::Not for #flag_name {
@@ -282,15 +369,27 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		impl ::core::fmt::Debug for #flag_name {
 			fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+				use core::fmt::Write;
+
+				if self.is_none() {
+					if f.alternate() {
+						write!(f, "{}::", stringify!(#flag_name))?;
+					}
+					write!(f, #none_name)?;
+					return Ok(());
+				}
+
 				let mut flags = *self;
 				let mut started = false;
-
 				#(
 					if flags.contains(#flag_name::#idents) {
 						if started {
-							f.write_str(" | ")?;
+							write!(f, " | ")?;
 						}
-						f.write_str(stringify!(#idents))?;
+						if f.alternate() {
+							write!(f, "{}::", stringify!(#flag_name))?;
+						}
+						write!(f, stringify!(#idents))?;
 						flags &= !#flag_name::#idents;
 						started = true;
 					}
@@ -298,9 +397,9 @@ pub fn flags(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				if flags.is_any() {
 					if started {
-						f.write_str(" | ")?;
+						write!(f, " | ")?;
 					}
-					f.write_fmt(format_args!("{:o}", flags.bits))?;
+					write!(f, "{:o}", flags.bits)?;
 				}
 
 				Ok(())

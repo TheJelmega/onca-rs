@@ -18,8 +18,12 @@ pub fn enum_from_index(item: TokenStream) -> TokenStream {
     derive::enum_from_index(item.into()).into()
 }
 
-
 #[proc_macro_derive(EnumDisplay, attributes(display))]
 pub fn enum_display(item: TokenStream) -> TokenStream {
     derive::enum_display(item.into()).into()
+}
+
+#[proc_macro_derive(EnumFromName, attributes(parse_name))]
+pub fn enum_from_name(item: TokenStream) -> TokenStream {
+    derive::enum_from_name(item.into()).into()
 }
