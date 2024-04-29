@@ -141,8 +141,8 @@ enum RegexNode {
 
 	AbsConditional(u16, Box<RegexNode>, Option<Box<RegexNode>>),
 	NamedConditional(String, Box<RegexNode>, Option<Box<RegexNode>>),
-	RecursiveConditional(u16, Box<RegexNode>, Option<Box<RegexNode>>),
-	NamedRecursiveConditional(String, Box<RegexNode>, Option<Box<RegexNode>>),
+	// RecursiveConditional(u16, Box<RegexNode>, Option<Box<RegexNode>>),
+	// NamedRecursiveConditional(String, Box<RegexNode>, Option<Box<RegexNode>>),
 	DefineConditional(Box<RegexNode>),
 	AssertConditional(Box<RegexNode>, Box<RegexNode>, Option<Box<RegexNode>>),
 	
