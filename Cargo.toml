@@ -20,8 +20,8 @@ publish = false
 members = [ "crates/*" ]
 
 [dependencies]
-onca_simd_macros = { path = "crates/onca_simd_macros" }
-onca_simd = { path = "crates/onca_simd" }
+# sub-crates
+onca_base = { path = "crates/onca_base" }
 onca_math = { path = "crates/onca_math" }
 onca_common_macros = { path = "crates/onca_common_macros" }
 onca_common = { path = "crates/onca_common" }
@@ -30,13 +30,18 @@ onca_terminal = { path = "crates/onca_terminal" }
 onca_logging = { path = "crates/onca_logging" }
 onca_window = { path = "crates/onca_window" }
 onca_hid = { path = "crates/onca_hid" }
-onca_input = { path = "crates/onca_input" }
+onca_input = { path = "crates/onca_input"}
+onca_unicode_info = { path = "crates/onca_unicode_info" }
+onca_regex = { path = "crates/onca_regex" }
 onca_parser_utils = { path = "crates/onca_parser_utils" }
 onca_toml = { path = "crates/onca_toml" }
 onca_ral = { path = "crates/onca_ral" }
 onca_ral_dx12 = { path = "crates/onca_ral_dx12" }
 onca_ral_vulkan = { path = "crates/onca_ral_vulkan" }
 onca_ral_software = { path = "crates/onca_ral_software" }
+onca_asset_system = { path = "crates/onca_asset_system" }
+
+# plugins
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_WindowsProgramming", "Win32_System_Kernel", "Win32_System_Threading", "Win32_Security"] }

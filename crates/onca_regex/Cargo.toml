@@ -1,0 +1,10 @@
+[package]
+name = "onca_regex"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+onca_base = { path = "../onca_base" }
+onca_common = { path = "../onca_common" }
+onca_common_macros = { path = "../onca_common_macros" }
+onca_unicode_info = { path = "../onca_unicode_info" }
