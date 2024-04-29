@@ -1,8 +1,7 @@
-use core::str::FromStr;
-use std::{env, process::Command, path::{PathBuf, Path}, fs, ffi::OsStr};
+use std::{env, process::Command, path::{PathBuf, Path}, fs};
 
 use embed_manifest::{
-    manifest::{ActiveCodePage, SupportedOS::{Windows10}, Setting, DpiAwareness},
+    manifest::{ActiveCodePage, SupportedOS::Windows10, Setting, DpiAwareness},
     embed_manifest, new_manifest,
 };
 use copy_to_output::copy_to_output;
@@ -37,9 +36,11 @@ fn get_dxc_path() -> PathBuf {
 fn _compile_shader(dxc: &Path, file: &str, output_dir: &Path, entry_point: &str, target_profile: &str, to_spirv: bool) -> bool {
     let mut command = Command::new(dxc);
     command.args(["-E", entry_point])
-        .args(["-HV", "2021"])
+        //.args(["-HV", "2021"])
         .args(["-T", target_profile])
-        .arg("-WX");
+        .arg("-WX")
+        .arg("-Zi")
+        .arg("-Zpr");
         
     let mut out_binary = output_dir.to_path_buf();
 
@@ -92,17 +93,32 @@ fn compile_shader(dxc_path: &Path, file: &str, output_dir: &Path, entry_point: &
     _compile_shader(dxc_path, file, output_dir, entry_point, target_profile, true);
 }
 
-fn get_output_path() -> PathBuf {
+fn get_working_dir() -> PathBuf {
     let manifest_dir_string = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    // Path when working directory is executable folder <root or manifest path>/target/<profile>/
-    //let build_type = env::var("PROFILE").unwrap();
-    //let path = Path::new(&manifest_dir_string).join("target").join(build_type);
 
     // Path when the working directory is the cargo directory: <root or manifest path>/
     let path = Path::new(&manifest_dir_string);
 
     return PathBuf::from(path);
+}
+
+#[allow(unused)]
+fn get_executable_dir() -> PathBuf {
+    let manifest_dir_string = env::var("CARGO_MANIFEST_DIR").unwrap();
+
+    // Path when working directory is executable folder <root or manifest path>/target/<profile>/
+    let build_type = env::var("PROFILE").unwrap();
+    let path = Path::new(&manifest_dir_string).join("target").join(build_type);
+
+    return PathBuf::from(path);
+}
+
+fn get_dylib_ext() -> &'static str {
+    if cfg!(target_os = "windows") {
+        ".dll"
+    } else {
+        ".so"
+    }
 }
 
 fn main() {
@@ -128,7 +144,7 @@ fn main() {
     // Only needed when the working directory is not the cargo root
     //copy_and_write_rerun("ral.toml", &profile);
 
-    let mut shader_output_dir = get_output_path();
+    let mut shader_output_dir = get_working_dir();
     shader_output_dir.push(Path::new("data"));
     shader_output_dir.push(Path::new("shaders"));
     println!("cargo:warning=CARGO_TARGET_DIR: {}", shader_output_dir.to_str().unwrap());
@@ -141,11 +157,14 @@ fn main() {
     let dxc_path = get_dxc_path();
     println!("cargo:warning=DXC is located at: {}", dxc_path.to_str().unwrap());
 
-    compile_shader(&dxc_path, "data/shaders/tri.vs.hlsl", &shader_output_dir, "main", ShaderType::Vertex);
-    compile_shader(&dxc_path, "data/shaders/tri.ps.hlsl", &shader_output_dir, "main", ShaderType::Pixel);
+    compile_shader(&dxc_path, "data/shaders/tri.vs.hlsl"    , &shader_output_dir, "main", ShaderType::Vertex);
+    compile_shader(&dxc_path, "data/shaders/tri.ps.hlsl"    , &shader_output_dir, "main", ShaderType::Pixel);
 
     #[cfg(windows)]
     println!("cargo:rustc-link-arg=/DEF:D3D12\\agility.def");
+
+    // Get dylib ext for copy
+    let dylib_ext = get_dylib_ext();
 
     // Link onca_alloc dylib
     // TODO: filename is only for windows atm
