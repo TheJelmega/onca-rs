@@ -38,6 +38,10 @@ impl RegexProcessor {
 
         // PROCESS PASS 2: Process lookbehind and set nodes per alteration
         self.process_nested(node, &ResolveLookbehind)?;
+
+        // PROCESS PASS 3: Processs `\K` by changing the capture
+        // (foo\Kbar) -> (?:foo(bar))
+        self.process_nested(node, &MatchRestartSplitter)?;
         
         // PROCESS PASS 3: go through nodes in reverse order to set repetition sub-groups
         self.process_nested(node, &ResolveRepetitionTail)?;
