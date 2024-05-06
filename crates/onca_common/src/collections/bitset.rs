@@ -1,6 +1,5 @@
 use std::ops::*;
 
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct BitSet<const COUNT: usize, const NUM_U64S: usize = {(COUNT + 63) / 64}>
 {
@@ -22,10 +21,14 @@ impl<const COUNT: usize, const NUM_U64S: usize> BitSet<COUNT, NUM_U64S> {
     pub const NUM_FULL_U64 : usize = COUNT / 64;
 
     pub fn new() -> Self {
+        /// Do a debug_assert here, as we can't use a static assert cause of compilation issues.
+        debug_assert!(NUM_U64S == (COUNT + 63) / 64);
         Self { bits: [0; NUM_U64S] }
     }
 
     pub fn from_bits(bits: [u64; NUM_U64S]) -> Self {
+        /// Do a debug_assert here, as we can't use a static assert cause of compilation issues.
+        debug_assert!(NUM_U64S == (COUNT + 63) / 64);
         Self { bits }
     }
 
