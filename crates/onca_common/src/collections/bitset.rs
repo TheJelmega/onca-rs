@@ -2,17 +2,12 @@ use std::ops::*;
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct BitSet<const COUNT: usize> 
-// We need a constraint here to make the compiler happy
-where
-    [u64; (COUNT + 63) / 64]:
+pub struct BitSet<const COUNT: usize, const NUM_U64S: usize = {(COUNT + 63) / 64}>
 {
-    bits: [u64; (COUNT + 63) / 64],
+    bits: [u64; NUM_U64S],
 }
 
-impl<const COUNT: usize> BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> BitSet<COUNT, NUM_U64S> {
     /// Number of bits in the bitset
     pub const BIT_COUNT : usize = COUNT; 
 
@@ -27,10 +22,10 @@ impl<const COUNT: usize> BitSet<COUNT> where
     pub const NUM_FULL_U64 : usize = COUNT / 64;
 
     pub fn new() -> Self {
-        Self { bits: [0; (COUNT + 63) / 64] }
+        Self { bits: [0; NUM_U64S] }
     }
 
-    pub fn from_bits(bits: [u64; (COUNT + 63) / 64]) -> Self {
+    pub fn from_bits(bits: [u64; NUM_U64S]) -> Self {
         Self { bits }
     }
 
@@ -78,7 +73,7 @@ impl<const COUNT: usize> BitSet<COUNT> where
 
     /// Check if all bits are set
     pub fn all(&self) -> bool {
-        let bits_left : usize = Self::BIT_COUNT & 63;
+        let bits_left = Self::BIT_COUNT & 63;
         let last_bits_mask = 0xFFFF_FFFF_FFFF_FFFF << (63 - bits_left);
 
         let last_idx = self.bits.len() - 1;
@@ -146,7 +141,7 @@ impl<const COUNT: usize> BitSet<COUNT> where
 
     /// Set all bits
     pub fn set_all(&mut self) {
-        let bits_left : usize = Self::BIT_COUNT & 63;
+        let bits_left = Self::BIT_COUNT & 63;
         let last_bits_mask = 0xFFFF_FFFF_FFFF_FFFF << (63 - bits_left);
 
         let last_idx = self.bits.len() - 1;
@@ -157,17 +152,17 @@ impl<const COUNT: usize> BitSet<COUNT> where
     }
     
     /// Get an iterator to the bitset
-    pub fn iter(&self) -> Iter<'_, COUNT> {
+    pub fn iter(&self) -> Iter<'_, COUNT, NUM_U64S> {
         Iter { bitset: &self, idx: 0, end: COUNT }
     }
 
     /// Get an iterator over all bits that are set to 1
-    pub fn iter_ones(&self) -> IterOnes<COUNT> {
+    pub fn iter_ones(&self) -> IterOnes<COUNT, NUM_U64S> {
         IterOnes { bitset: &self, idx: 0, end: COUNT }
     }
 
     /// Get an iterator over all bits that are set to 1
-    pub fn iter_zeros(&self) -> IterZeros<COUNT> {
+    pub fn iter_zeros(&self) -> IterZeros<COUNT, NUM_U64S> {
         IterZeros { bitset: &self, idx: 0, end: COUNT }
     }
 
@@ -208,13 +203,11 @@ impl<const COUNT: usize> BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> Not for &BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
-    type Output = BitSet<COUNT>;
+impl<const COUNT: usize, const NUM_U64S: usize> Not for &BitSet<COUNT, NUM_U64S> {
+    type Output = BitSet<COUNT, NUM_U64S>;
 
     fn not(self) -> Self::Output {
-        let mut res = BitSet::<COUNT>::new();
+        let mut res = BitSet::<COUNT, NUM_U64S>::new();
         for i in 0..self.bits.len() {
             res.bits[i] = !self.bits[i];
         }
@@ -222,13 +215,11 @@ impl<const COUNT: usize> Not for &BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitOr for &BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
-    type Output = BitSet<COUNT>;
+impl<const COUNT: usize, const NUM_U64S: usize> BitOr for &BitSet<COUNT, NUM_U64S> {
+    type Output = BitSet<COUNT, NUM_U64S>;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        let mut res = BitSet::<COUNT>::new();
+        let mut res = BitSet::<COUNT, NUM_U64S>::new();
         for i in 0..self.bits.len() {
             res.bits[i] = self.bits[i] | rhs.bits[i];
         }
@@ -236,13 +227,11 @@ impl<const COUNT: usize> BitOr for &BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitXor for &BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
-    type Output = BitSet<COUNT>;
+impl<const COUNT: usize, const NUM_U64S: usize> BitXor for &BitSet<COUNT, NUM_U64S> {
+    type Output = BitSet<COUNT, NUM_U64S>;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
-        let mut res = BitSet::<COUNT>::new();
+        let mut res = BitSet::<COUNT, NUM_U64S>::new();
         for i in 0..self.bits.len() {
             res.bits[i] = self.bits[i] ^ rhs.bits[i];
         }
@@ -250,13 +239,11 @@ impl<const COUNT: usize> BitXor for &BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitAnd for &BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
-    type Output = BitSet<COUNT>;
+impl<const COUNT: usize, const NUM_U64S: usize> BitAnd for &BitSet<COUNT, NUM_U64S> {
+    type Output = BitSet<COUNT, NUM_U64S>;
 
     fn bitand(self, rhs: Self) -> Self::Output {
-        let mut res = BitSet::<COUNT>::new();
+        let mut res = BitSet::<COUNT, NUM_U64S>::new();
         for i in 0..self.bits.len() {
             res.bits[i] = self.bits[i] & rhs.bits[i];
         }
@@ -264,9 +251,7 @@ impl<const COUNT: usize> BitAnd for &BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitOrAssign<&Self> for BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> BitOrAssign<&Self> for BitSet<COUNT, NUM_U64S> {
     fn bitor_assign(&mut self, rhs: &Self) {
         for i in 0..self.bits.len() {
             self.bits[i] |= rhs.bits[i];
@@ -274,9 +259,7 @@ impl<const COUNT: usize> BitOrAssign<&Self> for BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitXorAssign<&Self> for BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> BitXorAssign<&Self> for BitSet<COUNT, NUM_U64S> {
     fn bitxor_assign(&mut self, rhs: &Self) {
         for i in 0..self.bits.len() {
             self.bits[i] ^= rhs.bits[i];
@@ -284,9 +267,7 @@ impl<const COUNT: usize> BitXorAssign<&Self> for BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> BitAndAssign<&Self> for BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> BitAndAssign<&Self> for BitSet<COUNT, NUM_U64S> {
     fn bitand_assign(&mut self, rhs: &Self) {
         for i in 0..self.bits.len() {
             self.bits[i] &= rhs.bits[i];
@@ -294,22 +275,18 @@ impl<const COUNT: usize> BitAndAssign<&Self> for BitSet<COUNT> where
     }
 }
 
-impl<const COUNT: usize> IntoIterator for BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> IntoIterator for BitSet<COUNT, NUM_U64S> {
     type Item = bool;
-    type IntoIter = IntoIter<COUNT>;
+    type IntoIter = IntoIter<COUNT, NUM_U64S>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter{ bitset: self, idx: 0, end: COUNT }
     }
 }
 
-impl<'a, const COUNT: usize> IntoIterator for &'a BitSet<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<'a, const COUNT: usize, const NUM_U64S: usize> IntoIterator for &'a BitSet<COUNT, NUM_U64S> {
     type Item = bool;
-    type IntoIter = Iter<'a, COUNT>;
+    type IntoIter = Iter<'a, COUNT, NUM_U64S>;
 
     fn into_iter(self) -> Self::IntoIter {
         Iter{ bitset: self, idx: 0, end: COUNT }
@@ -318,17 +295,13 @@ impl<'a, const COUNT: usize> IntoIterator for &'a BitSet<COUNT> where
 
 //--------------------------------------------------------------
 
-pub struct Iter<'a, const COUNT: usize> where
-    [u64; (COUNT + 63) / 64]:
-{
-    bitset : &'a BitSet<COUNT>,
+pub struct Iter<'a, const COUNT: usize, const NUM_U64S: usize> {
+    bitset : &'a BitSet<COUNT, NUM_U64S>,
     idx    : usize,
     end    : usize
 }
 
-impl<const COUNT: usize> Iterator for Iter<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> Iterator for Iter<'_, COUNT, NUM_U64S> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -342,9 +315,7 @@ impl<const COUNT: usize> Iterator for Iter<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> DoubleEndedIterator for Iter<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> DoubleEndedIterator for Iter<'_, COUNT, NUM_U64S> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.idx < self.end {
             self.end -= 1;
@@ -355,9 +326,7 @@ impl<const COUNT: usize> DoubleEndedIterator for Iter<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> ExactSizeIterator for Iter<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> ExactSizeIterator for Iter<'_, COUNT, NUM_U64S> {
     fn len(&self) -> usize {
         COUNT
     }
@@ -365,17 +334,13 @@ impl<const COUNT: usize> ExactSizeIterator for Iter<'_, COUNT> where
 
 //--------------------------------------------------------------
 
-pub struct IterOnes<'a, const COUNT: usize> where
-    [u64; (COUNT + 63) / 64]:
-{
-    bitset : &'a BitSet<COUNT>,
+pub struct IterOnes<'a, const COUNT: usize, const NUM_U64S: usize> {
+    bitset : &'a BitSet<COUNT, NUM_U64S>,
     idx    : usize,
     end    : usize
 }
 
-impl<const COUNT: usize> Iterator for IterOnes<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> Iterator for IterOnes<'_, COUNT, NUM_U64S> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -390,9 +355,7 @@ impl<const COUNT: usize> Iterator for IterOnes<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> DoubleEndedIterator for IterOnes<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> DoubleEndedIterator for IterOnes<'_, COUNT, NUM_U64S> {
     fn next_back(&mut self) -> Option<Self::Item> {
         while self.idx < self.end {
             self.end -= 1;
@@ -404,9 +367,7 @@ impl<const COUNT: usize> DoubleEndedIterator for IterOnes<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> ExactSizeIterator for IterOnes<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> ExactSizeIterator for IterOnes<'_, COUNT, NUM_U64S> {
     fn len(&self) -> usize {
         COUNT
     }
@@ -414,17 +375,13 @@ impl<const COUNT: usize> ExactSizeIterator for IterOnes<'_, COUNT> where
 
 //--------------------------------------------------------------
 
-pub struct IterZeros<'a, const COUNT: usize> where
-    [u64; (COUNT + 63) / 64]:
-{
-    bitset: &'a BitSet<COUNT>,
+pub struct IterZeros<'a, const COUNT: usize, const NUM_U64S: usize> {
+    bitset: &'a BitSet<COUNT, NUM_U64S>,
     idx:    usize,
     end:    usize
 }
 
-impl<const COUNT: usize> Iterator for IterZeros<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> Iterator for IterZeros<'_, COUNT, NUM_U64S> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -439,9 +396,7 @@ impl<const COUNT: usize> Iterator for IterZeros<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> DoubleEndedIterator for IterZeros<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> DoubleEndedIterator for IterZeros<'_, COUNT, NUM_U64S> {
     fn next_back(&mut self) -> Option<Self::Item> {
         while self.idx < self.end {
             self.end -= 1;
@@ -453,9 +408,7 @@ impl<const COUNT: usize> DoubleEndedIterator for IterZeros<'_, COUNT> where
     }
 }
 
-impl<const COUNT: usize> ExactSizeIterator for IterZeros<'_, COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> ExactSizeIterator for IterZeros<'_, COUNT, NUM_U64S> {
     fn len(&self) -> usize {
         COUNT
     }
@@ -463,17 +416,13 @@ impl<const COUNT: usize> ExactSizeIterator for IterZeros<'_, COUNT> where
 
 //--------------------------------------------------------------
 
-pub struct IntoIter<const COUNT: usize> where
-    [u64; (COUNT + 63) / 64]:
-{
-    bitset: BitSet<COUNT>,
+pub struct IntoIter<const COUNT: usize, const NUM_U64S: usize> {
+    bitset: BitSet<COUNT, NUM_U64S>,
     idx:    usize,
     end:    usize,
 }
 
-impl<const COUNT: usize> Iterator for IntoIter<COUNT>  where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> Iterator for IntoIter<COUNT, NUM_U64S>  {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -485,9 +434,7 @@ impl<const COUNT: usize> Iterator for IntoIter<COUNT>  where
     }
 }
 
-impl<const COUNT: usize> DoubleEndedIterator for IntoIter<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> DoubleEndedIterator for IntoIter<COUNT, NUM_U64S> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.idx < self.end {
             self.end -= 1;
@@ -498,9 +445,7 @@ impl<const COUNT: usize> DoubleEndedIterator for IntoIter<COUNT> where
     }
 }
 
-impl<const COUNT: usize> ExactSizeIterator for IntoIter<COUNT> where
-    [u64; (COUNT + 63) / 64]:
-{
+impl<const COUNT: usize, const NUM_U64S: usize> ExactSizeIterator for IntoIter<COUNT, NUM_U64S> {
     fn len(&self) -> usize {
         COUNT
     }
