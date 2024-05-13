@@ -573,7 +573,7 @@ pub unsafe trait Storage: StorageBase {
 /// - may be invalidated when calling `Storage::allocate`, `Storage::deallocate`, `Storage::grow`, and `Storage::shrink`, or their variants.
 ///   Sizes are only guaranteed to remain valid acrosss those calls for instance also implement `StorageStable`.
 #[const_trait]
-pub trait StorageSliced: Storage {
+pub unsafe trait StorageSliced: Storage {
     /// Resolves the `handle` to the size of the underlying memory.
     /// 
     /// This does not invalidate any previously resolved pointers, even when `StorageStable` is not implemented.
@@ -918,7 +918,7 @@ pub unsafe trait StorageSingle: StorageBase {
 /// - may be invalidated when calling `Storage::allocate`, `Storage::deallocate`, `Storage::grow`, and `Storage::shrink`, or their variants.
 ///   Sizes are only guaranteed to remain valid acrosss those calls for instance also implement `StorageStable`.
 #[const_trait]
-pub trait StorageSingleSliced: StorageSingle {
+pub unsafe trait StorageSingleSliced: StorageSingle {
     /// Resolves the `handle` to the size of the underlying memory.
     /// 
     /// This does not invalidate any previously resolved pointers, even when not implementing `StorageStable`.
