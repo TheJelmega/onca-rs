@@ -1,21 +1,34 @@
 #![allow(unused)]
+#![allow(incomplete_features)]
 
 // NOTE: Currently, we have a lot of features we need for the implementations, we should be looking to reduce this in the future.
 //            While not having to use unstable features might not be possible, we might be able to reduce the amount we need
 
-// Used an allocators
-#![feature(alloc_layout_extra)]
-
-// Used in containers
-#![feature(vec_split_at_spare)]
-#![feature(can_vector)]
-
-// General
-#![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(specialization)]
-// NOTE: as `min_specialization` doesn't work for a minor use-case, we use full specialization here, all code added that needs `specialization` and not just `minspecialization` should be mentioned below:
-//     - crate::collections::imp::generic_dyn_array: `impl<T, B: DynArrayBuffer<T>> SpecFromIter<T, IntoIter<T, B>> for GenericDynArray<T, B> {`, as `B` needs to be the same, but does not care about the specialization
+#![feature(unsize)]
+#![feature(const_trait_impl)]
+#![feature(effects)]
+
+#![feature(allocator_api)]
+#![feature(alloc_layout_extra)]
+#![feature(ptr_alignment_type)]
+#![feature(strict_provenance)]
+#![feature(ptr_metadata)]
+#![feature(const_alloc_error)]
+#![feature(layout_for_ptr)]
+#![feature(const_try)]
+#![feature(const_alloc_layout)]
+#![feature(const_mut_refs)]
+#![feature(const_ptr_write)]
+#![feature(const_intrinsic_copy)]
+#![feature(const_refs_to_cell)]
+#![feature(const_slice_from_raw_parts_mut)]
+#![feature(const_ptr_as_ref)]
+#![feature(hint_assert_unchecked)]
+
+#![feature(vec_split_at_spare)]
+#![feature(can_vector)]
 
 #![debugger_visualizer(natvis_file = "libonca_common.natvis")]
 
