@@ -171,7 +171,7 @@ impl<T, H: Copy> SlicedSingleHandle<T, H> {
     /// - `self` must be associated to a block of memory containing a valid instance of `T`.
     /// - No access through a mutable slice to this of `T` must overlap with accesses through the result.
     /// - The slice is only guaranteed to be valid as long as `self` is valid.
-    /// - The slice is only guaranteed to be valid as long as pointers resovled from `self` are not invalidated.
+    /// - The slice is only guaranteed to be valid as long as pointers resolved from `self` are not invalidated.
     ///   Most notably, unless `storage` implements `StoreStable`, any method call on `store` including other `resolve` calls, may invalidate the reference.
     pub const unsafe fn resolve<'a, S>(&self, storage: &'a S) -> &'a [T] where
         S: ~const StorageSingleSliced<Handle = H>
@@ -192,7 +192,7 @@ impl<T, H: Copy> SlicedSingleHandle<T, H> {
     /// - `self` must be associated to a block of memory containing a valid instance of `T`.
     /// - No access through a mutable slice to this of `T` must overlap with accesses through the result.
     /// - The slice is only guaranteed to be valid as long as `self` is valid.
-    /// - The slice is only guaranteed to be valid as long as pointers resovled from `self` are not invalidated.
+    /// - The slice is only guaranteed to be valid as long as pointers resolved from `self` are not invalidated.
     ///   Most notably, unless `storage` implements `StoreStable`, any method call on `store` including other `resolve` calls, may invalidate the reference.
     pub const unsafe fn resolve_mut<'a, S>(&self, storage: &'a S) -> &'a mut [T] where
         S: ~const StorageSingleSliced<Handle = H>
@@ -211,7 +211,7 @@ impl<T, H: Copy> SlicedSingleHandle<T, H> {
     /// - `self` must have been allocated by `storage`, or a shared storage.
     /// - `self` must still be valid
     /// - The pointer is only guaranteed to be valid as long as `self` is valid.
-    /// - The pointer is only guaranteed to be valid as long as pointer s resovled from `self` are not invalidated.
+    /// - The pointer is only guaranteed to be valid as long as pointers resolved from `self` are not invalidated.
     ///   Most notably, unless `storage` implements `StorageStable`, any method call on `storage`, including other `resolve` calls, may invalidate the pointer.
     pub const unsafe fn resolve_raw<S>(&self, storage: &S) -> (NonNull<u8>, usize) where
         S: ~const StorageSingleSliced<Handle = H>
@@ -222,6 +222,26 @@ impl<T, H: Copy> SlicedSingleHandle<T, H> {
         let (ptr, size) = storage.resolve_sliced(self.handle);
 
         (ptr, size / core::mem::size_of::<T>())
+    }
+
+    /// Resolved the handle to its size.
+    /// 
+    /// # Safety
+    /// 
+    /// - `self` must have been allocated by `storage`, or a shared storage.
+    /// - `self` must still be valid
+    /// - The size is only guaranteed to be valid as long as `self` is valid.
+    /// - The size is only guaranteed to be valid as long as pointers resolved from `self` are not invalidated.
+    ///   Most notably, unless `storage` implements `StorageStable`, any method call on `storage`, including other `resolve` calls, may invalidate the poisizenter.
+    pub const unsafe fn resolve_size<S>(&self, storage: &S) -> usize where
+        S: ~const StorageSingleSliced<Handle = H>
+    {
+        // Safety
+        // - `self.handle` was allocated by `storage` or a shared storage, as per pre-conditions.
+        // - `self.handle` is still valid, as per pre-conditions
+        let size = storage.resolve_size(self.handle);
+
+        size / core::mem::size_of::<T>()
     }
 
     /// Grows the block of memory associated with the handle.
@@ -602,6 +622,15 @@ impl<T, H: Copy> SlicedSingleHandle<T, H> {
 
         self.handle = handle;
         Ok(())
+    }
+
+    /// Cast the handle to another type.
+    /// 
+    /// # Safety
+    /// 
+    /// - The user must ensure that the data stays valid when converting from `T` to `U`.
+    pub const fn cast<U>(self) -> SlicedSingleHandle<U, H> {
+        SlicedSingleHandle::<U, H>{ handle: self.handle, _phantom: PhantomData }
     }
 }
 

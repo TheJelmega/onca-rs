@@ -1,5 +1,6 @@
 #![allow(unused)]
 #![allow(incomplete_features)]
+#![allow(internal_features)]
 
 // NOTE: Currently, we have a lot of features we need for the implementations, we should be looking to reduce this in the future.
 //            While not having to use unstable features might not be possible, we might be able to reduce the amount we need
@@ -26,6 +27,25 @@
 #![feature(const_slice_from_raw_parts_mut)]
 #![feature(const_ptr_as_ref)]
 #![feature(hint_assert_unchecked)]
+#![feature(dropck_eyepatch)]
+#![feature(ptr_sub_ptr)]
+#![feature(exact_size_is_empty)]
+#![feature(trusted_len)]
+#![feature(slice_range)]
+#![feature(rustc_attrs)]
+#![feature(deref_pure_trait)]
+#![feature(iter_advance_by)]
+#![feature(iter_next_chunk)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(maybe_uninit_uninit_array_transpose)]
+#![feature(array_into_iter_constructors)]
+#![feature(stmt_expr_attributes)]
+#![feature(trusted_random_access)]
+#![feature(trusted_fused)]
+#![feature(inplace_iteration)]
+#![feature(extend_one)]
+#![feature(never_type)]
+#![feature(unwrap_infallible)]
 
 #![feature(vec_split_at_spare)]
 #![feature(can_vector)]

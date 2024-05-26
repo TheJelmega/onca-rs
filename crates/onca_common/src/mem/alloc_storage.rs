@@ -3,7 +3,7 @@ use core::{
     ptr::NonNull
 };
 
-use super::{CopyRegion, Storage, StorageBase, StoragePinning, StorageSingle, StorageStable, StoreSharing};
+use super::{CopyRegion, Storage, StorageBase, StoragePinning, StorageSingle, StorageStable, StorageSharing};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AllocStorage<A: Allocator> {
@@ -94,7 +94,7 @@ unsafe impl<A: Allocator> StorageStable for AllocStorage<A> {}
 
 unsafe impl<A: Allocator> StoragePinning for AllocStorage<A> {}
 
-unsafe impl<A: Allocator + Clone> StoreSharing for AllocStorage<A> {
+unsafe impl<A: Allocator + Clone> StorageSharing for AllocStorage<A> {
     type SharingError = ();
 
     fn is_sharing_with(&self, other: &Self) -> bool {

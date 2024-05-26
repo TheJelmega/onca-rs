@@ -989,7 +989,7 @@ pub unsafe trait StoragePinning: StorageStable {}
 /// # Safety
 /// 
 /// Implementers of this trait must guarantee that a handle created by one part of a sharing set may be used with any other part: resolved, deallocated, grown, or shrunk.
-pub unsafe trait StoreSharing: StoragePinning {
+pub unsafe trait StorageSharing: StoragePinning {
     /// Error returned if sharing is not currently possible
     type SharingError;
 
