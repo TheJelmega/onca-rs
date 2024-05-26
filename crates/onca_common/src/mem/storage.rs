@@ -89,7 +89,7 @@ impl CopyRegion {
         Self {
             src_offset,
             dst_offset,
-            size: todo!(),
+            size,
         }
     }
 }
@@ -242,12 +242,12 @@ pub unsafe trait Storage: StorageBase {
         // - `handle` has been allocated by `self` or a shared storage, according to the pre-conditions of `grow_region`
         // - `handle` is valid, as it was valid at the beginning of this function as per the pre-conditions of `grow_region`,
         //   and has not been invalidated by `self.allocate` since `self` can store multiple allocations
-        let current_ptr = self.resolve(new_handle);
+        let current_ptr = self.resolve(handle);
 
         // Safety:
         // - `new_handle` has been allocated by `self`
         // - `new_handle` is still valid, since only `self.resolve` was called which doesn't invalidate handles.
-        let new_ptr = self.resolve(handle);
+        let new_ptr = self.resolve(new_handle);
 
         // Safety:
         // - `current_ptr` is valid for reads, as `handle` is valid.
@@ -324,12 +324,12 @@ pub unsafe trait Storage: StorageBase {
         // - `handle` has been allocated by `self` or a shared storage, according to the pre-conditions of `grow_region`
         // - `handle` is valid, as it was valid at the beginning of this function as per the pre-conditions of `grow_region`,
         //   and has not been invalidated by `self.allocate` since `self` can store multiple allocations
-        let current_ptr = self.resolve(new_handle);
+        let current_ptr = self.resolve(handle);
 
         // Safety:
         // - `new_handle` has been allocated by `self`
         // - `new_handle` is still valid, since only `self.resolve` was called which doesn't invalidate handles.
-        let new_ptr = self.resolve(handle);
+        let new_ptr = self.resolve(new_handle);
 
         // Safety:
         // - Both starting and resulting pointers are in bounds of the same allocated objects as `region.offset` fits `current_ptr`, as per the pre-conditions of `grow_region`.

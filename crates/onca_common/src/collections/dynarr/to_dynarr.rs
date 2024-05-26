@@ -38,7 +38,7 @@ mod internal {
             }
             let mut arr = DynArr::with_capacity_in(s.len(), storage);
             let mut guard = DropGuard { arr: &mut arr, num_init: 0 };
-            let slots = guard.arr.space_capacity_mut();
+            let slots = guard.arr.spare_capacity_mut();
             // .take(slots.len()) is necessary for LLVM toremove bounds checks and has better codegen thanzip.
             for (i, b) in s.iter().enumerate().take(slots.len()) {
                 slots[i].write(b.clone());

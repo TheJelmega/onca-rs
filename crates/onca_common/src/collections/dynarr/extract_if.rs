@@ -51,7 +51,7 @@ impl<T, F, S: StorageSingleSliced, R: ReserveStrategy> Iterator for ExtractIf<'_
                 if drained {
                     self.del += 1;
                     return Some(ptr::read(&arr[i]));
-                } else {
+                } else if self.del > 0 {
                     let del = self.del;
                     let src: *const T = &arr[i];
                     let dst: *mut T = &mut arr[i - del];

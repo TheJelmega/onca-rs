@@ -46,6 +46,7 @@
 #![feature(extend_one)]
 #![feature(never_type)]
 #![feature(unwrap_infallible)]
+#![feature(macro_metavar_expr)]
 
 #![feature(vec_split_at_spare)]
 #![feature(can_vector)]

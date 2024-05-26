@@ -113,3 +113,15 @@ unsafe impl<T: StorageSingle> StorageSingleSliced for StorageSingleSlicedWrapper
 unsafe impl<T: StorageSingle + StorageStable> StorageStable for StorageSingleSlicedWrapper<T> {}
 
 unsafe impl<T: StorageSingle + StoragePinning> StoragePinning for StorageSingleSlicedWrapper<T> {}
+
+impl<T: StorageSingle + Default> Default for StorageSingleSlicedWrapper<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
+impl<T: StorageSingle + Clone> Clone for StorageSingleSlicedWrapper<T> {
+    fn clone(&self) -> Self {
+        Self { storage: self.storage.clone(), size: self.size }
+    }
+}

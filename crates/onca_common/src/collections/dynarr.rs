@@ -18,6 +18,9 @@ mod in_place_drop;
 mod splice;
 mod extract_if;
 
+#[cfg(test)]
+mod tests;
+
 pub use drain::Drain;
 pub use to_dynarr::ToDynArr;
 pub use into_iter::IntoIter;
@@ -26,12 +29,51 @@ pub use extract_if::ExtractIf;
 
 use spec::*;
 
-// pub struct DynArr<T, S: StorageSingle> {
-//     handle:   S::Handle,
-//     len:      usize,
-//     storage:  S,
-//     _phantom: PhantomData<T>,
-// }
+type DefaultStore = StorageSingleSlicedWrapper<AllocStorage<Global>>;
+
+#[macro_export]
+macro_rules! dynarr {
+    () => {
+        $crate::collections::DynArr::<_, DefaultStore>::new()
+    };
+    ($($vals:expr),* $(,)?) => {
+        $crate::collections::DynArr::<_, DefaultStore>::from([$($vals),*])
+    };
+    ($val:expr; $size:expr) => {
+        {
+            let mut arr = $crate::collections::DynArr::<_, DefaultStore>::new();
+            arr.resize($size, $val);
+            arr
+        }
+    }
+}
+pub use dynarr;
+
+#[macro_export]
+macro_rules! dynarr_in {
+    ($storage:expr) => {
+        $crate::collections::DynArr::new_in($storage)
+    };
+    ($storage:expr; $($vals:expr),* $(,)?) => {
+        {
+            let mut arr = $crate::collections::DynArr::<_, DefaultStore>::new_in($storage); 
+            arr.extend_from_array([$($vals),*]);
+            arr
+        }
+    };
+    ($storage:expr; $val:expr; $size:expr) => {
+        {
+            let mut arr = $crate::collections::DynArr::<_>::new_in($storage);
+            arr.resize($size, $val);
+            arr
+        }
+    };
+}
+pub use dynarr_in;
+
+pub fn test() {
+    let mut arr = dynarr_in![DefaultStore::default(); "hello", "wordl"];
+}
 
 /// A contiguous growable array type, also known as a dynamic array, or DynArr.
 /// 
@@ -239,7 +281,7 @@ use spec::*;
 /// [`reserve`]: DynArr::reserve
 /// [`MaybeUninit`]: core::mem::MaybeUninit
 /// [owned slice]: Box
-pub struct DynArr<T, S: StorageSingleSliced, R: ReserveStrategy = DoubleOrMinReserveStrategy> {
+pub struct DynArr<T, S: StorageSingleSliced = DefaultStore, R: ReserveStrategy = DoubleOrMinReserveStrategy> {
     arr: RawArray<T, S, R>,
     len: usize,
 }
@@ -512,7 +554,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
     /// assert!(dynarr.capacity() >= 3);
     /// ```
     pub fn shrink_to(&mut self, min_capacity: usize) {
-        if self.capacity() < min_capacity {
+        if self.capacity() > min_capacity {
             self.arr.shrink_to_fit(core::cmp::min(self.len, min_capacity));
         }
     }
@@ -1317,7 +1359,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
         }
     }
 
-    /// removes and returns the last element in a dyanmica array if the prodicate returns `true`,
+    /// removes and returns the last element in a dyanmica array if the predicate returns `true`,
     /// of [`None`] if tghe predicate retusn false of the dynamic array is emtpy.
     /// 
     /// # Examples
@@ -1605,7 +1647,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
     /// assert_eq!(&arr, [0, 1, 2])
     /// ```
     #[inline]
-    fn space_capacity_mut(&mut self) -> &mut [MaybeUninit<T>] {
+    fn spare_capacity_mut(&mut self) -> &mut [MaybeUninit<T>] {
         // Note:
         // This method is not implemented in terms of `split_at_sparse_mut`, to prevent invalidation of pointera to the buffer.
         unsafe {
@@ -1796,6 +1838,33 @@ impl<T: Clone, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
         self.spec_extend(other.iter())
     }
 
+    // TODO: Handle using the specialization feature
+    /// Clones and appends all elements in a slice to the `DynArr`.
+    /// 
+    /// Iterates over the slice `other`, clones each element, and then appends it to the `DynArr`.
+    /// The `other` slice is traversed in order.
+    /// 
+    /// Note thta htis function is the same as [`extend`] except that it is specialized to work wit hslices instead.
+    /// If and when Rust gets specialization, this function will likely be deprecaed (but still available).
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// let mut arr = dynarr![1];
+    /// arr.extend_from_slice(&[2, 3, 4]);
+    /// assert_eq!(arr, [1, 2, 3, 4]);
+    /// ```
+    pub fn extend_from_array<const N: usize>(&mut self, other: [T; N]) {
+        self.reserve(N);
+        unsafe {
+            let other = ManuallyDrop::new(other);
+            let len = self.len();
+            let dst = self.as_mut_ptr().add(len);
+            ptr::copy_nonoverlapping(other.as_ptr() as *const _, dst, N);
+            self.set_len(len + N);
+        }
+    }
+
     /// Copies elements from the `src` range to the end of the dynamic array.
     /// 
     /// # Panics
@@ -1890,7 +1959,7 @@ impl<T: Clone, S: StorageSingleSliced, R: ReserveStrategy, const N: usize> DynAr
         // - The memory pointed to by `handle` is well-aligned becuase `[T; N]` has the same alignment as `T`.
         // - The resulting handle refers to the same sized alloction as the old handle, because `new_cap * size_of::<T>` == `cap * size_of::<[T; N]>`.
         // - `len` <= `cap`, so `len * N` <= `cap * N`
-        unsafe { DynArr::from_raw_parts_in(handle.cast(), storage, len) }
+        unsafe { DynArr::from_raw_parts_in(handle.cast(), storage, new_len) }
     }
 }
 
@@ -2081,7 +2150,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> IntoIterator for DynArr<T, S
                 handle,
                 storage,
                 ptr,
-                end: todo!(),
+                end,
             }
         }
     }
@@ -2200,7 +2269,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
     /// assert_eq!(v, &[1, 7, 8, 9, 4]);
     /// assert_eq!(u, &[2, 3]);
     /// ```
-    fn splice<Ra, I>(&mut self, range: Ra, replace_with: I) -> Splice<'_, I::IntoIter, S, R> where
+    pub fn splice<Ra, I>(&mut self, range: Ra, replace_with: I) -> Splice<'_, I::IntoIter, S, R> where
         Ra: RangeBounds<usize>,
         I: IntoIterator<Item = T>
     {
@@ -2262,7 +2331,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> DynArr<T, S, R> {
             self.set_len(0);
         }
 
-        ExtractIf { arr: self, idx: 0, del: old_len, old_len, pred: filter  }
+        ExtractIf { arr: self, idx: 0, del: 0, old_len, pred: filter  }
     }
 }
 

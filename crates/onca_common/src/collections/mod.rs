@@ -9,6 +9,7 @@ use core::alloc::Layout;
 
 pub use bitset::BitSet;
 pub use byte_buffer::ByteBuffer;
+pub use dynarr::*;
 
 //--------------------------------------------------------------
 
@@ -43,6 +44,7 @@ use impl_slice_partial_eq;
 
 //--------------------------------------------------------------
 
+#[derive(Debug)]
 pub enum TryReserveError {
     CapacityOverflow,
     AllocError(Layout),

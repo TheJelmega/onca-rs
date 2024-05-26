@@ -107,3 +107,9 @@ unsafe impl<A: Allocator + Clone> StorageSharing for AllocStorage<A> {
         Ok(self.clone())
     }
 }
+
+impl<A: Allocator + Default> Default for AllocStorage<A> {
+    fn default() -> Self {
+        Self { alloc: Default::default() }
+    }
+}

@@ -276,7 +276,7 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy> RawArray<T, S, R> {
             len: usize,
             additional: usize,
         ) {
-            debug_assert!(len < slf.capacity());
+            debug_assert!(len <= slf.capacity());
             if let Err(err) = slf.grow_amortized(len, additional) {
                 handle_error(err);
             }
