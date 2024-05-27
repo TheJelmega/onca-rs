@@ -1,9 +1,12 @@
 use core::{ 
-    fmt, hash::Hash, iter, mem::{self, ManuallyDrop, MaybeUninit}, ops::{self, Deref, Index, IndexMut, Range, RangeBounds}, ptr::{self, NonNull}, slice::{self, SliceIndex}
+    borrow::{Borrow, BorrowMut}, fmt, hash::Hash, iter, mem::{self, ManuallyDrop, MaybeUninit}, ops::{self, Deref, Index, IndexMut, Range, RangeBounds}, ptr::{self, NonNull}, slice::{self, SliceIndex}
 };
-use std::{alloc::Global, fmt::Debug};
+use std::alloc::Global;
 
-use crate::mem::{AllocStorage, SlicedSingleHandle, StorageBase, StorageSingle, StorageSingleSliced, StorageSingleSlicedWrapper};
+use crate::{
+    borrow::{Cow, ToOwned},
+    mem::{AllocStorage, SlicedSingleHandle, StorageBase, StorageSingle, StorageSingleSliced, StorageSingleSlicedWrapper}
+};
 use self::spec::SpecFromElem;
 
 use super::{imp::array::RawArray, DoubleOrMinReserveStrategy, ReserveStrategy, TryReserveError, impl_slice_partial_eq_generic};
@@ -2403,7 +2406,7 @@ impl<T, S: StorageSingleSliced + Default, R: ReserveStrategy> Default for DynArr
     }
 }
 
-impl<T: Debug, S: StorageSingleSliced, R: ReserveStrategy> fmt::Debug for DynArr<T, S, R> {
+impl<T: fmt::Debug, S: StorageSingleSliced, R: ReserveStrategy> fmt::Debug for DynArr<T, S, R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
@@ -2504,6 +2507,27 @@ impl<T, S: StorageSingleSliced + Default, R: ReserveStrategy, const N: usize> Fr
     }
 }
 
+impl<'a, T, S: StorageSingleSliced + Default, R: ReserveStrategy> From<Cow<'a, [T], (S, R)>> for DynArr<T, S, R> where
+    [T]: ToOwned<(S, R), Owned = DynArr<T, S, R>>
+{
+    /// Convert a clone-on-write into a dynarr.
+    /// 
+    /// If `s` already owns a `DynArr<T>`, it will be return directly.
+    /// If `s` is borrowing a slice, a new `DynArr<T>` will be allocated andfilled by cloning `s`'s items into it.
+    /// 
+    /// # Examples:
+    /// 
+    /// ```
+    /// # use onca_common::borrow::Cow;
+    /// let o: Cow<'_, [i32]> = Cow::Owned(dynarr![1, 2, 3]);
+    /// let b: Cow<'_, [i32]> = Cow::Borrowed(&[1, 2, 3]);
+    /// assert_eq!(DynArr::from(0), DynArr::from(b));
+    /// ```
+    fn from(value: Cow<'a, [T], (S, R)>) -> Self {
+        value.into_owned()
+    }
+}
+
 impl<S: StorageSingleSliced + Default, R: ReserveStrategy> From<&str> for DynArr<u8, S, R> {
     fn from(value: &str) -> Self {
         From::from(value.as_bytes())
@@ -2549,5 +2573,29 @@ impl<T, S: StorageSingleSliced, R: ReserveStrategy, const N: usize> TryFrom<DynA
         // The items will not double-drop as the `set_len`tells the `DynArr` not to also drop them.
         let array = unsafe { ptr::read(arr.as_ptr() as *const [T; N]) };
         Ok(array)
+    }
+}
+
+impl<T, S: StorageSingleSliced, R: ReserveStrategy> Borrow<[T]> for DynArr<T, S, R> {
+    fn borrow(&self) -> &[T] {
+        &self[..]
+    }
+}
+
+impl<T, S: StorageSingleSliced, R: ReserveStrategy> BorrowMut<[T]> for DynArr<T, S, R> {
+    fn borrow_mut(&mut self) -> &mut [T] {
+        &mut self[..]
+    }
+}
+
+impl<T: Clone, S: StorageSingleSliced + Default, R: ReserveStrategy> ToOwned<(S, R)> for [T] {
+    type Owned = DynArr<T, S, R>;
+
+    fn to_owned(&self) -> Self::Owned {
+        self.to_dynarr()
+    }
+
+    fn clone_into(&self, target: &mut Self::Owned) {
+        SpecCloneIntoDynArray::clone_into(self, target);
     }
 }
