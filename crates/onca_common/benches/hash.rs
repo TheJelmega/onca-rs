@@ -1,4 +1,6 @@
-use criterion::{criterion_main, criterion_group, Criterion};
+#![allow(unused)]
+
+use criterion::{criterion_group, Criterion};
 
 use std::hash::Hasher;
 use onca_common::hashing::{FNV32, MD5};
@@ -86,4 +88,3 @@ fn sha1_benchmark(c: &mut Criterion) {
 }
 
 criterion_group!(hash, /*fnv_benchmark, md5_benchmark,*/ sha1_benchmark);
-criterion_main!(hash);

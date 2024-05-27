@@ -34,14 +34,14 @@ type DefaultStore = StorageSingleSlicedWrapper<AllocStorage<Global>>;
 #[macro_export]
 macro_rules! dynarr {
     () => {
-        $crate::collections::DynArr::<_, DefaultStore>::new()
+        $crate::collections::DynArr::<_>::new()
     };
     ($($vals:expr),* $(,)?) => {
-        $crate::collections::DynArr::<_, DefaultStore>::from([$($vals),*])
+        $crate::collections::DynArr::<_>::from([$($vals),*])
     };
     ($val:expr; $size:expr) => {
         {
-            let mut arr = $crate::collections::DynArr::<_, DefaultStore>::new();
+            let mut arr = $crate::collections::DynArr::<_>::new();
             arr.resize($size, $val);
             arr
         }
@@ -56,7 +56,7 @@ macro_rules! dynarr_in {
     };
     ($storage:expr; $($vals:expr),* $(,)?) => {
         {
-            let mut arr = $crate::collections::DynArr::<_, DefaultStore>::new_in($storage); 
+            let mut arr = $crate::collections::DynArr::<_>::new_in($storage); 
             arr.extend_from_array([$($vals),*]);
             arr
         }
@@ -70,10 +70,6 @@ macro_rules! dynarr_in {
     };
 }
 pub use dynarr_in;
-
-pub fn test() {
-    let mut arr = dynarr_in![DefaultStore::default(); "hello", "wordl"];
-}
 
 /// A contiguous growable array type, also known as a dynamic array, or DynArr.
 /// 

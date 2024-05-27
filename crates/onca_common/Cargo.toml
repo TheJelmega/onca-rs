@@ -45,5 +45,5 @@ windows = { version = "0.52.0", features = [
 criterion = "0.5.1"
 
 [[bench]]
-name = "hash"
+name = "bench"
 harness = false
