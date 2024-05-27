@@ -2,10 +2,9 @@
 #![feature(allocator_api)]
 
 mod hash;
-mod dynarr;
 
 
 use criterion::criterion_main;
 
 
-criterion_main!(dynarr::dynarr);
+criterion_main!(hash::hash);

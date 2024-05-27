@@ -13,40 +13,6 @@
 
 #![feature(allocator_api)]
 #![feature(alloc_layout_extra)]
-#![feature(ptr_alignment_type)]
-#![feature(strict_provenance)]
-#![feature(ptr_metadata)]
-#![feature(const_alloc_error)]
-#![feature(layout_for_ptr)]
-#![feature(const_try)]
-#![feature(const_alloc_layout)]
-#![feature(const_mut_refs)]
-#![feature(const_ptr_write)]
-#![feature(const_intrinsic_copy)]
-#![feature(const_refs_to_cell)]
-#![feature(const_slice_from_raw_parts_mut)]
-#![feature(const_ptr_as_ref)]
-#![feature(hint_assert_unchecked)]
-#![feature(dropck_eyepatch)]
-#![feature(ptr_sub_ptr)]
-#![feature(exact_size_is_empty)]
-#![feature(trusted_len)]
-#![feature(slice_range)]
-#![feature(rustc_attrs)]
-#![feature(deref_pure_trait)]
-#![feature(iter_advance_by)]
-#![feature(iter_next_chunk)]
-#![feature(maybe_uninit_uninit_array)]
-#![feature(maybe_uninit_uninit_array_transpose)]
-#![feature(array_into_iter_constructors)]
-#![feature(stmt_expr_attributes)]
-#![feature(trusted_random_access)]
-#![feature(trusted_fused)]
-#![feature(inplace_iteration)]
-#![feature(extend_one)]
-#![feature(never_type)]
-#![feature(unwrap_infallible)]
-#![feature(macro_metavar_expr)]
 
 #![feature(vec_split_at_spare)]
 #![feature(can_vector)]
@@ -67,7 +33,6 @@ pub mod collections;
 pub mod strings;
 pub mod io;
 pub mod fmt;
-pub mod borrow;
 
 pub mod time;
 
