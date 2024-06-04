@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![feature(let_chains)]
 
 use onca_common::{
